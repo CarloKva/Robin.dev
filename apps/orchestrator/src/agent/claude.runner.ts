@@ -1,0 +1,220 @@
+import { spawn } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+import type { JobPayload, JobResult } from "@robin/shared-types";
+import {
+  AgentTimeoutError,
+  AgentBlockedError,
+  RepositoryAccessError,
+  ClaudeNotFoundError,
+} from "../errors/job.errors";
+import { log } from "../utils/logger";
+
+const STDOUT_TAIL_CHARS = 10_000;
+
+/**
+ * ClaudeRunner encapsulates Claude Code headless execution.
+ * It knows nothing about BullMQ — it takes a JobPayload and returns a JobResult.
+ *
+ * Execution flow:
+ *   1. Write TASK.md to the repository root
+ *   2. Spawn: claude --dangerously-skip-permissions --output-format json
+ *   3. Stream stdout/stderr, log every chunk
+ *   4. Wait for exit or timeout
+ *   5. Parse output → JobResult
+ *   6. Clean up TASK.md
+ */
+export class ClaudeRunner {
+  async run(payload: JobPayload): Promise<JobResult> {
+    const startedAt = new Date().toISOString();
+
+    log.info({ taskId: payload.taskId }, "ClaudeRunner starting");
+
+    // Verify repository path exists
+    if (!fs.existsSync(payload.repositoryPath)) {
+      throw new RepositoryAccessError(
+        `Repository path not found: ${payload.repositoryPath}`
+      );
+    }
+
+    // Write TASK.md
+    const taskMdPath = path.join(payload.repositoryPath, "TASK.md");
+    fs.writeFileSync(taskMdPath, this.buildTaskMd(payload), "utf-8");
+    log.info({ taskId: payload.taskId, taskMdPath }, "TASK.md written");
+
+    let stdoutBuffer = "";
+    let stderrBuffer = "";
+
+    try {
+      const result = await this.spawnClaude(payload, (chunk) => {
+        stdoutBuffer += chunk;
+        // Log in real-time so journalctl shows progress
+        log.info(
+          { taskId: payload.taskId, chunk: chunk.slice(0, 200) },
+          "Claude output"
+        );
+      }, (chunk) => {
+        stderrBuffer += chunk;
+        log.warn({ taskId: payload.taskId, chunk }, "Claude stderr");
+      });
+
+      const completedAt = new Date().toISOString();
+      const durationSeconds = Math.round(
+        (new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000
+      );
+
+      const stdoutTail = stdoutBuffer.slice(-STDOUT_TAIL_CHARS);
+
+      log.info(
+        { taskId: payload.taskId, exitCode: result.exitCode, durationSeconds },
+        "Claude process exited"
+      );
+
+      // Check if agent wrote BLOCKED.md
+      const blockedMdPath = path.join(payload.repositoryPath, "BLOCKED.md");
+      if (fs.existsSync(blockedMdPath)) {
+        const question = fs.readFileSync(blockedMdPath, "utf-8").trim();
+        fs.unlinkSync(blockedMdPath);
+        throw new AgentBlockedError(question);
+      }
+
+      // Parse structured output
+      const parsed = this.parseClaudeOutput(stdoutBuffer);
+
+      return {
+        status: parsed.prUrl ? "in_review" : "completed",
+        ...(parsed.prUrl !== undefined && { prUrl: parsed.prUrl }),
+        ...(parsed.prNumber !== undefined && { prNumber: parsed.prNumber }),
+        ...(parsed.commitSha !== undefined && { commitSha: parsed.commitSha }),
+        ...(parsed.commitBranch !== undefined && { commitBranch: parsed.commitBranch }),
+        startedAt,
+        completedAt,
+        durationSeconds,
+        stdoutTail,
+      };
+    } finally {
+      // Always clean up TASK.md
+      if (fs.existsSync(taskMdPath)) {
+        fs.unlinkSync(taskMdPath);
+      }
+    }
+  }
+
+  private spawnClaude(
+    payload: JobPayload,
+    onStdout: (chunk: string) => void,
+    onStderr: (chunk: string) => void
+  ): Promise<{ exitCode: number }> {
+    return new Promise((resolve, reject) => {
+      const claudePath = process.env["CLAUDE_BIN"] ?? "claude";
+      const timeoutMs = payload.timeoutMinutes * 60 * 1000;
+
+      let process_: ReturnType<typeof spawn>;
+      try {
+        process_ = spawn(
+          claudePath,
+          ["--dangerously-skip-permissions", "--output-format", "json"],
+          {
+            cwd: payload.repositoryPath,
+            env: {
+              ...process.env,
+              ANTHROPIC_API_KEY: process.env["ANTHROPIC_API_KEY"],
+            },
+            stdio: ["ignore", "pipe", "pipe"],
+          }
+        );
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          reject(new ClaudeNotFoundError("claude binary not found. Is Claude Code installed?"));
+        } else {
+          reject(err);
+        }
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        process_.kill("SIGTERM");
+        reject(new AgentTimeoutError(`Claude Code timed out after ${payload.timeoutMinutes} minutes`));
+      }, timeoutMs);
+
+      process_.stdout?.on("data", (data: Buffer) => onStdout(data.toString()));
+      process_.stderr?.on("data", (data: Buffer) => onStderr(data.toString()));
+
+      process_.on("error", (err) => {
+        clearTimeout(timer);
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          reject(new ClaudeNotFoundError("claude binary not found. Is Claude Code installed?"));
+        } else {
+          reject(err);
+        }
+      });
+
+      process_.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ exitCode: code ?? 1 });
+      });
+    });
+  }
+
+  private parseClaudeOutput(stdout: string): {
+    prUrl?: string;
+    prNumber?: number;
+    commitSha?: string;
+    commitBranch?: string;
+  } {
+    // Try to parse JSON output from claude --output-format json
+    const result: { prUrl?: string; prNumber?: number; commitSha?: string; commitBranch?: string } = {};
+
+    try {
+      const lines = stdout.trim().split("\n");
+      const lastLine = lines[lines.length - 1];
+      if (lastLine?.startsWith("{")) {
+        const parsed = JSON.parse(lastLine) as Record<string, unknown>;
+        if (typeof parsed["pr_url"] === "string") result.prUrl = parsed["pr_url"];
+        if (typeof parsed["pr_number"] === "number") result.prNumber = parsed["pr_number"];
+        if (typeof parsed["commit_sha"] === "string") result.commitSha = parsed["commit_sha"];
+        if (typeof parsed["branch"] === "string") result.commitBranch = parsed["branch"];
+        return result;
+      }
+    } catch {
+      // Fall through to regex parsing
+    }
+
+    // Fallback: regex scan for GitHub PR URL in stdout
+    const prMatch = stdout.match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/);
+    const commitMatch = stdout.match(/\b([0-9a-f]{40})\b/);
+
+    if (prMatch?.[0]) result.prUrl = prMatch[0];
+    if (prMatch?.[1]) result.prNumber = parseInt(prMatch[1], 10);
+    if (commitMatch?.[1]) result.commitSha = commitMatch[1];
+
+    return result;
+  }
+
+  private buildTaskMd(payload: JobPayload): string {
+    return `# Task: ${payload.taskTitle}
+
+**Type:** ${payload.taskType}
+**Priority:** ${payload.priority}
+**Task ID:** ${payload.taskId}
+
+## Description
+
+${payload.taskDescription}
+
+## Instructions
+
+- Create a new branch named \`feat/${payload.taskId}\` if not already on one
+- Implement the task as described above
+- Commit your changes with a descriptive message
+- Open a Pull Request when the work is complete
+- If you need clarification and cannot proceed, write your question to \`BLOCKED.md\` in the repository root and stop
+
+## Notes
+
+- Follow the conventions in \`${payload.claudeMdPath}\`
+- Keep changes focused on this task only
+- Write tests if the codebase has a test suite
+`;
+  }
+}

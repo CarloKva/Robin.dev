@@ -1,0 +1,21 @@
+[Unit]
+Description=Robin.dev Orchestrator
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=agent
+WorkingDirectory=/home/agent/robindev/apps/orchestrator
+EnvironmentFile=/home/agent/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=robindev-orchestrator
+# Hard memory limit — prevents runaway processes from OOM-killing the VPS
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target
