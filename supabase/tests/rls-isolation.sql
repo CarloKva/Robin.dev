@@ -17,8 +17,8 @@
 
 DO $$
 DECLARE
-  ws_a  uuid := 'test0000-0000-0000-0000-00000000000a';
-  ws_b  uuid := 'test0000-0000-0000-0000-00000000000b';
+  ws_a  uuid := 'f0000000-0000-0000-0000-00000000000a';
+  ws_b  uuid := 'f0000000-0000-0000-0000-00000000000b';
   user_a text := 'user_test_alice';
   user_b text := 'user_test_bob';
 BEGIN
@@ -60,7 +60,7 @@ SELECT 'TEST 1 — Alice sees own tasks' AS test,
        COUNT(*) AS row_count,
        CASE WHEN COUNT(*) = 1 THEN 'PASS' ELSE 'FAIL' END AS result
 FROM tasks
-WHERE workspace_id = 'test0000-0000-0000-0000-00000000000a';
+WHERE workspace_id = 'f0000000-0000-0000-0000-00000000000a';
 
 -- -------------------------
 -- TEST 2: Alice cannot see Bob's tasks
@@ -73,7 +73,7 @@ SELECT 'TEST 2 — Alice cannot see Bob tasks' AS test,
        COUNT(*) AS row_count,
        CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS result
 FROM tasks
-WHERE workspace_id = 'test0000-0000-0000-0000-00000000000b';
+WHERE workspace_id = 'f0000000-0000-0000-0000-00000000000b';
 
 -- -------------------------
 -- TEST 3: Bob can see his own tasks
@@ -86,7 +86,7 @@ SELECT 'TEST 3 — Bob sees own tasks' AS test,
        COUNT(*) AS row_count,
        CASE WHEN COUNT(*) = 1 THEN 'PASS' ELSE 'FAIL' END AS result
 FROM tasks
-WHERE workspace_id = 'test0000-0000-0000-0000-00000000000b';
+WHERE workspace_id = 'f0000000-0000-0000-0000-00000000000b';
 
 -- -------------------------
 -- TEST 4: Bob cannot see Alice's tasks
@@ -99,7 +99,7 @@ SELECT 'TEST 4 — Bob cannot see Alice tasks' AS test,
        COUNT(*) AS row_count,
        CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END AS result
 FROM tasks
-WHERE workspace_id = 'test0000-0000-0000-0000-00000000000a';
+WHERE workspace_id = 'f0000000-0000-0000-0000-00000000000a';
 
 -- -------------------------
 -- TEST 5: Full table SELECT leaks nothing across tenants
@@ -112,7 +112,7 @@ SET LOCAL request.jwt.claims = '{"sub": "user_test_alice", "aud": "authenticated
 SELECT 'TEST 5 — Alice full table scan (should see only her tasks)' AS test,
        title,
        workspace_id,
-       CASE WHEN workspace_id = 'test0000-0000-0000-0000-00000000000a' THEN 'PASS' ELSE 'FAIL — data leak!' END AS result
+       CASE WHEN workspace_id = 'f0000000-0000-0000-0000-00000000000a' THEN 'PASS' ELSE 'FAIL — data leak!' END AS result
 FROM tasks
 WHERE title IN ('Alice secret task', 'Bob secret task');
 
@@ -149,8 +149,8 @@ WHERE tablename = 'task_events'
 -- -------------------------
 
 DELETE FROM workspaces WHERE id IN (
-  'test0000-0000-0000-0000-00000000000a',
-  'test0000-0000-0000-0000-00000000000b'
+  'f0000000-0000-0000-0000-00000000000a',
+  'f0000000-0000-0000-0000-00000000000b'
 );
 
 -- (CASCADE deletes workspace_members, tasks, etc.)
