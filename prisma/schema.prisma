@@ -1,0 +1,178 @@
+// =============================================================================
+// Robin.dev — Prisma Schema
+// Datasource: Supabase PostgreSQL
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -------------------------
+// Enums
+// -------------------------
+
+enum workspace_role {
+  owner
+  member
+}
+
+enum agent_status_enum {
+  idle
+  busy
+  error
+  offline
+}
+
+enum task_status {
+  pending
+  queued
+  in_progress
+  review_pending
+  approved
+  rejected
+  completed
+  failed
+  cancelled
+}
+
+enum task_priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum artifact_type {
+  pr
+  commit
+  deploy_preview
+  test_report
+}
+
+enum task_event_type {
+  task_created         @map("task.created")
+  task_state_changed   @map("task.state.changed")
+  agent_phase_started  @map("agent.phase.started")
+  agent_phase_completed @map("agent.phase.completed")
+  agent_commit_pushed  @map("agent.commit.pushed")
+  agent_pr_opened      @map("agent.pr.opened")
+  agent_blocked        @map("agent.blocked")
+  human_approved       @map("human.approved")
+  human_rejected       @map("human.rejected")
+  human_commented      @map("human.commented")
+  task_completed       @map("task.completed")
+  task_failed          @map("task.failed")
+}
+
+enum actor_type {
+  agent
+  human
+}
+
+// -------------------------
+// Models
+// -------------------------
+
+model workspaces {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String
+  slug       String   @unique
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  workspace_members workspace_members[]
+  agents            agents[]
+  tasks             tasks[]
+  task_artifacts    task_artifacts[]
+  task_events       task_events[]
+}
+
+model workspace_members {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String         @db.Uuid
+  user_id      String
+  role         workspace_role @default(member)
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+
+  workspaces workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, user_id])
+}
+
+model agents {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String   @db.Uuid
+  name         String
+  type         String
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  workspaces   workspaces    @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  agent_status agent_status?
+  tasks        tasks[]
+}
+
+model agent_status {
+  agent_id        String            @id @db.Uuid
+  status          agent_status_enum @default(offline)
+  current_task_id String?           @db.Uuid
+  last_heartbeat  DateTime?         @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+
+  agents        agents @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  current_task  tasks? @relation(fields: [current_task_id], references: [id], onDelete: SetNull)
+}
+
+model tasks {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id        String        @db.Uuid
+  title               String
+  description         String        @default("")
+  status              task_status   @default(pending)
+  priority            task_priority @default(medium)
+  assigned_agent_id   String?       @db.Uuid
+  created_by_user_id  String
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+
+  workspaces      workspaces       @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  agents          agents?          @relation(fields: [assigned_agent_id], references: [id], onDelete: SetNull)
+  task_artifacts  task_artifacts[]
+  task_events     task_events[]
+  agent_status    agent_status[]
+}
+
+model task_artifacts {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id      String        @db.Uuid
+  workspace_id String        @db.Uuid
+  type         artifact_type
+  url          String
+  title        String
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+
+  tasks      tasks      @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  workspaces workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+}
+
+model task_events {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id      String          @db.Uuid
+  workspace_id String          @db.Uuid
+  event_type   task_event_type
+  actor_type   actor_type
+  actor_id     String
+  payload      Json            @default("{}")
+  created_at   DateTime        @default(now()) @db.Timestamptz(6)
+
+  tasks      tasks      @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  workspaces workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+}

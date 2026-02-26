@@ -1,0 +1,17 @@
+{
+  "name": "@robin/orchestrator",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@robin/shared-types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "ts-node": "^10.9.2",
+    "typescript": "*"
+  }
+}
