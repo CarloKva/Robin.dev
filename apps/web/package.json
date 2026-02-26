@@ -19,6 +19,9 @@
     "zod": "^3.24.1",
     "@robin/shared-types": "*"
   },
+  "prisma": {
+    "schema": "../../prisma/schema.prisma"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.3",
