@@ -6,8 +6,8 @@ import { log } from "../utils/logger";
 const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ["queued", "cancelled"],
   queued: ["in_progress", "cancelled"],
-  in_progress: ["review_pending", "failed", "cancelled"],
-  review_pending: ["approved", "rejected", "in_progress"],
+  in_progress: ["review_pending", "completed", "failed", "cancelled"],
+  review_pending: ["approved", "completed", "rejected", "in_progress"],
   approved: ["completed"],
   rejected: ["in_progress"],
   completed: [],

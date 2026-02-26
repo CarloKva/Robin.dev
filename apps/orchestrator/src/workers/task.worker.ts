@@ -10,7 +10,16 @@ import { notificationService } from "../services/notification.service";
 import { JobError, AgentBlockedError } from "../errors/job.errors";
 import { log } from "../utils/logger";
 
-const AGENT_ID = process.env["AGENT_ID"] ?? "robin-alpha";
+// AGENT_ID must be a UUID that exists in the agents table.
+// For local dev with seed data use: b0000000-0000-0000-0000-000000000001
+const AGENT_ID = process.env["AGENT_ID"] ?? "b0000000-0000-0000-0000-000000000001";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+if (!UUID_RE.test(AGENT_ID)) {
+  throw new Error(
+    `AGENT_ID env var must be a valid UUID (got "${AGENT_ID}"). ` +
+    "Set it to the agent's UUID from the agents table."
+  );
+}
 
 async function processJob(job: Job<JobPayload>): Promise<JobResult> {
   const { taskId, workspaceId, taskTitle } = job.data;

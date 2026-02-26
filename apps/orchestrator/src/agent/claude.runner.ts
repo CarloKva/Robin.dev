@@ -113,7 +113,11 @@ export class ClaudeRunner {
       try {
         process_ = spawn(
           claudePath,
-          ["--dangerously-skip-permissions", "--output-format", "json"],
+          [
+            "--print",
+            "--dangerously-skip-permissions",
+            "Read the instructions in TASK.md and implement them.",
+          ],
           {
             cwd: payload.repositoryPath,
             env: {
