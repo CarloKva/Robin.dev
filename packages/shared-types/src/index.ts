@@ -1,7 +1,9 @@
-// Workspace roles
+// ---------------------------------------------------------------
+// Database enums
+// ---------------------------------------------------------------
+
 export type WorkspaceRole = "owner" | "member";
 
-// Task lifecycle statuses
 export type TaskStatus =
   | "pending"
   | "queued"
@@ -13,16 +15,12 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 
-// Task priorities
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
-// Agent operational states
 export type AgentStatusEnum = "idle" | "busy" | "error" | "offline";
 
-// Types of artifacts agents produce
 export type ArtifactType = "pr" | "commit" | "deploy_preview" | "test_report";
 
-// Event types in the task audit log
 export type TaskEventType =
   | "task.created"
   | "task.state.changed"
@@ -37,11 +35,81 @@ export type TaskEventType =
   | "task.completed"
   | "task.failed";
 
-// Who triggered an event
 export type ActorType = "agent" | "human";
 
 // ---------------------------------------------------------------
-// Shared entity shape types (mirrors DB rows — non-exhaustive)
+// Orchestrator types (Sprint 2)
+// ---------------------------------------------------------------
+
+export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore";
+
+/** Internal agent state — more granular than AgentStatusEnum for orchestrator use */
+export type AgentState =
+  | "idle"
+  | "claiming"
+  | "executing"
+  | "reporting"
+  | "blocked"
+  | "error";
+
+/**
+ * Payload passed from the BullMQ queue to ClaudeRunner.
+ * Contains everything the agent needs — no further DB lookups during execution.
+ */
+export type JobPayload = {
+  // Identity
+  taskId: string;
+  workspaceId: string;
+
+  // Repository
+  repositoryUrl: string;
+  branch: string;
+  repositoryPath: string;
+
+  // Task specification
+  taskTitle: string;
+  taskDescription: string;
+  taskType: TaskType;
+  priority: TaskPriority;
+
+  // Execution config
+  timeoutMinutes: number;
+  claudeMdPath: string;
+};
+
+/**
+ * Returned by ClaudeRunner.run() on successful completion.
+ */
+export type JobResult = {
+  status: "completed" | "in_review" | "blocked";
+
+  prUrl?: string;
+  prNumber?: number;
+  commitSha?: string;
+  commitBranch?: string;
+
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+
+  blockedReason?: string;
+  stdoutTail: string;
+};
+
+/**
+ * Error codes for structured error handling.
+ * `retryable` determines whether BullMQ retries the job.
+ */
+export type JobErrorCode =
+  | "AGENT_TIMEOUT"
+  | "API_RATE_LIMIT"
+  | "NETWORK_ERROR"
+  | "AGENT_BLOCKED"
+  | "INSUFFICIENT_SPEC"
+  | "REPO_ACCESS_ERROR";
+
+// ---------------------------------------------------------------
+// DB entity shape types (mirrors DB rows — non-exhaustive)
 // ---------------------------------------------------------------
 
 export type Workspace = {
@@ -70,6 +138,7 @@ export type Task = {
   priority: TaskPriority;
   assigned_agent_id: string | null;
   created_by_user_id: string;
+  queued_at: string | null;
   created_at: string;
   updated_at: string;
 };
