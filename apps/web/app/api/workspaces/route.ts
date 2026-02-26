@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const CreateWorkspaceSchema = z.object({
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   const { name, slug } = parsed.data;
 
   try {
-    const workspace = await prisma.$transaction(async (tx) => {
+    const workspace = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const ws = await tx.workspaces.create({
         data: { name, slug },
       });
