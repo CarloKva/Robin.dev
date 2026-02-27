@@ -23,19 +23,19 @@ export async function getAgentsForWorkspace(workspaceId: string): Promise<AgentW
 }
 
 /**
- * Returns the first online agent (last_seen_at < 2 min) for a workspace.
+ * Returns the first online agent for a workspace, using the agents_with_status
+ * view so that explicit offline markers (set on graceful shutdown) are respected.
  * Used by POST /api/tasks for auto-routing.
  * Returns null if no agent is online.
  */
 export async function getOnlineAgentForWorkspace(workspaceId: string): Promise<{ id: string; name: string } | null> {
   const supabase = await createSupabaseServerClient();
-  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
-    .from("agents")
+    .from("agents_with_status")
     .select("id, name")
     .eq("workspace_id", workspaceId)
-    .gte("last_seen_at", twoMinutesAgo)
+    .in("effective_status", ["idle", "busy"])
     .order("last_seen_at", { ascending: false })
     .limit(1)
     .maybeSingle();
