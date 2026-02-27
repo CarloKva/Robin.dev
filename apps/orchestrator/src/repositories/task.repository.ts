@@ -13,6 +13,7 @@ const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   completed: [],
   failed: ["pending"],
   cancelled: [],
+  backlog: ["queued", "cancelled"],
 };
 
 export class TaskRepository {
