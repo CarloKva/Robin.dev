@@ -53,6 +53,11 @@ const statusConfig: Record<
     badge: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500",
     border: "border-l-neutral-300",
   },
+  backlog: {
+    label: "Backlog",
+    badge: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
+    border: "border-l-neutral-200",
+  },
 };
 
 // ── Priority config ───────────────────────────────────────────────────────────
