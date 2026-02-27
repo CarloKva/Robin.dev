@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AgentWithStatus } from "@robin/shared-types";
 import { cn } from "@/lib/utils";
 
@@ -146,7 +146,7 @@ export function AgentsClient({ workspaceId, initialAgents }: AgentsClientProps) 
 
   // Subscribe to Realtime changes on agents table
   useEffect(() => {
-    const supabase = createBrowserSupabaseClient();
+    const supabase = getSupabaseBrowserClient();
 
     const channel = supabase
       .channel(`agents:${workspaceId}`)
