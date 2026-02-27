@@ -97,6 +97,8 @@ export class TaskRepository {
     const wasUpdated = data !== null;
     if (wasUpdated) {
       log.info({ taskId, jobId }, "Task marked as queued");
+    } else {
+      log.debug({ taskId, jobId }, "Task already queued (queued_at already set), skipping markQueued");
     }
     return wasUpdated;
   }
@@ -142,12 +144,12 @@ export class TaskRepository {
     }
   }
 
-  /** Fetch tasks eligible for queueing: pending and not yet queued. */
+  /** Fetch tasks eligible for queueing: pending or queued (not yet picked up by worker). */
   async getPendingUnqueued() {
     const { data, error } = await this.db
       .from("tasks")
       .select("*")
-      .eq("status", "pending")
+      .in("status", ["pending", "queued"])
       .is("queued_at", null)
       .order("created_at", { ascending: true });
 
