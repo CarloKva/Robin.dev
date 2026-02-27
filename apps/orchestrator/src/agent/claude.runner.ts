@@ -7,6 +7,7 @@ import {
   AgentBlockedError,
   RepositoryAccessError,
   ClaudeNotFoundError,
+  ClaudeExitError,
 } from "../errors/job.errors";
 import { log } from "../utils/logger";
 
@@ -90,6 +91,19 @@ export class ClaudeRunner {
         { taskId: payload.taskId, exitCode: result.exitCode, durationSeconds },
         "Claude process exited"
       );
+
+      // Always log stderr if non-empty — critical for debugging silent failures
+      if (stderrBuffer) {
+        log.warn(
+          { taskId: payload.taskId, stderr: stderrBuffer.slice(-2000) },
+          "Claude stderr output"
+        );
+      }
+
+      // Treat non-zero exit as a retryable failure — prevents false "completed" with 0 artifacts
+      if (result.exitCode !== 0) {
+        throw new ClaudeExitError(result.exitCode, stderrBuffer, "write");
+      }
 
       // Emit phase completed — write phase
       await hooks.onPhaseCompleted?.("write", durationSeconds);
@@ -234,17 +248,23 @@ export class ClaudeRunner {
 
 ${payload.taskDescription}
 
-## Instructions
+## Required Steps (ALL mandatory — do not skip any)
 
-- Create a new branch named \`feat/${payload.taskId}\` if not already on one
-- Implement the task as described above
-- Commit your changes with a descriptive message
-- Open a Pull Request when the work is complete
-- If you need clarification and cannot proceed, write your question to \`BLOCKED.md\` in the repository root and stop
+1. Run \`git checkout -b feat/${payload.taskId}\` to create a new branch
+2. Implement the task: create or edit files as needed
+3. Run \`git add -A && git commit -m "<descriptive message>"\`
+4. Run \`git push origin feat/${payload.taskId}\`
+5. Open a Pull Request from \`feat/${payload.taskId}\` to \`${payload.branch === `feat/${payload.taskId}` ? "main" : payload.branch}\`
+6. Output the PR URL on the **very last line** of your response in this exact format:
+   \`{"pr_url":"<url>","branch":"feat/${payload.taskId}"}\`
+
+> IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 3–6.
+> If you only output text without committing and creating a PR, the task will be considered failed.
+> If you cannot proceed, write your question to \`BLOCKED.md\` in the repository root instead.
 
 ## Notes
 
-- Follow the conventions in \`${payload.claudeMdPath}\`
+- Follow the conventions in \`${payload.claudeMdPath}\` if it exists
 - Keep changes focused on this task only
 - Write tests if the codebase has a test suite
 `;

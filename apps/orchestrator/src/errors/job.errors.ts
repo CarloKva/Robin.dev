@@ -63,3 +63,20 @@ export class ClaudeNotFoundError extends JobError {
   readonly retryable = false;
   readonly code = "CLAUDE_NOT_FOUND";
 }
+
+/** Claude Code process exited with a non-zero code (API error, auth failure, etc.). Retryable. */
+export class ClaudeExitError extends JobError {
+  readonly retryable = true;
+  readonly code = "CLAUDE_EXIT_ERROR";
+  readonly exitCode: number;
+  readonly stderrTail: string;
+
+  constructor(exitCode: number, stderrTail: string, phase?: string) {
+    super(
+      `Claude Code exited with code ${exitCode}. Stderr: ${stderrTail.slice(-500) || "(empty)"}`,
+      phase
+    );
+    this.exitCode = exitCode;
+    this.stderrTail = stderrTail;
+  }
+}
