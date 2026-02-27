@@ -7,6 +7,7 @@ import { taskRepository } from "../repositories/task.repository";
 import { agentRepository } from "../repositories/agent.repository";
 import { ClaudeRunner } from "../agent/claude.runner";
 import { notificationService } from "../services/notification.service";
+import { eventService } from "../events/event.service";
 import { JobError, AgentBlockedError } from "../errors/job.errors";
 import { log } from "../utils/logger";
 
@@ -22,20 +23,36 @@ if (!UUID_RE.test(AGENT_ID)) {
 }
 
 async function processJob(job: Job<JobPayload>): Promise<JobResult> {
-  const { taskId, workspaceId, taskTitle } = job.data;
+  const { taskId, workspaceId, taskTitle, agentId: jobAgentId } = job.data;
 
   log.info({ jobId: job.id, taskId, phase: "start" }, "Processing job");
+
+  // Verify this job is intended for this agent (routing safety check)
+  if (jobAgentId && jobAgentId !== AGENT_ID) {
+    log.warn(
+      { jobId: job.id, taskId, jobAgentId, AGENT_ID },
+      "Job agent mismatch — skipping (job is for a different agent)"
+    );
+    // Re-delay instead of failing: the correct agent will pick it up
+    await job.moveToDelayed(Date.now() + 5000);
+    return { status: "completed", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), durationSeconds: 0, stdoutTail: "" };
+  }
 
   // 1. Mark task in_progress + agent busy
   await taskRepository.updateStatus(taskId, "in_progress", { actorId: AGENT_ID });
   await agentRepository.setStatus(AGENT_ID, "busy", taskId);
-  await taskRepository.appendEvent(taskId, workspaceId, "agent.phase.started", AGENT_ID, {
-    phase: "execution",
-  });
+  await eventService.phaseStarted(taskId, workspaceId, AGENT_ID, "analysis");
 
   // 2. Run Claude Code
   const runner = new ClaudeRunner();
-  const result = await runner.run(job.data);
+  const result = await runner.run(job.data, {
+    onCommitPushed: (commitSha, branch) =>
+      eventService.commitPushed(taskId, workspaceId, AGENT_ID, commitSha, branch),
+    onPhaseStarted: (phase) =>
+      eventService.phaseStarted(taskId, workspaceId, AGENT_ID, phase),
+    onPhaseCompleted: (phase, durationSeconds) =>
+      eventService.phaseCompleted(taskId, workspaceId, AGENT_ID, phase, durationSeconds),
+  });
 
   log.info({ jobId: job.id, taskId, status: result.status }, "Claude runner finished");
 
@@ -46,11 +63,14 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
       url: result.prUrl,
       title: `PR for ${taskTitle}`,
     });
-    await taskRepository.appendEvent(taskId, workspaceId, "agent.pr.opened", AGENT_ID, {
-      pr_url: result.prUrl,
-      pr_number: result.prNumber,
-      commit_sha: result.commitSha,
-    });
+    await eventService.prOpened(
+      taskId,
+      workspaceId,
+      AGENT_ID,
+      result.prUrl,
+      result.prNumber,
+      result.commitSha
+    );
     await taskRepository.updateStatus(taskId, "review_pending", { actorId: AGENT_ID });
 
     await notificationService.notifyTaskReady({
@@ -68,9 +88,7 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
       });
     }
     await taskRepository.updateStatus(taskId, "completed", { actorId: AGENT_ID });
-    await taskRepository.appendEvent(taskId, workspaceId, "task.completed", AGENT_ID, {
-      duration_seconds: result.durationSeconds,
-    });
+    await eventService.taskCompleted(taskId, workspaceId, AGENT_ID, result.durationSeconds);
   }
 
   // 4. Mark agent idle
@@ -106,9 +124,7 @@ export function createWorker(): Worker<JobPayload, JobResult> {
     if (isFinalAttempt) {
       try {
         if (err instanceof AgentBlockedError) {
-          await taskRepository.appendEvent(taskId, workspaceId, "agent.blocked", AGENT_ID, {
-            question: err.question,
-          });
+          await eventService.agentBlocked(taskId, workspaceId, AGENT_ID, err.question);
           await notificationService.notifyTaskBlocked(
             { id: taskId, title: taskTitle, workspaceId },
             err.question
@@ -118,10 +134,7 @@ export function createWorker(): Worker<JobPayload, JobResult> {
             actorId: AGENT_ID,
             note: `${errorCode}: ${err.message}`,
           });
-          await taskRepository.appendEvent(taskId, workspaceId, "task.failed", AGENT_ID, {
-            error_code: errorCode,
-            message: err.message,
-          });
+          await eventService.taskFailed(taskId, workspaceId, AGENT_ID, errorCode, err.message);
           await notificationService.notifyTaskFailed(
             { id: taskId, title: taskTitle, workspaceId },
             errorCode,

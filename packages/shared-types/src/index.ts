@@ -5,6 +5,7 @@
 export type WorkspaceRole = "owner" | "member";
 
 export type TaskStatus =
+  | "backlog"
   | "pending"
   | "queued"
   | "in_progress"
@@ -28,6 +29,8 @@ export type TaskEventType =
   | "agent.phase.completed"
   | "agent.commit.pushed"
   | "agent.pr.opened"
+  | "agent.pr.updated"
+  | "agent.deploy.staging"
   | "agent.blocked"
   | "human.approved"
   | "human.rejected"
@@ -36,6 +39,139 @@ export type TaskEventType =
   | "task.failed";
 
 export type ActorType = "agent" | "human";
+
+// ---------------------------------------------------------------
+// Sprint 3 — Event sourcing types
+// ---------------------------------------------------------------
+
+/**
+ * Phases of the ADWP agent work cycle:
+ * Analysis → Design → Write → Proof
+ */
+export type ADWPPhase = "analysis" | "design" | "write" | "proof";
+
+/**
+ * Discriminated union: maps each event_type to its strongly-typed payload shape.
+ * Use for type-safe payload access in TypeScript projections and UI components.
+ */
+export type EventPayloadMap = {
+  "task.created": {
+    title: string;
+    description: string;
+    priority: TaskPriority;
+  };
+  "task.state.changed": {
+    from: TaskStatus;
+    to: TaskStatus;
+    note?: string;
+  };
+  "agent.phase.started": {
+    phase: ADWPPhase | string;
+  };
+  "agent.phase.completed": {
+    phase: ADWPPhase | string;
+    duration_seconds?: number;
+  };
+  "agent.commit.pushed": {
+    commit_sha: string;
+    branch: string;
+    message?: string;
+    additions?: number;
+    deletions?: number;
+  };
+  "agent.pr.opened": {
+    pr_url: string;
+    pr_number?: number;
+    title?: string;
+    branch?: string;
+    commit_sha?: string;
+    additions?: number;
+    deletions?: number;
+    changed_files?: number;
+    commits?: number;
+  };
+  "agent.pr.updated": {
+    pr_url: string;
+    pr_number?: number;
+    /** New status of the PR */
+    status?: "open" | "merged" | "closed" | "draft";
+    additions?: number;
+    deletions?: number;
+    changed_files?: number;
+  };
+  "agent.deploy.staging": {
+    deploy_url: string;
+    deploy_status: "building" | "ready" | "error";
+    error_message?: string;
+  };
+  "agent.blocked": {
+    question: string;
+  };
+  "human.approved": {
+    comment?: string;
+  };
+  "human.rejected": {
+    reason?: string;
+  };
+  "human.commented": {
+    comment: string;
+  };
+  "task.completed": {
+    duration_seconds?: number;
+  };
+  "task.failed": {
+    error_code: string;
+    message: string;
+  };
+};
+
+/**
+ * Projected state calculated from the full event stream of a task.
+ * Computed by `projectTaskState()` in `apps/web/lib/db/events.ts`.
+ */
+export type PRData = {
+  pr_url: string;
+  pr_number?: number;
+  title?: string;
+  branch?: string;
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
+  commits?: number;
+  /** Derived from events — open by default, updated by agent.pr.updated */
+  status: "open" | "merged" | "closed" | "draft";
+};
+
+export type DeployData = {
+  deploy_url: string;
+  deploy_status: "building" | "ready" | "error";
+  error_message?: string;
+};
+
+export type TaskProjectedState = {
+  status: TaskStatus;
+  currentPhase: ADWPPhase | null;
+  prUrl: string | null;
+  prData: PRData | null;
+  deployData: DeployData | null;
+  commitSha: string | null;
+  blockedReason: string | null;
+  lastUpdated: string;
+};
+
+/**
+ * A single event enriched with a human-readable narrative string.
+ * Used in the timeline UI component.
+ */
+export type TimelineEntry = {
+  id: string;
+  event_type: TaskEventType;
+  actor_type: ActorType;
+  actor_id: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+  narrative: string;
+};
 
 // ---------------------------------------------------------------
 // Orchestrator types (Sprint 2)
@@ -60,6 +196,7 @@ export type JobPayload = {
   // Identity
   taskId: string;
   workspaceId: string;
+  agentId: string;
 
   // Repository
   repositoryUrl: string;
@@ -136,6 +273,7 @@ export type Task = {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  type: TaskType;
   assigned_agent_id: string | null;
   created_by_user_id: string;
   queued_at: string | null;
@@ -152,4 +290,28 @@ export type TaskEvent = {
   actor_id: string;
   payload: Record<string, unknown>;
   created_at: string;
+};
+
+export type Agent = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  type: string;
+  slug: string | null;
+  github_account: string | null;
+  vps_ip: string | null;
+  vps_region: string | null;
+  last_seen_at: string | null;
+  orchestrator_version: string | null;
+  claude_code_version: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Agent row joined with live status from agents_with_status view */
+export type AgentWithStatus = Agent & {
+  effective_status: AgentStatusEnum;
+  raw_status: AgentStatusEnum | null;
+  current_task_id: string | null;
+  last_heartbeat: string | null;
 };

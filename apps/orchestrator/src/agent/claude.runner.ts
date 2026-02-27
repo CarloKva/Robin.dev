@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import type { JobPayload, JobResult } from "@robin/shared-types";
+import type { JobPayload, JobResult, ADWPPhase } from "@robin/shared-types";
 import {
   AgentTimeoutError,
   AgentBlockedError,
@@ -12,20 +12,29 @@ import { log } from "../utils/logger";
 
 const STDOUT_TAIL_CHARS = 10_000;
 
+/** Callbacks fired during execution to emit structured events. */
+export interface ClaudeRunnerHooks {
+  onCommitPushed?: (commitSha: string, branch: string) => Promise<void>;
+  onPhaseStarted?: (phase: ADWPPhase | string) => Promise<void>;
+  onPhaseCompleted?: (phase: ADWPPhase | string, durationSeconds?: number) => Promise<void>;
+}
+
 /**
  * ClaudeRunner encapsulates Claude Code headless execution.
  * It knows nothing about BullMQ — it takes a JobPayload and returns a JobResult.
  *
  * Execution flow:
  *   1. Write TASK.md to the repository root
- *   2. Spawn: claude --dangerously-skip-permissions --output-format json
+ *   2. Spawn: claude --print --dangerously-skip-permissions
  *   3. Stream stdout/stderr, log every chunk
  *   4. Wait for exit or timeout
  *   5. Parse output → JobResult
  *   6. Clean up TASK.md
+ *
+ * Sprint 3: accepts optional hooks for structured event emission.
  */
 export class ClaudeRunner {
-  async run(payload: JobPayload): Promise<JobResult> {
+  async run(payload: JobPayload, hooks: ClaudeRunnerHooks = {}): Promise<JobResult> {
     const startedAt = new Date().toISOString();
 
     log.info({ taskId: payload.taskId }, "ClaudeRunner starting");
@@ -45,14 +54,26 @@ export class ClaudeRunner {
     let stdoutBuffer = "";
     let stderrBuffer = "";
 
+    // Emit phase started — write phase
+    await hooks.onPhaseStarted?.("write");
+
     try {
       const result = await this.spawnClaude(payload, (chunk) => {
         stdoutBuffer += chunk;
-        // Log in real-time so journalctl shows progress
         log.info(
           { taskId: payload.taskId, chunk: chunk.slice(0, 200) },
           "Claude output"
         );
+
+        // Detect commit SHA in output and emit commit event
+        const commitMatch = chunk.match(/\b([0-9a-f]{40})\b/);
+        const branchMatch = chunk.match(/(?:branch|feat|fix|chore)\/[\w/-]+/i);
+        if (commitMatch?.[1] && hooks.onCommitPushed) {
+          const sha = commitMatch[1];
+          const branch = branchMatch?.[0] ?? payload.branch;
+          // Fire-and-forget to avoid blocking stdout processing
+          void hooks.onCommitPushed(sha, branch);
+        }
       }, (chunk) => {
         stderrBuffer += chunk;
         log.warn({ taskId: payload.taskId, chunk }, "Claude stderr");
@@ -70,6 +91,9 @@ export class ClaudeRunner {
         "Claude process exited"
       );
 
+      // Emit phase completed — write phase
+      await hooks.onPhaseCompleted?.("write", durationSeconds);
+
       // Check if agent wrote BLOCKED.md
       const blockedMdPath = path.join(payload.repositoryPath, "BLOCKED.md");
       if (fs.existsSync(blockedMdPath)) {
@@ -78,8 +102,13 @@ export class ClaudeRunner {
         throw new AgentBlockedError(question);
       }
 
+      // Emit proof phase
+      await hooks.onPhaseStarted?.("proof");
+
       // Parse structured output
       const parsed = this.parseClaudeOutput(stdoutBuffer);
+
+      await hooks.onPhaseCompleted?.("proof");
 
       return {
         status: parsed.prUrl ? "in_review" : "completed",
@@ -166,7 +195,6 @@ export class ClaudeRunner {
     commitSha?: string;
     commitBranch?: string;
   } {
-    // Try to parse JSON output from claude --output-format json
     const result: { prUrl?: string; prNumber?: number; commitSha?: string; commitBranch?: string } = {};
 
     try {

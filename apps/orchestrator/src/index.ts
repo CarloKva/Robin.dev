@@ -6,8 +6,11 @@ import { BULL_BOARD_PORT } from "./config/bullmq.config";
 import { taskQueue } from "./queues/task.queue";
 import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
 import { taskPoller } from "./services/task.poller";
+import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
 import { log } from "./utils/logger";
+
+const AGENT_ID = process.env["AGENT_ID"] ?? "b0000000-0000-0000-0000-000000000001";
 
 const VERSION = process.env["npm_package_version"] ?? "0.0.1";
 
@@ -26,6 +29,12 @@ async function main() {
   // -------------------------
   const worker = createWorker();
   const queueEvents = createQueueEventMonitor(taskQueue);
+
+  // -------------------------
+  // Start heartbeat (updates agents.last_seen_at every 30s)
+  // -------------------------
+  const heartbeat = new HeartbeatService(AGENT_ID, VERSION);
+  heartbeat.start();
 
   // -------------------------
   // Start poller
@@ -85,6 +94,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     log.info({ signal }, "Shutting down gracefully");
 
+    heartbeat.stop();
     taskPoller.stop();
 
     // Give active jobs 30s to complete before forcing exit

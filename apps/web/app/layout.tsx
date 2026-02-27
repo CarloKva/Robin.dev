@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Robin.dev",
@@ -17,8 +24,8 @@ export default function RootLayout({
       afterSignInUrl="/dashboard"
       afterSignUpUrl="/onboarding/workspace"
     >
-      <html lang="en">
-        <body>{children}</body>
+      <html lang="en" className={inter.variable}>
+        <body className="font-sans">{children}</body>
       </html>
     </ClerkProvider>
   );

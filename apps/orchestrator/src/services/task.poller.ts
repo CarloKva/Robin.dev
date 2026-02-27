@@ -75,9 +75,13 @@ export class TaskPoller {
 
   private buildPayload(task: Record<string, unknown>): JobPayload {
     const taskType = (task["task_type"] as TaskType | undefined) ?? "feature";
+    const agentId =
+      (task["assigned_agent_id"] as string | undefined) ??
+      (process.env["AGENT_ID"] ?? "");
     return {
       taskId: task["id"] as string,
       workspaceId: task["workspace_id"] as string,
+      agentId,
       repositoryUrl: (task["repository_url"] as string | undefined) ?? "",
       branch: `feat/${task["id"] as string}`,
       repositoryPath: this.resolveRepoPath(task),

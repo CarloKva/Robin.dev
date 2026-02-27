@@ -51,6 +51,29 @@ export class AgentRepository {
     if (error) throw new Error(`AgentRepository.getByWorkspace failed: ${error.message}`);
     return data ?? [];
   }
+
+  /**
+   * Find the first agent for a workspace that has a fresh heartbeat (< 2 min).
+   * Used by the task poller to verify the agent is online before processing.
+   */
+  async findOnlineAgentForWorkspace(workspaceId: string): Promise<string | null> {
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    const { data, error } = await this.db
+      .from("agents")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .gte("last_seen_at", twoMinutesAgo)
+      .order("last_seen_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      log.warn({ workspaceId, error: error.message }, "AgentRepository.findOnlineAgentForWorkspace failed");
+      return null;
+    }
+    return data?.id ?? null;
+  }
 }
 
 export const agentRepository = new AgentRepository();
