@@ -85,6 +85,13 @@ export class HeartbeatService {
     if (error) {
       log.warn({ agentId: this.agentId, error: error.message }, "HeartbeatService.beat failed");
     }
+
+    // Reset agent_status from 'offline' to 'idle' on restart (only if currently offline)
+    await db
+      .from("agent_status")
+      .update({ status: "idle", updated_at: now })
+      .eq("agent_id", this.agentId)
+      .eq("status", "offline");
   }
 
   private async markOffline(): Promise<void> {
