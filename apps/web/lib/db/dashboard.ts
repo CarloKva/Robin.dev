@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { narrativize } from "@/lib/events/narrativize";
 import { projectTaskState } from "@/lib/db/projectTaskState";
-import type { TaskEventType, TaskEvent, TaskProjectedState } from "@robin/shared-types";
+import type { TaskEventType, TaskEvent, TaskProjectedState, AgentProvisioningStatus } from "@robin/shared-types";
 
 export type DashboardMetrics = {
   completedThisWeek: number;
@@ -28,6 +28,101 @@ export type ActiveTaskData = {
   created_at: string;
   projectedState: TaskProjectedState;
 };
+
+// ─── Multi-agent dashboard ────────────────────────────────────────────────────
+
+export type DashboardAgent = {
+  id: string;
+  name: string;
+  slug: string | null;
+  effective_status: string;          // "idle" | "busy" | "error" | "offline"
+  provisioning_status: AgentProvisioningStatus;
+  vps_ip: string | null;
+  current_task_id: string | null;
+  current_task_title: string | null;
+  repository_names: string[];        // full_names of assigned repos
+};
+
+/**
+ * Fetches all agents for the workspace with their current status,
+ * active task title, and assigned repository names.
+ * Used for the dashboard AgentStatusGrid.
+ */
+export async function getDashboardAgents(workspaceId: string): Promise<DashboardAgent[]> {
+  const supabase = await createSupabaseServerClient();
+
+  // 1. All agents (non-deprovisioned) with status
+  const { data: agents, error } = await supabase
+    .from("agents_with_status")
+    .select("id, name, slug, effective_status, provisioning_status, vps_ip")
+    .eq("workspace_id", workspaceId)
+    .neq("provisioning_status", "deprovisioned")
+    .order("created_at", { ascending: true });
+
+  if (error || !agents || agents.length === 0) return [];
+
+  const agentIds = agents.map((a) => a.id as string);
+
+  // 2. Fetch current_task_id from agent_status for each agent
+  const [statusRows, repoRows] = await Promise.all([
+    supabase
+      .from("agent_status")
+      .select("agent_id, current_task_id")
+      .in("agent_id", agentIds)
+      .then(({ data }) => data ?? []),
+
+    // 3. Fetch repository names via agent_repositories join
+    supabase
+      .from("agent_repositories")
+      .select("agent_id, repositories(full_name)")
+      .in("agent_id", agentIds)
+      .then(({ data }) => data ?? []),
+  ]);
+
+  // Build task_id lookup
+  const taskIdByAgent: Record<string, string | null> = {};
+  for (const row of statusRows) {
+    taskIdByAgent[row.agent_id as string] = (row.current_task_id as string | null) ?? null;
+  }
+
+  // 4. Fetch task titles for non-null task IDs
+  const taskIds = [...new Set(Object.values(taskIdByAgent).filter((id): id is string => Boolean(id)))];
+  const taskTitleById: Record<string, string> = {};
+  if (taskIds.length > 0) {
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("id, title")
+      .in("id", taskIds);
+    for (const t of tasks ?? []) {
+      taskTitleById[t.id as string] = t.title as string;
+    }
+  }
+
+  // Build repo names lookup
+  const repoNamesByAgent: Record<string, string[]> = {};
+  for (const row of repoRows) {
+    const agentId = row.agent_id as string;
+    const fullName = (row.repositories as unknown as { full_name: string } | null)?.full_name;
+    if (fullName) {
+      (repoNamesByAgent[agentId] ??= []).push(fullName);
+    }
+  }
+
+  return agents.map((a) => {
+    const taskId = taskIdByAgent[a.id as string] ?? null;
+    return {
+      id: a.id as string,
+      name: a.name as string,
+      slug: (a.slug as string | null) ?? null,
+      effective_status: (a.effective_status as string) ?? "offline",
+      provisioning_status: (a.provisioning_status as AgentProvisioningStatus) ?? "online",
+      vps_ip: (a.vps_ip as string | null) ?? null,
+      current_task_id: taskId,
+      current_task_title: taskId ? (taskTitleById[taskId] ?? null) : null,
+      repository_names: repoNamesByAgent[a.id as string] ?? [],
+    };
+  });
+}
 
 /**
  * Fetches task count metrics for the dashboard tiles.

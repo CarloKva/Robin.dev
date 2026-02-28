@@ -22,34 +22,34 @@ Eseguire i test in ordine: le sezioni successive dipendono da quelle precedenti.
 
 ### 1.1 — Signup nuovo utente
 
-- [ ] Aprire il sito in una finestra privata del browser
-- [ ] Verificare che le route protette (`/dashboard`, `/tasks`, `/metrics`) redirigano a `/sign-in`
-- [ ] Cliccare "Sign Up"
-- [ ] Completare la registrazione con Google OAuth
-- [ ] Verificare che dopo il signup venga rediretto a `/onboarding/workspace`
-- [ ] Verificare che la pagina di onboarding non sembri rotta (layout corretto, form visibile)
+- [P] Aprire il sito in una finestra privata del browser
+- [P] Verificare che le route protette (`/dashboard`, `/tasks`, `/metrics`) redirigano a `/sign-in`
+- [P] Cliccare "Sign Up"
+- [P] Completare la registrazione con Google OAuth
+- [P] Verificare che dopo il signup venga rediretto a `/onboarding/workspace`
+- [P] Verificare che la pagina di onboarding non sembri rotta (layout corretto, form visibile)
 
 ### 1.2 — Login utente esistente
 
-- [ ] Visitare `/sign-in`
-- [ ] Login con Google OAuth
-- [ ] Verificare redirect a `/dashboard` (se workspace esiste)
-- [ ] Verificare che il nome utente / avatar appaia nell'header
+- [P] Visitare `/sign-in`
+- [P] Login con Google OAuth
+- [P] Verificare redirect a `/dashboard` (se workspace esiste)
+- [P] Verificare che il nome utente / avatar appaia nell'header
 
 ### 1.3 — Logout
 
-- [ ] Cliccare su `UserButton` (avatar) nell'header
-- [ ] Cliccare "Sign Out"
-- [ ] Verificare redirect a `/sign-in`
-- [ ] Verificare che navigare direttamente a `/dashboard` rediriga a `/sign-in`
+- [P] Cliccare su `UserButton` (avatar) nell'header
+- [P] Cliccare "Sign Out"
+- [P] Verificare redirect a `/sign-in`
+- [P] Verificare che navigare direttamente a `/dashboard` rediriga a `/sign-in`
 
 ### 1.4 — Sessione scaduta / token invalido
 
-- [ ] Login normalmente
-- [ ] Cancellare manualmente i cookie di sessione Clerk dal browser
-- [ ] Ricaricare la pagina
-- [ ] Verificare redirect a `/sign-in` senza crash o pagina bianca
-- [ ] Verificare che non vengano mostrati dati parziali o errori non gestiti
+- [P] Login normalmente
+- [P] Cancellare manualmente i cookie di sessione Clerk dal browser
+- [P] Ricaricare la pagina
+- [P] Verificare redirect a `/sign-in` senza crash o pagina bianca
+- [P] Verificare che non vengano mostrati dati parziali o errori non gestiti
 
 ---
 
@@ -57,24 +57,24 @@ Eseguire i test in ordine: le sezioni successive dipendono da quelle precedenti.
 
 ### 2.1 — Creazione workspace (primo accesso)
 
-- [ ] Dopo il signup, verificare che la pagina `/onboarding/workspace` mostri il form
-- [ ] Verificare i campi: nome workspace, slug (auto-generato dal nome, modificabile)
-- [ ] Inserire un nome e verificare che lo slug venga generato correttamente (lowercase, no spazi)
-- [ ] Modificare lo slug manualmente e verificare che venga accettato
-- [ ] Cliccare "Crea workspace"
-- [ ] Verificare redirect a `/dashboard`
-- [ ] Verificare che il nome workspace appaia nell'header/sidebar
+- [P] Dopo il signup, verificare che la pagina `/onboarding/workspace` mostri il form
+- [P] Verificare i campi: nome workspace, slug (auto-generato dal nome, modificabile)
+- [P] Inserire un nome e verificare che lo slug venga generato correttamente (lowercase, no spazi)
+- [P] Modificare lo slug manualmente e verificare che venga accettato
+- [P] Cliccare "Crea workspace"
+- [P] Verificare redirect a `/dashboard`
+- [P] Verificare che il nome workspace appaia nell'header/sidebar
 
 ### 2.2 — Slug duplicato
 
-- [ ] Tentare di creare un workspace con uno slug già esistente
-- [ ] Verificare che appaia un errore chiaro (es. "Slug già in uso")
-- [ ] Verificare che il form non si resetti e l'utente possa correggere
+- [P] Tentare di creare un workspace con uno slug già esistente
+- [P] Verificare che appaia un errore chiaro (es. "Slug già in uso")
+- [P] Verificare che il form non si resetti e l'utente possa correggere
 
 ### 2.3 — Utente senza workspace
 
-- [ ] Se l'utente non ha un workspace, verificare che qualsiasi route protetta rediriga a `/onboarding/workspace`
-- [ ] Verificare che non ci siano crash o pagine bianche
+- [P] Se l'utente non ha un workspace, verificare che qualsiasi route protetta rediriga a `/onboarding/workspace`
+- [P] Verificare che non ci siano crash o pagine bianche
 
 ---
 
@@ -82,37 +82,37 @@ Eseguire i test in ordine: le sezioni successive dipendono da quelle precedenti.
 
 ### 3.1 — Dashboard con dati
 
-- [ ] Effettuare login in un workspace con task esistenti
-- [ ] Verificare che la dashboard carichi senza errori
-- [ ] Verificare la presenza dei tre metric tile: "Task completate", "In coda", "Richiedono attenzione"
-- [ ] Verificare che i valori dei tile siano coerenti con i dati reali del workspace
-- [ ] Verificare che il tile "Richiedono attenzione" abbia sfondo rosso/arancione se il conteggio è > 0
-- [ ] Verificare la sezione "Task in corso" (se c'è una task in_progress): titolo, fase ADWP corrente, tempo trascorso
-- [ ] Verificare il feed eventi recenti: almeno gli ultimi eventi visibili con timestamp relativo
-- [ ] Cliccare su un evento nel feed → verificare redirect alla task detail corretta
-- [ ] Verificare che la loading state mostri skeleton loader (non pagina bianca)
+- [P] Effettuare login in un workspace con task esistenti
+- [P] Verificare che la dashboard carichi senza errori
+- [P] Verificare la presenza dei tre metric tile: "Task completate", "In coda", "Richiedono attenzione"
+- [P] Verificare che i valori dei tile siano coerenti con i dati reali del workspace
+- [P] Verificare che il tile "Richiedono attenzione" abbia sfondo rosso/arancione se il conteggio è > 0
+- [P] Verificare la sezione "Task in corso" (se c'è una task in_progress): titolo, fase ADWP corrente, tempo trascorso
+- [P] Verificare il feed eventi recenti: almeno gli ultimi eventi visibili con timestamp relativo
+- [P] Cliccare su un evento nel feed → verificare redirect alla task detail corretta
+- [P] Verificare che la loading state mostri skeleton loader (non pagina bianca)
 
 ### 3.2 — Dashboard vuota (empty state)
 
-- [ ] Effettuare login in un workspace senza task
-- [ ] Verificare che appaia l'empty state "Come iniziare" con i 3 passi
-- [ ] Verificare che la CTA "Crea la tua prima task" funzioni e porti a `/tasks/new`
-- [ ] Verificare che la dashboard non sembri "rotta" (layout integro, testi leggibili)
+- [P] Effettuare login in un workspace senza task
+- [P] Verificare che appaia l'empty state "Come iniziare" con i 3 passi
+- [P] Verificare che la CTA "Crea la tua prima task" funzioni e porti a `/tasks/new`
+- [P] Verificare che la dashboard non sembri "rotta" (layout integro, testi leggibili)
 
 ### 3.3 — Stato agente
 
-- [ ] Verificare che il badge `AgentStatusBadge` sia visibile nella dashboard
-- [ ] Se agente idle: verificare testo "Agente pronto" con dot neutro
-- [ ] Se agente busy: verificare testo "Lavora su: [titolo task]" con dot verde pulsante
-- [ ] Se agente offline: verificare testo "Realtime offline" con dot grigio
+- [P] Verificare che il badge `AgentStatusBadge` sia visibile nella dashboard
+- [P] Se agente idle: verificare testo "Agente pronto" con dot neutro
+- [P] Se agente busy: verificare testo "Lavora su: [titolo task]" con dot verde pulsante
+- [P] Se agente offline: verificare testo "Realtime offline" con dot grigio
 
 ### 3.4 — Real-time sulla dashboard
 
-- [ ] Tenere la dashboard aperta
-- [ ] Creare una task da un'altra finestra/tab
-- [ ] Verificare che il feed eventi si aggiorni senza refresh manuale
-- [ ] Verificare che i metric tile si aggiornino (potrebbe avere un delay di ~60s)
-- [ ] Verificare che lo stato agente cambi in real-time quando una task viene presa in carico
+- [P] Tenere la dashboard aperta
+- [P] Creare una task da un'altra finestra/tab
+- [P] Verificare che il feed eventi si aggiorni senza refresh manuale
+- [P] Verificare che i metric tile si aggiornino (potrebbe avere un delay di ~60s)
+- [P] Verificare che lo stato agente cambi in real-time quando una task viene presa in carico
 
 ---
 

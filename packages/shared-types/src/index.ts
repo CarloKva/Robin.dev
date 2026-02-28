@@ -315,3 +315,76 @@ export type AgentWithStatus = Agent & {
   current_task_id: string | null;
   last_heartbeat: string | null;
 };
+
+// ---------------------------------------------------------------
+// Sprint A — GitHub integration + Agent provisioning types
+// ---------------------------------------------------------------
+
+export type AgentProvisioningStatus =
+  | "pending"
+  | "provisioning"
+  | "online"
+  | "error"
+  | "deprovisioning"
+  | "deprovisioned";
+
+/** GitHub App connection for a workspace */
+export type GitHubConnection = {
+  id: string;
+  workspace_id: string;
+  installation_id: number;
+  github_account_id: number;
+  github_account_login: string;
+  github_account_type: "User" | "Organization";
+  status: "connected" | "revoked" | "suspended";
+  connected_at: string;
+  last_validated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Repository enabled by the founder for Robin.dev agents */
+export type Repository = {
+  id: string;
+  workspace_id: string;
+  github_repo_id: number;
+  full_name: string;          // e.g. "acme/frontend"
+  default_branch: string;
+  is_private: boolean;
+  is_enabled: boolean;
+  is_available: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Many-to-many between agents and repositories */
+export type AgentRepository = {
+  id: string;
+  agent_id: string;
+  repository_id: string;
+  assigned_at: string;
+};
+
+/** Agent enriched with provisioning state and assigned repos */
+export type AgentWithProvisioning = Agent & {
+  provisioning_status: AgentProvisioningStatus;
+  vps_id: number | null;
+  vps_created_at: string | null;
+  provisioned_at: string | null;
+  provisioning_error: string | null;
+  repositories: Pick<Repository, "id" | "full_name" | "default_branch">[];
+};
+
+/** Payload for agent-provisioning BullMQ job */
+export type AgentProvisioningJobPayload = {
+  agentId: string;
+  workspaceId: string;
+};
+
+/** Payload for agent-deprovisioning BullMQ job */
+export type AgentDeprovisioningJobPayload = {
+  agentId: string;
+  workspaceId: string;
+  vpsId: number | null;
+};

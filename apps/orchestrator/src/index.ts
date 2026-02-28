@@ -5,69 +5,96 @@ import { ExpressAdapter } from "@bull-board/express";
 import { BULL_BOARD_PORT } from "./config/bullmq.config";
 import { taskQueue } from "./queues/task.queue";
 import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
+import { createProvisioningWorker } from "./workers/agent.provisioning.worker";
+import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
 import { taskPoller } from "./services/task.poller";
 import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
 import { log } from "./utils/logger";
 
 const AGENT_ID = process.env["AGENT_ID"] ?? "b0000000-0000-0000-0000-000000000001";
-
 const VERSION = process.env["npm_package_version"] ?? "0.0.1";
 
-async function main() {
-  log.info({ version: VERSION }, "Robin.dev Orchestrator starting");
+/**
+ * CONTROL_PLANE mode: runs provisioning/deprovisioning workers only.
+ * Set CONTROL_PLANE=true on Carlo's control-plane VPS.
+ * Agent VPSes leave this unset and run the task execution worker instead.
+ */
+const IS_CONTROL_PLANE = process.env["CONTROL_PLANE"] === "true";
 
-  // -------------------------
-  // Verify Redis connection
-  // -------------------------
+async function main() {
+  log.info(
+    { version: VERSION, mode: IS_CONTROL_PLANE ? "control-plane" : "agent" },
+    "Robin.dev Orchestrator starting"
+  );
+
+  // ─── Verify Redis connection ─────────────────────────────────────────────
   const redis = getRedisConnection();
   await redis.ping();
   log.info({}, "Redis connection verified");
 
-  // -------------------------
-  // Start worker + queue events monitor
-  // -------------------------
-  const worker = createWorker();
-  const queueEvents = createQueueEventMonitor(taskQueue);
+  // ─── Mode-specific setup ─────────────────────────────────────────────────
+  const workersToClose: Array<{ close: () => Promise<void> }> = [];
+  let heartbeat: HeartbeatService | null = null;
 
-  // -------------------------
-  // Start heartbeat (updates agents.last_seen_at every 30s)
-  // -------------------------
-  const heartbeat = new HeartbeatService(AGENT_ID, VERSION);
-  heartbeat.start();
+  if (IS_CONTROL_PLANE) {
+    // Control-plane: provisioning + deprovisioning workers only (no task execution)
+    const provisioningWorker = createProvisioningWorker();
+    const deprovisioningWorker = createDeprovisioningWorker();
+    workersToClose.push(provisioningWorker, deprovisioningWorker);
 
-  // -------------------------
-  // Start poller
-  // -------------------------
-  taskPoller.start();
+    log.info({}, "Control-plane workers started (provisioning + deprovisioning)");
+  } else {
+    // Agent VPS: validate AGENT_ID
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(AGENT_ID)) {
+      throw new Error(
+        `AGENT_ID env var must be a valid UUID (got "${AGENT_ID}"). ` +
+        "Set it to the agent's UUID from the agents table."
+      );
+    }
 
-  // -------------------------
-  // Express: health endpoint + Bull Board
-  // -------------------------
+    const worker = createWorker();
+    const queueEvents = createQueueEventMonitor(taskQueue);
+    workersToClose.push(worker, queueEvents);
+
+    heartbeat = new HeartbeatService(AGENT_ID, VERSION);
+    heartbeat.start();
+
+    taskPoller.start();
+
+    log.info({}, "Agent workers started (task execution + heartbeat + poller)");
+  }
+
+  // ─── Express: health endpoint + Bull Board ───────────────────────────────
   const app = express();
 
-  // Bull Board UI — accessible via SSH tunnel: ssh -L 3001:localhost:3001 agent@<vps>
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath("/admin/queues");
+
   createBullBoard({
-    queues: [new BullMQAdapter(taskQueue.getBullMQQueue())],
+    queues: IS_CONTROL_PLANE ? [] : [new BullMQAdapter(taskQueue.getBullMQQueue())],
     serverAdapter,
   });
   app.use("/admin/queues", serverAdapter.getRouter());
 
-  // Health endpoint — polled by Betterstack
+  // Health endpoint — polled by Betterstack and by waitForOrchestratorHealth()
   app.get("/health", async (_req, res) => {
     try {
       await redis.ping();
-      const queueCounts = await taskQueue.getJobCounts();
-
-      res.json({
+      const payload: Record<string, unknown> = {
         status: "ok",
         version: VERSION,
+        mode: IS_CONTROL_PLANE ? "control-plane" : "agent",
         uptime: Math.round(process.uptime()),
-        queueCounts,
         redisConnected: true,
-      });
+      };
+
+      if (!IS_CONTROL_PLANE) {
+        payload["queueCounts"] = await taskQueue.getJobCounts();
+      }
+
+      res.json(payload);
     } catch (err) {
       res.status(503).json({
         status: "error",
@@ -77,30 +104,39 @@ async function main() {
     }
   });
 
-  const server = app.listen(BULL_BOARD_PORT, "127.0.0.1", () => {
+  // Control-plane listens on 0.0.0.0 (polled by provisioning health check).
+  // Agent VPS listens on loopback only (health check is via SSH tunnel).
+  const listenHost = IS_CONTROL_PLANE ? "0.0.0.0" : "127.0.0.1";
+
+  const server = app.listen(BULL_BOARD_PORT, listenHost, () => {
     log.info(
-      { port: BULL_BOARD_PORT },
-      `Health endpoint: http://127.0.0.1:${BULL_BOARD_PORT}/health`
+      { port: BULL_BOARD_PORT, host: listenHost },
+      `Health endpoint: http://${listenHost}:${BULL_BOARD_PORT}/health`
     );
-    log.info(
-      { port: BULL_BOARD_PORT },
-      `Bull Board: http://127.0.0.1:${BULL_BOARD_PORT}/admin/queues`
-    );
+    if (!IS_CONTROL_PLANE) {
+      log.info(
+        { port: BULL_BOARD_PORT },
+        `Bull Board: http://127.0.0.1:${BULL_BOARD_PORT}/admin/queues`
+      );
+    }
   });
 
-  // -------------------------
-  // Graceful shutdown
-  // -------------------------
+  // ─── Graceful shutdown ───────────────────────────────────────────────────
   const shutdown = async (signal: string) => {
     log.info({ signal }, "Shutting down gracefully");
 
-    heartbeat.stop();
-    taskPoller.stop();
+    heartbeat?.stop();
+    if (!IS_CONTROL_PLANE) taskPoller.stop();
 
     // Give active jobs 30s to complete before forcing exit
-    await worker.close();
-    await queueEvents.close();
-    await taskQueue.close();
+    for (const w of workersToClose) {
+      await w.close();
+    }
+
+    if (!IS_CONTROL_PLANE) {
+      await taskQueue.close();
+    }
+
     await closeRedis();
 
     server.close(() => {
@@ -115,8 +151,8 @@ async function main() {
     }, 35_000);
   };
 
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 
   log.info({}, "Robin.dev Orchestrator ready");
 }

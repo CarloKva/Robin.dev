@@ -3,18 +3,15 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AgentHeroSection } from "@/components/dashboard/AgentHeroSection";
+import { AgentStatusGrid } from "@/components/dashboard/AgentStatusGrid";
 import { MetricsTile } from "@/components/dashboard/MetricsTile";
 import { ActiveTaskCard } from "@/components/dashboard/ActiveTaskCard";
 import { WorkspaceFeed } from "@/components/dashboard/WorkspaceFeed";
-import type { AgentStatusEnum } from "@robin/shared-types";
-import type { DashboardMetrics, FeedEntry, ActiveTaskData } from "@/lib/db/dashboard";
+import type { DashboardMetrics, FeedEntry, ActiveTaskData, DashboardAgent } from "@/lib/db/dashboard";
 
 interface DashboardClientProps {
   workspaceId: string;
-  agentName: string;
-  initialAgentStatus: AgentStatusEnum;
-  initialAgentTaskTitle: string | null;
+  initialAgents: DashboardAgent[];
   metrics: DashboardMetrics;
   activeTask: ActiveTaskData | null;
   initialFeed: FeedEntry[];
@@ -29,9 +26,7 @@ const METRICS_REFRESH_INTERVAL_MS = 60_000;
  */
 export function DashboardClient({
   workspaceId,
-  agentName,
-  initialAgentStatus,
-  initialAgentTaskTitle,
+  initialAgents,
   metrics,
   activeTask,
   initialFeed,
@@ -39,7 +34,7 @@ export function DashboardClient({
   const router = useRouter();
 
   // Refresh server-fetched metrics (task counts) every 60s.
-  // Realtime handles the feed and agent status — this only refreshes the tiles.
+  // Realtime handles the feed and agent grid — this only refreshes the tiles.
   useEffect(() => {
     const id = setInterval(() => {
       router.refresh();
@@ -54,13 +49,16 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
-      {/* Hero: agent status */}
-      <AgentHeroSection
-        workspaceId={workspaceId}
-        agentName={agentName}
-        initialStatus={initialAgentStatus}
-        initialTaskTitle={initialAgentTaskTitle}
-      />
+      {/* Agents grid — real-time status of all agents */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Agenti attivi</h2>
+          <Link href="/agents" className="text-xs text-muted-foreground hover:text-foreground">
+            Gestisci →
+          </Link>
+        </div>
+        <AgentStatusGrid workspaceId={workspaceId} initialAgents={initialAgents} />
+      </section>
 
       {/* Metric tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
