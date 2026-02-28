@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import type { JobPayload } from "@robin/shared-types";
+import { createRedisConnection } from "./redis.connection";
 
 const QUEUE_NAME = "tasks";
 
@@ -12,13 +13,8 @@ let _queue: Queue<JobPayload> | null = null;
 export function getTaskQueue(): Queue<JobPayload> {
   if (_queue) return _queue;
 
-  const redisUrl = process.env["REDIS_URL"];
-  if (!redisUrl) {
-    throw new Error("REDIS_URL environment variable is not set");
-  }
-
   _queue = new Queue<JobPayload>(QUEUE_NAME, {
-    connection: { url: redisUrl },
+    connection: createRedisConnection(),
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: "exponential", delay: 5_000 },

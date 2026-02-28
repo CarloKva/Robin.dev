@@ -4,8 +4,8 @@
  */
 
 import { Queue } from "bullmq";
-import IORedis from "ioredis";
 import type { AgentProvisioningJobPayload, AgentDeprovisioningJobPayload } from "@robin/shared-types";
+import { createRedisConnection } from "./redis.connection";
 
 export const PROVISIONING_QUEUE_NAME = "agent-provisioning";
 export const DEPROVISIONING_QUEUE_NAME = "agent-deprovisioning";
@@ -13,19 +13,12 @@ export const DEPROVISIONING_QUEUE_NAME = "agent-deprovisioning";
 let provisioningQueue: Queue<AgentProvisioningJobPayload> | null = null;
 let deprovisioningQueue: Queue<AgentDeprovisioningJobPayload> | null = null;
 
-function getRedisConnection() {
-  return new IORedis(process.env["REDIS_URL"] ?? "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
-}
-
 export function getProvisioningQueue(): Queue<AgentProvisioningJobPayload> {
   if (!provisioningQueue) {
     provisioningQueue = new Queue<AgentProvisioningJobPayload>(
       PROVISIONING_QUEUE_NAME,
       {
-        connection: getRedisConnection(),
+        connection: createRedisConnection(),
         defaultJobOptions: {
           attempts: 1,         // Provisioning is idempotent — manual retry via UI
           removeOnComplete: { count: 50 },
@@ -42,7 +35,7 @@ export function getDeprovisioningQueue(): Queue<AgentDeprovisioningJobPayload> {
     deprovisioningQueue = new Queue<AgentDeprovisioningJobPayload>(
       DEPROVISIONING_QUEUE_NAME,
       {
-        connection: getRedisConnection(),
+        connection: createRedisConnection(),
         defaultJobOptions: {
           attempts: 2,
           removeOnComplete: { count: 50 },
