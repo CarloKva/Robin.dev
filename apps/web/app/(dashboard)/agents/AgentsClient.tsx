@@ -196,20 +196,25 @@ function CreationModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+      <div
+        className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-base font-semibold text-foreground">Crea agente</h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Chiudi"
           >
-            ✕
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
         <AgentCreationForm

@@ -65,7 +65,6 @@ export function AgentCreationForm({
         return;
       }
 
-      // Navigate to agent detail page
       router.push(`/agents/${data.agent!.id}`);
       router.refresh();
       onClose();
@@ -100,48 +99,68 @@ export function AgentCreationForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="es. Agent Alpha"
           maxLength={100}
+          autoFocus
           disabled={isPending}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
         />
       </div>
 
       {/* Repository selection */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">
-          Repository ({selectedRepoIds.length} selezionati)
+          Repository
+          {selectedRepoIds.length > 0 && (
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+              ({selectedRepoIds.length} selezionati)
+            </span>
+          )}
         </label>
         {enabledRepos.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
             Nessun repository abilitato.{" "}
             <a href="/settings" className="underline">
               Abilitane uno nelle impostazioni.
             </a>
           </p>
         ) : (
-          <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border border-border p-2">
+          <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-border p-1.5">
             {enabledRepos.map((repo) => {
               const checked = selectedRepoIds.includes(repo.id);
               return (
                 <label
                   key={repo.id}
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                    "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                     checked
-                      ? "bg-primary/10 text-foreground"
-                      : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                      ? "bg-primary/10 ring-1 ring-primary/20 text-foreground"
+                      : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
                   )}
                 >
+                  <span
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                      checked
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {checked && (
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5L4.5 7.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleRepo(repo.id)}
                     disabled={isPending}
-                    className="h-4 w-4 rounded border-border accent-primary"
+                    className="sr-only"
                   />
-                  <span className="truncate font-mono text-xs">{repo.full_name}</span>
+                  <span className="min-w-0 truncate font-mono text-xs">{repo.full_name}</span>
                   {repo.is_private && (
-                    <span className="ml-auto shrink-0 rounded-full bg-zinc-100 px-1.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      privata
+                    <span className="ml-auto shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      private
                     </span>
                   )}
                 </label>
@@ -156,19 +175,19 @@ export function AgentCreationForm({
       )}
 
       {/* Actions */}
-      <div className="flex justify-end gap-3">
+      <div className="flex items-center justify-end gap-3 pt-1">
         <button
           type="button"
           onClick={onClose}
           disabled={isPending}
-          className="rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
         >
           Annulla
         </button>
         <button
           type="submit"
           disabled={isPending || !name.trim() || selectedRepoIds.length === 0}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPending ? "Creazione in corso..." : "Crea agente"}
         </button>
