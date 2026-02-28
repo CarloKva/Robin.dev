@@ -38,7 +38,7 @@ function generateName(event: ClerkUserCreatedEvent["data"]): string {
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.CLERK_WEBHOOK_SECRET;
+  const secret = process.env["CLERK_WEBHOOK_SECRET"];
   if (!secret) {
     console.error("[Clerk Webhook] CLERK_WEBHOOK_SECRET is not set");
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
