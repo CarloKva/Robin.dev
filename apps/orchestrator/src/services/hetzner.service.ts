@@ -36,7 +36,7 @@ export interface HetznerServer {
 
 export interface CreateServerParams {
   name: string;           // e.g. "robin-agent-{agentId}"
-  serverType?: string;    // default: "cx22"
+  serverType?: string;    // default: "cx23"
   image?: string;         // default: "ubuntu-24.04"
   location?: string;      // default: "fsn1"
   sshKeyId?: number;      // Hetzner SSH key ID
@@ -48,7 +48,7 @@ export async function createServer(params: CreateServerParams): Promise<HetznerS
 
   const body: Record<string, unknown> = {
     name: params.name,
-    server_type: params.serverType ?? "cx22",
+    server_type: params.serverType ?? "cx23",
     image: params.image ?? "ubuntu-24.04",
     location: params.location ?? "fsn1",
     user_data: params.userData,
