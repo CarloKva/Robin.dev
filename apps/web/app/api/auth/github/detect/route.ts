@@ -58,14 +58,13 @@ export async function POST() {
       .filter((inst) => !linkedIds.has(inst.id))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    if (unlinked.length === 0) {
+    const target = unlinked[0];
+    if (!target) {
       return NextResponse.json(
         { error: "all_linked", message: "Tutte le installazioni sono già collegate a un workspace." },
         { status: 404 }
       );
     }
-
-    const target = unlinked[0];
 
     await upsertGitHubConnection({
       workspaceId: workspace.id,
