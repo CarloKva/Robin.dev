@@ -24,6 +24,7 @@ import {
   waitForOrchestratorHealth,
   buildCloudInitScript,
 } from "../services/hetzner.service";
+import { getInstallationToken } from "../services/github.service";
 import { log } from "../utils/logger";
 
 export const PROVISIONING_QUEUE_NAME = "agent-provisioning";
@@ -94,6 +95,13 @@ async function processProvisioningJob(
   let vpsIp: string | undefined;
 
   if (!vpsId) {
+    // Generate a short-lived GitHub token for git clone in cloud-init
+    const githubCloneToken = await getInstallationToken(
+      githubAppId,
+      githubAppPrivateKeyB64,
+      connection.installation_id as number
+    );
+
     const userData = buildCloudInitScript({
       agentId,
       workspaceId,
@@ -103,6 +111,7 @@ async function processProvisioningJob(
       githubAppId,
       githubAppPrivateKeyB64,
       githubInstallationId: connection.installation_id as number,
+      githubCloneToken,
       ...(redisUrl !== undefined && { redisUrl }),
       ...(orchestratorRepoUrl !== undefined && { orchestratorRepoUrl }),
     });

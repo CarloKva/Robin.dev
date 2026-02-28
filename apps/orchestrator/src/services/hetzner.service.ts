@@ -191,6 +191,7 @@ interface CloudInitParams {
   githubAppId: string;
   githubAppPrivateKeyB64: string;
   githubInstallationId: number;
+  githubCloneToken: string;
   redisUrl?: string;
   orchestratorRepoUrl?: string;
 }
@@ -204,7 +205,8 @@ interface CloudInitParams {
  * Future: migrate to a bootstrap-token pattern.
  */
 export function buildCloudInitScript(params: CloudInitParams): string {
-  const repoUrl = params.orchestratorRepoUrl ?? "https://github.com/CarloKva/Robin.dev.git";
+  const baseRepoUrl = params.orchestratorRepoUrl ?? "https://github.com/CarloKva/Robin.dev.git";
+  const repoUrl = baseRepoUrl.replace("https://", `https://x-access-token:${params.githubCloneToken}@`);
   const redisUrl = params.redisUrl ?? "redis://127.0.0.1:6379";
 
   return `#!/bin/bash
