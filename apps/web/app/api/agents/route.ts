@@ -87,19 +87,25 @@ export async function POST(request: Request) {
     );
   }
 
-  // Enqueue provisioning job (best-effort — agent record exists regardless)
+  // Enqueue provisioning job (best-effort — agent record exists regardless).
+  // Wrapped in a timeout because ioredis retries forever when Redis is unreachable,
+  // which would hang the API response indefinitely.
   try {
     const queue = getProvisioningQueue();
     const payload: AgentProvisioningJobPayload = {
       agentId: agent.id,
       workspaceId: workspace.id,
     };
-    await queue.add(`provision-${agent.id}`, payload, {
-      jobId: `provision-${agent.id}`,
-    });
+    await Promise.race([
+      queue.add(`provision-${agent.id}`, payload, {
+        jobId: `provision-${agent.id}`,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Redis enqueue timeout")), 5000)
+      ),
+    ]);
   } catch (err) {
     console.error("[POST /api/agents] provisioning enqueue error:", err);
-    // Don't fail the request — the provisioning can be triggered manually
   }
 
   return NextResponse.json({ agent }, { status: 201 });

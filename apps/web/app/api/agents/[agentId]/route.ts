@@ -58,7 +58,7 @@ export async function DELETE(
     .update({ provisioning_status: "deprovisioning" })
     .eq("id", agentId);
 
-  // Enqueue deprovisioning job
+  // Enqueue deprovisioning job (best-effort, timeout-guarded like provisioning)
   try {
     const queue = getDeprovisioningQueue();
     const payload: AgentDeprovisioningJobPayload = {
@@ -66,9 +66,14 @@ export async function DELETE(
       workspaceId: workspace.id,
       vpsId: (agent.vps_id as number | null) ?? null,
     };
-    await queue.add(`deprovision-${agentId}`, payload, {
-      jobId: `deprovision-${agentId}`,
-    });
+    await Promise.race([
+      queue.add(`deprovision-${agentId}`, payload, {
+        jobId: `deprovision-${agentId}`,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Redis enqueue timeout")), 5000)
+      ),
+    ]);
   } catch (err) {
     console.error("[DELETE /api/agents/[agentId]] deprovisioning enqueue error:", err);
   }
