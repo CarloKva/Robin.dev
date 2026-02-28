@@ -38,7 +38,7 @@ export interface CreateServerParams {
   name: string;           // e.g. "robin-agent-{agentId}"
   serverType?: string;    // default: "cx23"
   image?: string;         // default: "ubuntu-24.04"
-  location?: string;      // default: "fsn1"
+  location?: string;      // default: "nbg1"
   sshKeyId?: number;      // Hetzner SSH key ID
   userData: string;       // cloud-init script (bash)
 }
@@ -50,7 +50,7 @@ export async function createServer(params: CreateServerParams): Promise<HetznerS
     name: params.name,
     server_type: params.serverType ?? "cx23",
     image: params.image ?? "ubuntu-24.04",
-    location: params.location ?? "fsn1",
+    location: params.location ?? "nbg1",
     user_data: params.userData,
   };
 

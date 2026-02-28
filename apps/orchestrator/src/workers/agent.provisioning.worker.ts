@@ -143,7 +143,7 @@ async function processProvisioningJob(
   // Save vps_ip
   await supabase
     .from("agents")
-    .update({ vps_ip: vpsIp, vps_region: "fsn1" })
+    .update({ vps_ip: vpsIp, vps_region: "nbg1" })
     .eq("id", agentId);
 
   log.info({ agentId, vpsId, vpsIp }, "VPS running; waiting for orchestrator health check");
