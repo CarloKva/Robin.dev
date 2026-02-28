@@ -302,8 +302,8 @@ export function AgentDetailClient({
         </section>
       </div>
 
-      {/* Task history */}
-      {provStatus === "online" && (
+      {/* Task history — hidden during provisioning */}
+      {!isProvisioning && provStatus !== "error" && (
         <section className="rounded-xl border border-border p-6">
           <h2 className="mb-4 text-base font-semibold">Ultimi task</h2>
           <AgentTaskHistory tasks={recentTasks} />
