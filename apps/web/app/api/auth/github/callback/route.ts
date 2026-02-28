@@ -13,7 +13,9 @@ import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { upsertGitHubConnection } from "@/lib/db/github";
 import { getInstallationInfo } from "@/lib/github/app";
 
-const APP_URL = process.env["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000";
+const APP_URL =
+  process.env["NEXT_PUBLIC_APP_URL"] ??
+  (process.env["VERCEL_URL"] ? `https://${process.env["VERCEL_URL"]}` : "http://localhost:3000");
 
 export async function GET(request: NextRequest) {
   const { userId } = await auth();

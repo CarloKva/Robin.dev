@@ -160,6 +160,47 @@ export async function listInstallationRepos(installationId: number): Promise<Git
   return repos;
 }
 
+// ─── List all App installations ──────────────────────────────────────────────
+
+type AppInstallation = {
+  id: number;
+  account: InstallationAccount;
+  created_at: string;
+};
+
+/**
+ * Lists all installations of this GitHub App (across all accounts).
+ * Used as a fallback to detect installations when the callback redirect fails.
+ */
+export async function listAppInstallations(): Promise<AppInstallation[]> {
+  const jwt = createGitHubAppJWT();
+  const installations: AppInstallation[] = [];
+  let page = 1;
+
+  while (true) {
+    const res = await fetch(
+      `${GITHUB_API}/app/installations?per_page=100&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      }
+    );
+
+    if (!res.ok) break;
+
+    const data = (await res.json()) as AppInstallation[];
+    installations.push(...data);
+
+    if (data.length < 100) break;
+    page++;
+  }
+
+  return installations;
+}
+
 // ─── Installation URL ────────────────────────────────────────────────────────
 
 /**
