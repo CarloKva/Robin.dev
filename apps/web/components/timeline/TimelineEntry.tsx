@@ -16,6 +16,10 @@ import {
   MessageSquare,
   CheckCheck,
   XCircle,
+  UserPlus,
+  UserPen,
+  UserX,
+  RotateCcw,
 } from "lucide-react";
 import type { TimelineEntry as TimelineEntryType, TaskEventType } from "@robin/shared-types";
 import { useRelativeTime } from "@/lib/hooks/useRelativeTime";
@@ -49,6 +53,10 @@ const EVENT_META: Record<TaskEventType, EventMeta> = {
   "task.completed":               { icon: CheckCheck,     iconClass: "text-emerald-700", ringClass: "bg-emerald-100", key: true  },
   "task.failed":                  { icon: XCircle,        iconClass: "text-red-700",     ringClass: "bg-red-100",     key: true  },
   "task.pr_closed_without_merge": { icon: XCircle,        iconClass: "text-orange-600",  ringClass: "bg-orange-100",  key: true  },
+  "user.task.created":            { icon: UserPlus,       iconClass: "text-blue-700",    ringClass: "bg-blue-100",    key: false },
+  "user.task.updated":            { icon: UserPen,        iconClass: "text-amber-700",   ringClass: "bg-amber-100",   key: false },
+  "user.task.deleted":            { icon: UserX,          iconClass: "text-red-700",     ringClass: "bg-red-100",     key: true  },
+  "user.rework.initiated":        { icon: RotateCcw,      iconClass: "text-violet-700",  ringClass: "bg-violet-100",  key: true  },
 };
 
 const DEFAULT_META: EventMeta = {
