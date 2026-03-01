@@ -3,9 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
-import { getOnlineAgentForWorkspace } from "@/lib/db/agents";
-import { getTaskQueue, priorityToNumber, defaultTimeoutByType } from "@/lib/queue/tasks.queue";
-import type { JobPayload } from "@robin/shared-types";
 
 const createTaskSchema = z.object({
   title: z.string().min(1, "Titolo obbligatorio").max(200),
@@ -80,64 +77,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
-  // ── Resolve repository metadata for the job payload ─────────────────────
-  // When repository_id is provided, resolve the clone URL and local path.
-  // Auth is handled by the agent VPS at clone time using its stored GitHub App credentials.
-  const reposBasePath = process.env["AGENT_REPOS_BASE_PATH"] ?? "/home/agent/repos";
-  let resolvedRepositoryUrl = process.env["DEFAULT_REPOSITORY_URL"] ?? "";
-  let resolvedRepositoryPath = process.env["DEFAULT_REPOSITORY_PATH"] ?? "/workspace/repo";
-  let resolvedBranch = process.env["DEFAULT_BRANCH"] ?? "main";
-
-  if (repository_id) {
-    const { data: repo, error: repoError } = await supabase
-      .from("repositories")
-      .select("id, full_name, default_branch")
-      .eq("id", repository_id)
-      .eq("workspace_id", workspace.id)
-      .maybeSingle();
-
-    if (repoError) {
-      console.error("[POST /api/tasks] failed to fetch repository:", repoError.message);
-    }
-
-    if (repo) {
-      resolvedRepositoryPath = `${reposBasePath}/${repo.id}`;
-      resolvedBranch = repo.default_branch ?? "main";
-      // Store the base URL without a token — the agent VPS generates a fresh token at clone time
-      // using its stored GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY_B64 / GITHUB_INSTALLATION_ID.
-      resolvedRepositoryUrl = `https://github.com/${repo.full_name}.git`;
-    } else if (!repoError) {
-      console.warn("[POST /api/tasks] repository_id provided but repo not found:", repository_id);
-    }
-  }
-
-  // Determine initial status
+  // Determine initial status:
+  // - If sprint_id or add_to_sprint → sprint_ready (task assigned to sprint, pending sprint start)
+  // - Otherwise → backlog (task will only execute when added to a sprint and sprint is started)
   let taskStatus: string;
-  let assignedAgentId: string | null = null;
-
-  if (sprint_id) {
-    // Task is being added directly to a sprint — mark as sprint_ready
-    taskStatus = "sprint_ready";
-  } else if (add_to_sprint) {
+  if (sprint_id || add_to_sprint) {
     taskStatus = "sprint_ready";
   } else {
-    // Routing: prefer explicit agent, fall back to auto-routing
-    if (preferred_agent_id) {
-      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-      const { data: preferredAgent } = await supabase
-        .from("agents")
-        .select("id")
-        .eq("id", preferred_agent_id)
-        .eq("workspace_id", workspace.id)
-        .gt("last_seen_at", twoMinutesAgo)
-        .maybeSingle();
-      assignedAgentId = preferredAgent?.id ?? null;
-    }
-    if (!assignedAgentId) {
-      const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
-      assignedAgentId = onlineAgent?.id ?? null;
-    }
-    taskStatus = assignedAgentId ? "queued" : "backlog";
+    taskStatus = "backlog";
   }
 
   // Determine sprint_order if adding to sprint
@@ -163,7 +110,6 @@ export async function POST(request: Request) {
       type,
       priority,
       status: taskStatus,
-      assigned_agent_id: assignedAgentId,
       created_by_user_id: userId,
       ...(sprint_id !== undefined && sprint_id !== null && { sprint_id }),
       ...(repository_id !== undefined && repository_id !== null && { repository_id }),
@@ -203,37 +149,11 @@ export async function POST(request: Request) {
     payload: { from: "pending", to: taskStatus },
   });
 
-  // Enqueue in BullMQ only when an agent is online (best-effort)
-  if (assignedAgentId && taskStatus === "queued") {
-    try {
-      const queue = getTaskQueue();
-
-      const jobPayload: JobPayload = {
-        taskId: task.id,
-        workspaceId: workspace.id,
-        agentId: assignedAgentId,
-        repositoryUrl: resolvedRepositoryUrl,
-        branch: resolvedBranch,
-        repositoryPath: resolvedRepositoryPath,
-        taskTitle: title,
-        taskDescription: description,
-        taskType: type as JobPayload["taskType"],
-        priority: priority as JobPayload["priority"],
-        timeoutMinutes: defaultTimeoutByType[type as keyof typeof defaultTimeoutByType] ?? 30,
-        claudeMdPath: "CLAUDE.md",
-      };
-
-      await queue.add(title, jobPayload, {
-        priority: priorityToNumber(priority as Parameters<typeof priorityToNumber>[0]),
-        jobId: task.id,
-      });
-    } catch (err) {
-      console.error("[POST /api/tasks] BullMQ enqueue error:", err);
-    }
-  }
+  // Tasks are NOT enqueued at creation time. Execution only starts when the sprint is started
+  // explicitly via POST /api/sprints/{id}/start. This decouples task creation from execution.
 
   return NextResponse.json(
-    { task, agentAssigned: !!assignedAgentId },
+    { task, agentAssigned: false },
     { status: 201 }
   );
 }

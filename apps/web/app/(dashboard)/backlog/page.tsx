@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getBacklogTasks } from "@/lib/db/backlog";
-import { getSprintsForWorkspace } from "@/lib/db/sprints";
+import { getSprintsForWorkspace, getSprintWithTasks } from "@/lib/db/sprints";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
-import { BacklogClient } from "@/components/backlog/BacklogClient";
+import { BacklogSprintTabs } from "@/components/backlog/BacklogSprintTabs";
 import type { TaskType, TaskPriority, EstimatedEffort } from "@robin/shared-types";
 
 interface BacklogPageProps {
@@ -16,6 +16,7 @@ interface BacklogPageProps {
     repositoryId?: string;
     search?: string;
     page?: string;
+    tab?: string;
   }>;
 }
 
@@ -28,8 +29,9 @@ export default async function BacklogPage({ searchParams }: BacklogPageProps) {
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
+  const defaultTab = params.tab === "sprint" ? "sprint" : "backlog";
 
-  const [{ tasks, total }, repositories, sprints] = await Promise.all([
+  const [{ tasks, total }, repositories, allSprints] = await Promise.all([
     getBacklogTasks(workspace.id, {
       ...(params.type && { type: params.type as TaskType }),
       ...(params.priority && { priority: params.priority as TaskPriority }),
@@ -41,6 +43,18 @@ export default async function BacklogPage({ searchParams }: BacklogPageProps) {
     }),
     getRepositoriesForWorkspace(workspace.id),
     getSprintsForWorkspace(workspace.id),
+  ]);
+
+  // Load current active or planning sprint with its tasks for the Sprint tab
+  const activeSprintMeta = allSprints.find((s) => s.status === "active") ?? null;
+  const planningSprintMeta = allSprints.find((s) => s.status === "planning") ?? null;
+  const pastSprints = allSprints.filter((s) => ["completed", "cancelled"].includes(s.status));
+
+  const [activeSprint, planningSprint] = await Promise.all([
+    activeSprintMeta ? getSprintWithTasks(activeSprintMeta.id, workspace.id) : Promise.resolve(null),
+    planningSprintMeta && !activeSprintMeta
+      ? getSprintWithTasks(planningSprintMeta.id, workspace.id)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -60,13 +74,18 @@ export default async function BacklogPage({ searchParams }: BacklogPageProps) {
         </Link>
       </div>
 
-      <BacklogClient
+      <BacklogSprintTabs
         tasks={tasks}
         total={total}
         page={page}
         pageSize={30}
         repositories={repositories.filter((r) => r.is_enabled)}
-        sprints={sprints}
+        sprints={allSprints}
+        activeSprint={activeSprint}
+        planningSprint={planningSprint}
+        pastSprints={pastSprints}
+        workspaceId={workspace.id}
+        defaultTab={defaultTab}
       />
     </div>
   );
