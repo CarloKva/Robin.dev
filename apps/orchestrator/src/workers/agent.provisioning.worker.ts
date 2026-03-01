@@ -43,13 +43,13 @@ async function waitForAgentHeartbeat(
     await new Promise((r) => setTimeout(r, 10_000));
 
     const { data } = await supabase
-      .from("agent_status")
-      .select("last_heartbeat")
-      .eq("agent_id", agentId)
+      .from("agents")
+      .select("last_seen_at")
+      .eq("id", agentId)
       .maybeSingle();
 
-    if (data?.last_heartbeat) {
-      const hbAge = Date.now() - new Date(data.last_heartbeat).getTime();
+    if (data?.last_seen_at) {
+      const hbAge = Date.now() - new Date(data.last_seen_at).getTime();
       if (hbAge < 60_000) {
         log.info({ agentId, hbAge: Math.round(hbAge / 1000) }, "Agent heartbeat detected");
         return;
