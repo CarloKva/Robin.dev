@@ -145,13 +145,12 @@ function PreflightIndicator({ state }: { state: PreflightState }) {
 // ─── Main form ─────────────────────────────────────────────────────────────
 
 interface Props {
-  hasOnlineAgent: boolean;
   workspaceId: string;
   repositories: Repository[];
   agents: AgentWithStatus[];
 }
 
-export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId, repositories, agents }: Props) {
+export function TaskCreationForm({ workspaceId: _workspaceId, repositories, agents }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
@@ -284,7 +283,6 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId, re
 
         {activeTab === "form" ? (
           <FormPanel
-            hasOnlineAgent={hasOnlineAgent}
             errors={errors}
             isSubmitting={isSubmitting}
             serverError={serverError}
@@ -307,7 +305,6 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId, re
       <div className="hidden w-full gap-6 lg:flex lg:gap-8">
         <div className="flex-1 min-w-0">
           <FormPanel
-            hasOnlineAgent={hasOnlineAgent}
             errors={errors}
             isSubmitting={isSubmitting}
             serverError={serverError}
@@ -335,7 +332,6 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId, re
 import type { UseFormRegister, FieldErrors } from "react-hook-form";
 
 interface FormPanelProps {
-  hasOnlineAgent: boolean;
   errors: FieldErrors<FormValues>;
   isSubmitting: boolean;
   serverError: string | null;
@@ -351,7 +347,6 @@ interface FormPanelProps {
 }
 
 function FormPanel({
-  hasOnlineAgent,
   errors,
   isSubmitting,
   serverError,
@@ -403,23 +398,23 @@ function FormPanel({
         </div>
 
         <div>
-          <FieldLabel htmlFor="task-agent">Agente</FieldLabel>
+          <FieldLabel htmlFor="task-agent">Agente (opzionale)</FieldLabel>
           <select
             id="task-agent"
             className={`mt-1 ${selectClass}`}
             {...register("preferred_agent_id")}
             disabled={isSubmitting}
           >
-            <option value="">— Automatico —</option>
+            <option value="">— Assegna automaticamente —</option>
             {onlineAgents.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
           </select>
-          {onlineAgents.length === 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">Nessun agente online</p>
-          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            L&apos;agente viene assegnato all&apos;avvio dello sprint.
+          </p>
           <FieldError message={errors.preferred_agent_id?.message} />
         </div>
       </div>
@@ -463,13 +458,10 @@ function FormPanel({
         </div>
       </div>
 
-      {/* No online agent warning */}
-      {!hasOnlineAgent && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
-          <strong>Nessun agente online.</strong> La task verrà creata in stato{" "}
-          <em>backlog</em> e assegnata automaticamente quando l&apos;agente si connette.
-        </div>
-      )}
+      {/* Backlog info */}
+      <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+        La task verrà creata nel <strong>backlog</strong>. Aggiungila a uno sprint e avvia lo sprint per iniziare l&apos;esecuzione.
+      </div>
 
       {/* Description */}
       <div>
@@ -503,7 +495,7 @@ function FormPanel({
           disabled={isSubmitting || preflight.status === "error"}
           className="rounded-md bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
         >
-          {isSubmitting ? "Creazione…" : hasOnlineAgent ? "Crea task" : "Crea task (backlog)"}
+          {isSubmitting ? "Creazione…" : "Crea task"}
         </button>
         <button
           type="button"

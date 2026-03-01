@@ -29,8 +29,8 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Link href="/sprints" className="text-sm text-muted-foreground hover:text-foreground">
-              ← Sprint
+            <Link href="/backlog?tab=sprint" className="text-sm text-muted-foreground hover:text-foreground">
+              ← Backlog / Sprint
             </Link>
           </div>
           <h1 className="mt-1 truncate text-2xl font-bold">{sprint.name}</h1>
