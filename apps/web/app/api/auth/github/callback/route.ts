@@ -8,7 +8,7 @@
  */
 
 import { auth } from "@clerk/nextjs/server";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { upsertGitHubConnection } from "@/lib/db/github";
 import { getInstallationInfo } from "@/lib/github/app";

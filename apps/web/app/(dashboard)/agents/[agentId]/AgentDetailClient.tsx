@@ -24,6 +24,7 @@ interface AgentData {
   provisioning_status?: AgentProvisioningStatus;
   vps_id?: number | null;
   vps_created_at?: string | null;
+  vps_online_at?: string | null;
   provisioned_at?: string | null;
   provisioning_error?: string | null;
 }
@@ -50,6 +51,24 @@ const taskStatusColors: Record<string, string> = {
 
 // ─── Agent info panel ─────────────────────────────────────────────────────────
 
+const provStatusBadge: Record<AgentProvisioningStatus, string> = {
+  pending: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  provisioning: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
+  online: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+  error: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
+  deprovisioning: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+  deprovisioned: "bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-600",
+};
+
+const provStatusLabel: Record<AgentProvisioningStatus, string> = {
+  pending: "In coda",
+  provisioning: "Provisioning",
+  online: "Online",
+  error: "Errore",
+  deprovisioning: "Eliminazione",
+  deprovisioned: "Eliminato",
+};
+
 function AgentInfoPanel({ agent }: { agent: AgentData }) {
   const createdAt = new Date(agent.created_at).toLocaleDateString("it-IT", {
     year: "numeric",
@@ -63,6 +82,24 @@ function AgentInfoPanel({ agent }: { agent: AgentData }) {
       )
     : null;
 
+  const provisionedAtLabel = agent.provisioned_at
+    ? new Date(agent.provisioned_at).toLocaleDateString("it-IT", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
+  const vpsCreatedAtLabel = agent.vps_created_at
+    ? new Date(agent.vps_created_at).toLocaleDateString("it-IT", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
+  const provStatus = agent.provisioning_status;
+
   return (
     <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
       {agent.vps_ip && (
@@ -71,16 +108,34 @@ function AgentInfoPanel({ agent }: { agent: AgentData }) {
           <dd className="font-mono text-foreground">{agent.vps_ip}</dd>
         </>
       )}
+      {agent.vps_id && (
+        <>
+          <dt className="text-muted-foreground">ID Server</dt>
+          <dd className="font-mono text-foreground">#{agent.vps_id}</dd>
+        </>
+      )}
       {agent.vps_region && (
         <>
           <dt className="text-muted-foreground">Regione</dt>
           <dd className="text-foreground">{agent.vps_region.toUpperCase()}</dd>
         </>
       )}
+      {vpsCreatedAtLabel && (
+        <>
+          <dt className="text-muted-foreground">VPS creato</dt>
+          <dd className="text-foreground">{vpsCreatedAtLabel}</dd>
+        </>
+      )}
       {uptimeHours !== null && (
         <>
           <dt className="text-muted-foreground">Uptime</dt>
           <dd className="text-foreground">{uptimeHours}h</dd>
+        </>
+      )}
+      {provisionedAtLabel && (
+        <>
+          <dt className="text-muted-foreground">Attivo dal</dt>
+          <dd className="text-foreground">{provisionedAtLabel}</dd>
         </>
       )}
       {agent.orchestrator_version && (
@@ -93,6 +148,21 @@ function AgentInfoPanel({ agent }: { agent: AgentData }) {
         <>
           <dt className="text-muted-foreground">Claude Code</dt>
           <dd className="font-mono text-foreground">{agent.claude_code_version}</dd>
+        </>
+      )}
+      {provStatus && (
+        <>
+          <dt className="text-muted-foreground">Stato</dt>
+          <dd>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                provStatusBadge[provStatus]
+              )}
+            >
+              {provStatusLabel[provStatus]}
+            </span>
+          </dd>
         </>
       )}
       <dt className="text-muted-foreground">Creato</dt>
@@ -282,6 +352,7 @@ export function AgentDetailClient({
                 initial={{
                   provisioning_status: provStatus,
                   vps_created_at: agent.vps_created_at ?? null,
+                  vps_online_at: agent.vps_online_at ?? null,
                   provisioned_at: agent.provisioned_at ?? null,
                   provisioning_error: agent.provisioning_error ?? null,
                 }}

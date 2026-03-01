@@ -5,8 +5,6 @@ import type {
   TaskStatus,
   ADWPPhase,
   EventPayloadMap,
-  PRData,
-  DeployData,
 } from "@robin/shared-types";
 
 /**

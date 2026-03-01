@@ -3,7 +3,8 @@
 -- Added in 0007 but the view was not updated at that time.
 -- -------------------------
 
-CREATE OR REPLACE VIEW agents_with_status AS
+DROP VIEW IF EXISTS agents_with_status;
+CREATE VIEW agents_with_status AS
 SELECT
   a.id,
   a.workspace_id,
