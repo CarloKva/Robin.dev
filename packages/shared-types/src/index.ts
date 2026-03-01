@@ -462,6 +462,29 @@ export type RepoQueueJobPayload = {
   sprintOrder: number;
 };
 
+// ---------------------------------------------------------------
+// Task iterations — history of execution attempts
+// ---------------------------------------------------------------
+
+export type IterationTrigger = "original" | "github_rework" | "dashboard_rework";
+
+export type IterationStatus = "pending" | "running" | "completed" | "failed";
+
+export type TaskIteration = {
+  id: string;
+  task_id: string;
+  workspace_id: string;
+  iteration_number: number;
+  trigger: IterationTrigger;
+  status: IterationStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  pr_url: string | null;
+  summary: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** Default task description templates (seeded per-workspace on creation) */
 export const DEFAULT_TASK_TEMPLATES: Record<TaskType, string> = {
   bug: `## Comportamento attuale\n[Descrivi cosa succede]\n\n## Comportamento atteso\n[Descrivi cosa dovrebbe succedere]\n\n## Passi per riprodurre\n1. ...\n\n## Contesto aggiuntivo\n[Screenshot, log, URL...]`,

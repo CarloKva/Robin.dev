@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowDown, AlertCircle, CheckCircle2, X } from "lucide-react";
-import type { Task, TimelineEntry, TaskProjectedState } from "@robin/shared-types";
+import type { Task, TimelineEntry, TaskProjectedState, TaskIteration } from "@robin/shared-types";
 import { useTaskEventsFeed } from "@/lib/realtime/useTaskEventsFeed";
 import { projectTaskState } from "@/lib/db/projectTaskState";
 import { Timeline } from "@/components/timeline/Timeline";
@@ -13,12 +13,14 @@ import { TaskExecutionMetrics } from "@/components/tasks/TaskExecutionMetrics";
 import { PRCard } from "@/components/tasks/PRCard";
 import { DeployPreviewCard } from "@/components/tasks/DeployPreviewCard";
 import { CommitList } from "@/components/tasks/CommitList";
+import { IterationsList } from "@/components/tasks/IterationsList";
 import { cn } from "@/lib/utils";
 
 interface TaskDetailClientProps {
   task: Task;
   initialEvents: TimelineEntry[];
   initialProjectedState: TaskProjectedState;
+  initialIterations: TaskIteration[];
 }
 
 // ── Status label map ──────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ export function TaskDetailClient({
   task,
   initialEvents,
   initialProjectedState,
+  initialIterations,
 }: TaskDetailClientProps) {
   const { events, isConnected } = useTaskEventsFeed({
     taskId: task.id,
@@ -367,6 +370,9 @@ export function TaskDetailClient({
 
           {/* Commit list */}
           <CommitList events={events} {...(repoUrl !== undefined && { repoUrl })} />
+
+          {/* Iterations history */}
+          <IterationsList iterations={initialIterations} allEvents={events} />
 
           {/* Contextual actions */}
           <ActionButtons
