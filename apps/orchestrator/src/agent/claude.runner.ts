@@ -40,11 +40,19 @@ export class ClaudeRunner {
 
     log.info({ taskId: payload.taskId }, "ClaudeRunner starting");
 
-    // Verify repository path exists
+    // Ensure repository path exists — auto-clone if url is available
     if (!fs.existsSync(payload.repositoryPath)) {
-      throw new RepositoryAccessError(
-        `Repository path not found: ${payload.repositoryPath}`
-      );
+      if (payload.repositoryUrl) {
+        log.info(
+          { taskId: payload.taskId, repositoryPath: payload.repositoryPath, repositoryUrl: payload.repositoryUrl },
+          "Repository path not found — cloning"
+        );
+        await this.cloneRepository(payload.repositoryUrl, payload.repositoryPath);
+      } else {
+        throw new RepositoryAccessError(
+          `Repository path not found: ${payload.repositoryPath}`
+        );
+      }
     }
 
     // Write TASK.md
@@ -235,6 +243,31 @@ export class ClaudeRunner {
     if (commitMatch?.[1]) result.commitSha = commitMatch[1];
 
     return result;
+  }
+
+  /** Clone a git repository to targetPath, creating parent directories as needed. */
+  private async cloneRepository(repositoryUrl: string, targetPath: string): Promise<void> {
+    const parentDir = path.dirname(targetPath);
+    fs.mkdirSync(parentDir, { recursive: true });
+
+    await new Promise<void>((resolve, reject) => {
+      const git = spawn("git", ["clone", repositoryUrl, targetPath], { stdio: "pipe" });
+      const stderr: string[] = [];
+      git.stderr?.on("data", (d: Buffer) => stderr.push(d.toString()));
+      git.on("close", (code) => {
+        if (code === 0) {
+          log.info({ repositoryUrl, targetPath }, "Repository cloned successfully");
+          resolve();
+        } else {
+          reject(new RepositoryAccessError(
+            `Failed to clone ${repositoryUrl}: exit code ${code} — ${stderr.join("").trim()}`
+          ));
+        }
+      });
+      git.on("error", (err) => reject(new RepositoryAccessError(
+        `Failed to clone ${repositoryUrl}: ${err.message}`
+      )));
+    });
   }
 
   private buildTaskMd(payload: JobPayload): string {
