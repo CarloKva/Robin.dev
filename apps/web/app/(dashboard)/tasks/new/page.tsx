@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
-import { getOnlineAgentForWorkspace } from "@/lib/db/agents";
+import { getOnlineAgentForWorkspace, getAgentsForWorkspace } from "@/lib/db/agents";
+import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { TaskCreationForm } from "./TaskCreationForm";
 
 export default async function NewTaskPage() {
@@ -11,7 +12,11 @@ export default async function NewTaskPage() {
   const workspace = await getWorkspaceForUser(userId);
   if (!workspace) redirect("/onboarding/workspace");
 
-  const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
+  const [onlineAgent, repositories, agents] = await Promise.all([
+    getOnlineAgentForWorkspace(workspace.id),
+    getRepositoriesForWorkspace(workspace.id),
+    getAgentsForWorkspace(workspace.id),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -23,7 +28,12 @@ export default async function NewTaskPage() {
         </p>
       </div>
 
-      <TaskCreationForm hasOnlineAgent={!!onlineAgent} workspaceId={workspace.id} />
+      <TaskCreationForm
+        hasOnlineAgent={!!onlineAgent}
+        workspaceId={workspace.id}
+        repositories={repositories.filter((r) => r.is_enabled)}
+        agents={agents}
+      />
     </div>
   );
 }
