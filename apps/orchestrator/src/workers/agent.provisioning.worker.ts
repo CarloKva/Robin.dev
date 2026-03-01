@@ -21,13 +21,46 @@ import { getSupabaseClient } from "../db/supabase.client";
 import {
   createServer,
   waitForServerRunning,
-  waitForOrchestratorHealth,
   buildCloudInitScript,
 } from "../services/hetzner.service";
 import { getInstallationToken } from "../services/github.service";
 import { log } from "../utils/logger";
 
 export const PROVISIONING_QUEUE_NAME = "agent-provisioning";
+
+// ─── Heartbeat-based health check ────────────────────────────────────────────
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function waitForAgentHeartbeat(
+  supabase: SupabaseClient,
+  agentId: string,
+  timeoutMs = 5 * 60 * 1000
+): Promise<void> {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 10_000));
+
+    const { data } = await supabase
+      .from("agent_status")
+      .select("last_heartbeat")
+      .eq("agent_id", agentId)
+      .maybeSingle();
+
+    if (data?.last_heartbeat) {
+      const hbAge = Date.now() - new Date(data.last_heartbeat).getTime();
+      if (hbAge < 60_000) {
+        log.info({ agentId, hbAge: Math.round(hbAge / 1000) }, "Agent heartbeat detected");
+        return;
+      }
+    }
+  }
+
+  throw new Error(
+    `Agent ${agentId} did not send a heartbeat within ${timeoutMs / 1000}s — check cloud-init log via SSH`
+  );
+}
 
 // ─── Main job processor ───────────────────────────────────────────────────────
 
@@ -155,10 +188,13 @@ async function processProvisioningJob(
     .update({ vps_ip: vpsIp, vps_region: "nbg1" })
     .eq("id", agentId);
 
-  log.info({ agentId, vpsId, vpsIp }, "VPS running; waiting for orchestrator health check");
+  log.info({ agentId, vpsId, vpsIp }, "VPS running; waiting for agent heartbeat");
 
-  // ── 6. Wait for orchestrator health endpoint ───────────────────────────────
-  await waitForOrchestratorHealth(vpsIp);
+  // ── 6. Wait for agent heartbeat in DB ──────────────────────────────────────
+  // The agent VPS binds its health endpoint to loopback (127.0.0.1) so we
+  // can't reach it from the control-plane. Instead, poll Supabase for the
+  // agent's heartbeat (last_seen_at) which the HeartbeatService updates.
+  await waitForAgentHeartbeat(supabase, agentId);
 
   // ── 7. Mark agent online ───────────────────────────────────────────────────
   const { error: onlineErr } = await supabase
