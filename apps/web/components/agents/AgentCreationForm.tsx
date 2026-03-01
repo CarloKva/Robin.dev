@@ -11,6 +11,22 @@ interface AgentCreationFormProps {
   onClose: () => void;
 }
 
+// Jikan API has a 1 req/sec rate limit. Since this is user-triggered (button click),
+// no debounce is needed — the user can't click faster than the spinner resets.
+async function fetchAnimeCharacter(): Promise<{ name: string; imageUrl: string | null }> {
+  const res = await fetch("https://api.jikan.moe/v4/random/characters");
+  if (!res.ok) throw new Error("Jikan API error");
+  const json = await res.json() as { data: { name: string; images: { jpg: { image_url: string } } } };
+  return {
+    name: json.data.name,
+    imageUrl: json.data.images?.jpg?.image_url ?? null,
+  };
+}
+
+function dicebearUrl(seed: string): string {
+  return `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
+}
+
 export function AgentCreationForm({
   repositories,
   hasGitHubConnection,
@@ -19,10 +35,29 @@ export function AgentCreationForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const enabledRepos = repositories.filter((r) => r.is_enabled && r.is_available);
+
+  // The displayed avatar: explicit URL from Jikan, or Dicebear fallback when name is set
+  const previewAvatarUrl = avatarUrl ?? (name.trim() ? dicebearUrl(name.trim()) : null);
+
+  async function handleAutoGenerate() {
+    setIsGenerating(true);
+    try {
+      const { name: charName, imageUrl } = await fetchAnimeCharacter();
+      setName(charName);
+      // Use Jikan image if available, otherwise fall back to Dicebear
+      setAvatarUrl(imageUrl ?? dicebearUrl(charName));
+    } catch {
+      // On error, keep current name; avatar will fall back to Dicebear via previewAvatarUrl
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   function toggleRepo(repoId: string) {
     setSelectedRepoIds((prev) =>
@@ -43,11 +78,18 @@ export function AgentCreationForm({
       return;
     }
 
+    // Resolve final avatar URL: explicit one set (from Jikan or manual) or Dicebear fallback
+    const finalAvatarUrl = avatarUrl ?? dicebearUrl(name.trim());
+
     startTransition(async () => {
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), repository_ids: selectedRepoIds }),
+        body: JSON.stringify({
+          name: name.trim(),
+          repository_ids: selectedRepoIds,
+          avatar_url: finalAvatarUrl,
+        }),
       });
 
       const data = (await res.json().catch(() => ({}))) as {
@@ -87,22 +129,55 @@ export function AgentCreationForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Name */}
+      {/* Name + auto-generate */}
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground" htmlFor="agent-name">
           Nome agente
         </label>
-        <input
-          id="agent-name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="es. Agent Alpha"
-          maxLength={100}
-          autoFocus
-          disabled={isPending}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
-        />
+        <div className="flex items-center gap-2">
+          {/* Avatar preview */}
+          {previewAvatarUrl && (
+            <img
+              src={previewAvatarUrl}
+              alt="Avatar anteprima"
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
+            />
+          )}
+          <input
+            id="agent-name"
+            type="text"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              // Clear explicit avatar so Dicebear follows the new name
+              setAvatarUrl(null);
+            }}
+            placeholder="es. Agent Alpha"
+            maxLength={100}
+            autoFocus
+            disabled={isPending}
+            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={handleAutoGenerate}
+            disabled={isGenerating || isPending}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            title="Genera nome e avatar da un personaggio anime casuale"
+          >
+            {isGenerating ? (
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <span>🎲</span>
+            )}
+            Genera
+          </button>
+        </div>
       </div>
 
       {/* Repository selection */}
