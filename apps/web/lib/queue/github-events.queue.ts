@@ -1,27 +1,31 @@
 import { Queue } from "bullmq";
 import { createRedisConnection } from "./redis.connection";
 
-export const GITHUB_EVENTS_QUEUE_NAME = "github-events";
+export const GITHUB_WEBHOOK_QUEUE_NAME = "github-webhook-processor";
 
-export type GitHubEventJobPayload = {
+export type GitHubWebhookJobPayload = {
   /** GitHub event name (X-GitHub-Event header), e.g. "pull_request" */
   event: string;
-  /** GitHub delivery ID (X-GitHub-Delivery header) */
+  /** GitHub delivery ID (X-GitHub-Delivery header) for deduplication and tracing */
   deliveryId: string;
-  /** Full webhook payload from GitHub */
+  /** Workspace ID resolved from repository.full_name */
+  workspaceId: string;
+  /** repository.full_name from the GitHub payload */
+  repositoryFullName: string;
+  /** Full raw webhook payload from GitHub */
   payload: Record<string, unknown>;
 };
 
-let _queue: Queue<GitHubEventJobPayload> | null = null;
+let _queue: Queue<GitHubWebhookJobPayload> | null = null;
 
 /**
  * Singleton BullMQ Queue for GitHub webhook events.
  * The control-plane orchestrator worker consumes jobs from this queue.
  */
-export function getGitHubEventsQueue(): Queue<GitHubEventJobPayload> {
+export function getGitHubWebhookQueue(): Queue<GitHubWebhookJobPayload> {
   if (_queue) return _queue;
 
-  _queue = new Queue<GitHubEventJobPayload>(GITHUB_EVENTS_QUEUE_NAME, {
+  _queue = new Queue<GitHubWebhookJobPayload>(GITHUB_WEBHOOK_QUEUE_NAME, {
     connection: createRedisConnection(),
     defaultJobOptions: {
       attempts: 3,

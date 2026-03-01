@@ -17,7 +17,7 @@
 
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { getGitHubEventsQueue } from "@/lib/queue/github-events.queue";
+import { getGitHubWebhookQueue } from "@/lib/queue/github-events.queue";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /** Verify the X-Hub-Signature-256 header from GitHub. */
@@ -111,11 +111,11 @@ export async function POST(request: Request) {
     const workspaceId = repo.workspace_id as string;
 
     // Enqueue the job — processing happens in the worker, not here
-    const queue = getGitHubEventsQueue();
+    const queue = getGitHubWebhookQueue();
     const jobName = action ? `${event}:${action}` : event;
     await queue.add(
       jobName,
-      { event, deliveryId, payload: { ...payload, _resolved_workspace_id: workspaceId } },
+      { event, deliveryId, workspaceId, repositoryFullName: repoFullName, payload },
       { jobId: `gh:${deliveryId}` } // deduplicate by delivery ID
     );
 
