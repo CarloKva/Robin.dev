@@ -17,7 +17,8 @@ ALTER TABLE agents
 -- Rebuild agents_with_status view to include vps_online_at
 -- -------------------------
 
-CREATE OR REPLACE VIEW agents_with_status AS
+DROP VIEW IF EXISTS agents_with_status;
+CREATE VIEW agents_with_status AS
 SELECT
   a.id,
   a.workspace_id,
