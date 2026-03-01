@@ -125,45 +125,45 @@ ALTER PUBLICATION supabase_realtime ADD TABLE sprints;
 ALTER TABLE sprints ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "sprints_select" ON sprints
-  FOR SELECT USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR SELECT USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "sprints_insert" ON sprints
-  FOR INSERT WITH CHECK (workspace_id = ANY(get_my_workspace_ids()));
+  FOR INSERT WITH CHECK (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "sprints_update" ON sprints
-  FOR UPDATE USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR UPDATE USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "sprints_delete" ON sprints
-  FOR DELETE USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR DELETE USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 -- ─── 9. RLS policies — task_templates ────────────────────────────────────────
 
 ALTER TABLE task_templates ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "task_templates_select" ON task_templates
-  FOR SELECT USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR SELECT USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "task_templates_insert" ON task_templates
-  FOR INSERT WITH CHECK (workspace_id = ANY(get_my_workspace_ids()));
+  FOR INSERT WITH CHECK (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "task_templates_update" ON task_templates
-  FOR UPDATE USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR UPDATE USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "task_templates_delete" ON task_templates
-  FOR DELETE USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR DELETE USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 -- ─── 10. RLS policies — workspace_settings ───────────────────────────────────
 
 ALTER TABLE workspace_settings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "workspace_settings_select" ON workspace_settings
-  FOR SELECT USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR SELECT USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "workspace_settings_insert" ON workspace_settings
-  FOR INSERT WITH CHECK (workspace_id = ANY(get_my_workspace_ids()));
+  FOR INSERT WITH CHECK (workspace_id IN (SELECT get_my_workspace_ids()));
 
 CREATE POLICY "workspace_settings_update" ON workspace_settings
-  FOR UPDATE USING (workspace_id = ANY(get_my_workspace_ids()));
+  FOR UPDATE USING (workspace_id IN (SELECT get_my_workspace_ids()));
 
 -- ─── 11. Insert default task templates ───────────────────────────────────────
 -- These are workspace-agnostic defaults inserted at system level.
