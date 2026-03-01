@@ -9,10 +9,6 @@ interface SprintSummaryProps {
 }
 
 export function SprintSummary({ sprint }: SprintSummaryProps) {
-  const doneTasks = sprint.tasks.filter((t) => ["done", "completed"].includes(t.status));
-  const failedTasks = sprint.tasks.filter((t) => t.status === "failed");
-  const movedBack = sprint.tasks.filter((t) => t.status === "backlog" || !t.sprint_id);
-
   return (
     <div className="space-y-6">
       {/* Metrics */}

@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { TaskTemplate, TaskType, DEFAULT_TASK_TEMPLATES } from "@robin/shared-types";
+import type { TaskTemplate, TaskType } from "@robin/shared-types";
 
 // Re-export for convenience
 export { DEFAULT_TASK_TEMPLATES } from "@robin/shared-types";

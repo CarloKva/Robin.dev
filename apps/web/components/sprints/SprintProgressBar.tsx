@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import type { Task } from "@robin/shared-types";
 
 interface SprintProgressBarProps {

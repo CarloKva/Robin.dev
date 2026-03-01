@@ -7,7 +7,6 @@ import { SprintPlanningView } from "@/components/sprints/SprintPlanningView";
 import { ActiveSprintBoard } from "@/components/sprints/ActiveSprintBoard";
 import { SprintSummary } from "@/components/sprints/SprintSummary";
 import { CompleteSprintButton } from "@/components/sprints/CompleteSprintButton";
-import type { SprintWithTasks } from "@robin/shared-types";
 
 interface SprintDetailPageProps {
   params: Promise<{ sprintId: string }>;
@@ -36,7 +35,7 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
           </div>
           <h1 className="mt-1 truncate text-2xl font-bold">{sprint.name}</h1>
           {sprint.goal && (
-            <p className="mt-0.5 text-sm text-muted-foreground italic">"{sprint.goal}"</p>
+            <p className="mt-0.5 text-sm text-muted-foreground italic">&ldquo;{sprint.goal}&rdquo;</p>
           )}
         </div>
 

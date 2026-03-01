@@ -6,14 +6,18 @@ import { log } from "../utils/logger";
 const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   pending: ["queued", "cancelled"],
   queued: ["in_progress", "cancelled"],
-  in_progress: ["in_progress", "review_pending", "completed", "failed", "cancelled"],
+  in_progress: ["in_progress", "review_pending", "completed", "failed", "cancelled", "in_review"],
   review_pending: ["approved", "completed", "rejected", "in_progress"],
   approved: ["completed"],
   rejected: ["in_progress"],
   completed: [],
   failed: ["pending"],
   cancelled: [],
-  backlog: ["queued", "cancelled"],
+  backlog: ["queued", "cancelled", "sprint_ready"],
+  sprint_ready: ["queued", "cancelled"],
+  in_review: ["rework", "done", "in_progress"],
+  rework: ["in_progress", "cancelled"],
+  done: [],
 };
 
 export class TaskRepository {

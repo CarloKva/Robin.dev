@@ -76,7 +76,7 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
               {tasks.length} task nello sprint · {readyCount} pronte
             </p>
             {sprint.goal && (
-              <p className="mt-1 text-sm italic text-muted-foreground">"{sprint.goal}"</p>
+              <p className="mt-1 text-sm italic text-muted-foreground">&ldquo;{sprint.goal}&rdquo;</p>
             )}
           </div>
 
@@ -105,7 +105,7 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
 
         {readyCount === 0 && tasks.length > 0 && (
           <div className="mt-3 rounded-md bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-            Nessuna task in stato "sprint_ready". Sposta le task dal backlog o aggiornane lo stato.
+            Nessuna task in stato &ldquo;sprint_ready&rdquo;. Sposta le task dal backlog o aggiornane lo stato.
           </div>
         )}
       </div>

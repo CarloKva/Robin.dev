@@ -1,11 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getTemplatesForWorkspace, upsertTemplate } from "@/lib/db/task-templates";
-import type { TaskType } from "@robin/shared-types";
-
-const VALID_TYPES: TaskType[] = ["bug", "feature", "docs", "refactor", "chore", "accessibility", "security"];
 
 const upsertSchema = z.object({
   task_type: z.enum(["bug", "feature", "docs", "refactor", "chore", "accessibility", "security"]),
