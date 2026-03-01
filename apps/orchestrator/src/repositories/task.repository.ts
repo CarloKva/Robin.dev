@@ -152,7 +152,7 @@ export class TaskRepository {
   async getPendingUnqueued() {
     const { data, error } = await this.db
       .from("tasks")
-      .select("*")
+      .select("*, repositories(id, full_name, default_branch)")
       .in("status", ["pending", "queued"])
       .is("queued_at", null)
       .order("created_at", { ascending: true });

@@ -242,6 +242,9 @@ echo "[robin] Redis started"
 npm install -g @anthropic-ai/claude-code 2>/dev/null || true
 echo "[robin] Claude Code: $(claude --version 2>/dev/null || echo 'not found')"
 
+# ── Create non-root agent user ────────────────────────────────────────────────
+useradd -m -s /bin/bash agent 2>/dev/null || true
+
 # ── Clone orchestrator ───────────────────────────────────────────────────────
 mkdir -p /opt/robin
 git clone --depth=1 ${repoUrl} /opt/robin/app
@@ -270,6 +273,11 @@ AGENT_HOME=/home/agent
 ENVEOF
 
 echo "[robin] .env written"
+
+# ── Set ownership so agent user can read/write everything ─────────────────────
+chown -R agent:agent /opt/robin
+mkdir -p /home/agent/repos
+chown -R agent:agent /home/agent
 
 # ── GitHub token helper (Node ESM — no external deps) ────────────────────────
 cat > /opt/robin/get-github-token.mjs << 'JSEOF'
@@ -354,7 +362,7 @@ After=network.target redis-server.service
 
 [Service]
 Type=simple
-User=root
+User=agent
 WorkingDirectory=/opt/robin
 ExecStart=/opt/robin/start.sh
 Restart=always
