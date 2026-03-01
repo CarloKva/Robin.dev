@@ -95,22 +95,26 @@ type AgentRow = AgentWithStatus & {
 function AgentCard({ agent }: { agent: AgentRow }) {
   const router = useRouter();
   const provStatus = (agent.provisioning_status ?? "online") as AgentProvisioningStatus;
-  const isProvisioning = provStatus !== "online" && provStatus !== "deprovisioned";
-
-  // Choose which badge to show
-  let cfg: { label: string; dot: string; badge: string; ring: string };
-  if (isProvisioning) {
-    cfg = provisioningStatusConfig[provStatus];
-  } else {
-    const effectiveStatus =
-      (agent.effective_status as keyof typeof operationalStatusConfig) in operationalStatusConfig
-        ? (agent.effective_status as keyof typeof operationalStatusConfig)
-        : "offline";
-    cfg = operationalStatusConfig[effectiveStatus];
-  }
+  // Only treat pending/provisioning as "in-flight provisioning" — error/deprovisioning
+  // are terminal states that should show operational status based on heartbeat.
+  const isActivelyProvisioning = provStatus === "pending" || provStatus === "provisioning";
+  const isDeprovisioned = provStatus === "deprovisioned" || provStatus === "deprovisioning";
 
   const lastSeen = agent.last_seen_at ? new Date(agent.last_seen_at) : null;
   const lastSeenLabel = lastSeen ? formatRelativeTime(lastSeen) : "Mai";
+  const isAlive = lastSeen !== null && Date.now() - lastSeen.getTime() < 2 * 60 * 1000;
+
+  // Choose which badge to show: provisioning lifecycle takes precedence,
+  // otherwise derive operational status directly from heartbeat.
+  let cfg: { label: string; dot: string; badge: string; ring: string };
+  if (isActivelyProvisioning || isDeprovisioned) {
+    cfg = provisioningStatusConfig[provStatus];
+  } else if (isAlive) {
+    const opStatus = agent.effective_status === "busy" ? "busy" : "idle";
+    cfg = operationalStatusConfig[opStatus];
+  } else {
+    cfg = operationalStatusConfig["offline"];
+  }
 
   return (
     <div
@@ -177,7 +181,7 @@ function AgentCard({ agent }: { agent: AgentRow }) {
             <dd className="font-mono text-foreground">#{agent.vps_id}</dd>
           </>
         )}
-        {!isProvisioning && (
+        {!isActivelyProvisioning && !isDeprovisioned && (
           <>
             <dt className="text-muted-foreground">Ultimo heartbeat</dt>
             <dd className="text-foreground">{lastSeenLabel}</dd>
@@ -327,9 +331,10 @@ export function AgentsClient({
   }, [workspaceId]);
 
   const visibleAgents = agents.filter((a) => a.provisioning_status !== "deprovisioned");
-  const onlineCount = visibleAgents.filter(
-    (a) => a.effective_status === "idle" || a.effective_status === "busy"
-  ).length;
+  const onlineCount = visibleAgents.filter((a) => {
+    if (!a.last_seen_at) return false;
+    return Date.now() - new Date(a.last_seen_at).getTime() < 2 * 60 * 1000;
+  }).length;
 
   return (
     <>

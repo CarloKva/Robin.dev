@@ -30,12 +30,15 @@ export async function getAgentsForWorkspace(workspaceId: string): Promise<AgentW
  */
 export async function getOnlineAgentForWorkspace(workspaceId: string): Promise<{ id: string; name: string } | null> {
   const supabase = await createSupabaseServerClient();
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
+  // Query agents table directly by last_seen_at to avoid effective_status
+  // being polluted by agent_status.status (e.g. 'error' from a failed task).
   const { data, error } = await supabase
-    .from("agents_with_status")
+    .from("agents")
     .select("id, name")
     .eq("workspace_id", workspaceId)
-    .in("effective_status", ["idle", "busy"])
+    .gt("last_seen_at", twoMinutesAgo)
     .order("last_seen_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -56,14 +59,16 @@ export async function getOnlineAgentForWorkspace(workspaceId: string): Promise<{
 export async function getOnlineAgentsForRepository(
   repositoryId: string,
   workspaceId: string
-): Promise<{ id: string; name: string; effective_status: string }[]> {
+): Promise<{ id: string; name: string }[]> {
   const supabase = await createSupabaseServerClient();
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
+  // Query agents table directly by last_seen_at (same reason as getOnlineAgentForWorkspace)
   const { data, error } = await supabase
-    .from("agents_with_status")
-    .select("id, name, effective_status")
+    .from("agents")
+    .select("id, name")
     .eq("workspace_id", workspaceId)
-    .in("effective_status", ["idle", "busy"])
+    .gt("last_seen_at", twoMinutesAgo)
     .order("last_seen_at", { ascending: false });
 
   if (error) {
@@ -74,16 +79,11 @@ export async function getOnlineAgentsForRepository(
   if (!data?.length) return [];
 
   // Filter to only agents assigned to this repository
-  const supabase2 = await createSupabaseServerClient();
-  const { data: agentRepos } = await supabase2
+  const { data: agentRepos } = await supabase
     .from("agent_repositories")
     .select("agent_id")
     .eq("repository_id", repositoryId);
 
   const assignedIds = new Set((agentRepos ?? []).map((r: { agent_id: string }) => r.agent_id));
-  return data.filter((a: { id: string }) => assignedIds.has(a.id)) as {
-    id: string;
-    name: string;
-    effective_status: string;
-  }[];
+  return data.filter((a: { id: string }) => assignedIds.has(a.id)) as { id: string; name: string }[];
 }
