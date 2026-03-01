@@ -48,7 +48,7 @@ function provisioningStatusToStepStatuses(
   vpsCreatedAt: string | null,
   vpsOnlineAt: string | null,
   provisionedAt: string | null,
-  _provisioningError: string | null
+  provisioningError: string | null
 ): Record<string, StepStatus> {
   const PENDING = {
     vps_created: "pending" as StepStatus,
@@ -62,9 +62,23 @@ function provisioningStatusToStepStatuses(
 
   if (status === "error") {
     // Determine how far provisioning got before the failure
-    if (provisionedAt)  return { vps_created: "done", vps_online: "done", setup_running: "done", health_check: "error", ready: "pending" };
-    if (vpsOnlineAt)    return { vps_created: "done", vps_online: "done", setup_running: "error", health_check: "pending", ready: "pending" };
-    if (vpsCreatedAt)   return { vps_created: "done", vps_online: "error", setup_running: "pending", health_check: "pending", ready: "pending" };
+    if (provisionedAt) {
+      return { vps_created: "done", vps_online: "done", setup_running: "done", health_check: "error", ready: "pending" };
+    }
+    // VPS reached running state → failure was in the health-check phase
+    if (vpsOnlineAt) {
+      return { vps_created: "done", vps_online: "done", setup_running: "pending", health_check: "error", ready: "pending" };
+    }
+    if (vpsCreatedAt) {
+      // Older orchestrator versions didn't persist vps_online_at. Infer progress from
+      // the error message: if it clearly originated from the health/heartbeat wait,
+      // treat the VPS-online step as completed.
+      const isHealthCheckFailure = /heartbeat|health|did not respond|orchestrator/i.test(provisioningError ?? "");
+      if (isHealthCheckFailure) {
+        return { vps_created: "done", vps_online: "done", setup_running: "pending", health_check: "error", ready: "pending" };
+      }
+      return { vps_created: "done", vps_online: "error", setup_running: "pending", health_check: "pending", ready: "pending" };
+    }
     return { ...PENDING, vps_created: "error" };
   }
 
