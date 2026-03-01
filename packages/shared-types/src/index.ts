@@ -6,17 +6,21 @@ export type WorkspaceRole = "owner" | "member";
 
 export type TaskStatus =
   | "backlog"
+  | "sprint_ready"
   | "pending"
   | "queued"
   | "in_progress"
+  | "in_review"
+  | "rework"
   | "review_pending"
   | "approved"
   | "rejected"
+  | "done"
   | "completed"
   | "failed"
   | "cancelled";
 
-export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskPriority = "low" | "medium" | "high" | "urgent" | "critical";
 
 export type AgentStatusEnum = "idle" | "busy" | "error" | "offline";
 
@@ -177,7 +181,7 @@ export type TimelineEntry = {
 // Orchestrator types (Sprint 2)
 // ---------------------------------------------------------------
 
-export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore";
+export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
 
 /** Internal agent state — more granular than AgentStatusEnum for orchestrator use */
 export type AgentState =
@@ -275,6 +279,12 @@ export type Task = {
   priority: TaskPriority;
   type: TaskType;
   assigned_agent_id: string | null;
+  preferred_agent_id: string | null;
+  sprint_id: string | null;
+  repository_id: string | null;
+  sprint_order: number | null;
+  context: string | null;
+  estimated_effort: "xs" | "s" | "m" | "l" | null;
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
@@ -387,4 +397,71 @@ export type AgentDeprovisioningJobPayload = {
   agentId: string;
   workspaceId: string;
   vpsId: number | null;
+};
+
+// ---------------------------------------------------------------
+// Sprint B — Sprint management + Backlog types
+// ---------------------------------------------------------------
+
+export type SprintStatus = "planning" | "active" | "completed" | "cancelled";
+
+export type EstimatedEffort = "xs" | "s" | "m" | "l";
+
+export type Sprint = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  goal: string | null;
+  status: SprintStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  tasks_completed: number;
+  tasks_failed: number;
+  tasks_moved_back: number;
+  avg_cycle_time_minutes: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Sprint enriched with its tasks (used in planning and active views) */
+export type SprintWithTasks = Sprint & {
+  tasks: Task[];
+};
+
+export type TaskTemplate = {
+  id: string;
+  workspace_id: string;
+  task_type: TaskType;
+  template_body: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkspaceSettings = {
+  workspace_id: string;
+  notify_email: string | null;
+  notify_slack_webhook: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Payload for sprint execution job in BullMQ (one job per repo queue) */
+export type RepoQueueJobPayload = {
+  taskId: string;
+  workspaceId: string;
+  repositoryId: string;
+  sprintId: string;
+  sprintOrder: number;
+};
+
+/** Default task description templates (seeded per-workspace on creation) */
+export const DEFAULT_TASK_TEMPLATES: Record<TaskType, string> = {
+  bug: `## Comportamento attuale\n[Descrivi cosa succede]\n\n## Comportamento atteso\n[Descrivi cosa dovrebbe succedere]\n\n## Passi per riprodurre\n1. ...\n\n## Contesto aggiuntivo\n[Screenshot, log, URL...]`,
+  feature: `## Obiettivo\n[Descrivi la funzionalità da implementare]\n\n## Comportamento atteso\n[Come deve funzionare una volta implementata]\n\n## Criteri di accettazione\n- [ ] ...\n\n## Note tecniche\n[Dettagli implementativi, librerie, vincoli...]`,
+  refactor: `## Motivazione\n[Perché è necessario il refactoring]\n\n## Scope\n[Quali file/moduli sono coinvolti]\n\n## Obiettivo finale\n[Come deve apparire il codice dopo]\n\n## Rischi\n[Cosa potrebbe rompersi]`,
+  accessibility: `## Problema di accessibilità\n[Descrivi il problema (WCAG, screen reader, keyboard nav...)]\n\n## Componenti coinvolti\n[Lista dei componenti/pagine]\n\n## Standard di riferimento\n[WCAG 2.1 AA, ARIA...]\n\n## Criteri di accettazione\n- [ ] ...`,
+  security: `## Vulnerabilità\n[Descrivi la vulnerabilità (OWASP category, CVE se nota...)]\n\n## Impatto\n[Cosa può essere compromesso]\n\n## Fix proposto\n[Soluzione tecnica]\n\n## Test di verifica\n[Come verificare che il fix funzioni]`,
+  chore: `## Task\n[Descrivi cosa deve essere fatto]\n\n## Motivazione\n[Perché è necessario]\n\n## Definizione di fatto\n- [ ] ...`,
+  docs: `## Documentazione da aggiornare\n[Quale doc / file README / ADR]\n\n## Contenuto richiesto\n[Cosa deve essere documentato]\n\n## Audience\n[A chi è rivolta la documentazione]`,
 };

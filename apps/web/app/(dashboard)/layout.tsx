@@ -4,7 +4,9 @@ import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { MobileNav } from "@/components/mobile-nav";
 import { AgentStatusWidget } from "@/components/agent/AgentStatusWidget";
+import { QuickTaskFormProvider } from "@/components/tasks/QuickTaskForm";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { AgentStatusEnum } from "@robin/shared-types";
 
@@ -53,6 +55,14 @@ export default async function DashboardLayout({
     // Silently ignore — widget simply won't render if agent data unavailable
   }
 
+  // Fetch repositories for QuickTaskForm (best-effort)
+  let repositories: Awaited<ReturnType<typeof getRepositoriesForWorkspace>> = [];
+  try {
+    repositories = await getRepositoriesForWorkspace(workspace.id);
+  } catch {
+    // Non-fatal
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
@@ -70,6 +80,8 @@ export default async function DashboardLayout({
         <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6">{children}</main>
       </div>
       <MobileNav />
+      {/* Global quick task form — accessible via N shortcut from any page */}
+      <QuickTaskFormProvider repositories={repositories} />
     </div>
   );
 }

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ListTodo, BarChart2, Settings } from "lucide-react";
+import { LayoutDashboard, ListTodo, Zap, BarChart2, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/tasks", label: "Tasks", icon: ListTodo },
+  { href: "/backlog", label: "Backlog", icon: ListTodo },
+  { href: "/sprints", label: "Sprint", icon: Zap },
   { href: "/metrics", label: "Metriche", icon: BarChart2 },
-  { href: "/settings", label: "Impostazioni", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 /**

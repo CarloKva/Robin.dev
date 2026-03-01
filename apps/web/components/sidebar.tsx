@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/backlog", label: "Backlog" },
+  { href: "/sprints", label: "Sprint" },
   { href: "/tasks", label: "Tasks" },
   { href: "/metrics", label: "Metriche" },
   { href: "/agents", label: "Agents" },
@@ -38,6 +40,12 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="border-t border-border p-3">
+        <p className="px-3 text-xs text-muted-foreground">
+          <kbd className="rounded border border-border px-1 font-mono">N</kbd> Nuova task
+        </p>
+      </div>
     </aside>
   );
 }
