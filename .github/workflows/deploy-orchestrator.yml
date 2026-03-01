@@ -1,0 +1,43 @@
+name: Deploy Orchestrator
+
+# Triggers only after CI passes on main — never on PRs or feature branches.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    # Skip if CI failed or was cancelled
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true   # abort on first error
+          script: |
+            set -e
+            cd ${{ secrets.VPS_DEPLOY_PATH || '~/Robin.dev' }}
+
+            echo "▶ Pulling latest code..."
+            git pull origin main
+
+            echo "▶ Installing dependencies..."
+            npm ci --workspace=packages/shared-types
+            npm ci --workspace=apps/orchestrator
+
+            echo "▶ Building orchestrator..."
+            npm run build --workspace=apps/orchestrator
+
+            echo "▶ Restarting PM2..."
+            pm2 restart orchestrator --update-env
+
+            echo "✅ Deploy complete."
