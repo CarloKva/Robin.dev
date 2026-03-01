@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AgentCreationForm } from "@/components/agents/AgentCreationForm";
 import { cn } from "@/lib/utils";
@@ -133,7 +134,7 @@ function AgentCard({ agent }: { agent: AgentRow }) {
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <img
+          <Image
             src={agentAvatarUrl(agent)}
             alt={agent.name}
             width={32}
