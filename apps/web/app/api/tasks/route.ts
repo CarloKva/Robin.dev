@@ -4,8 +4,6 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getOnlineAgentForWorkspace } from "@/lib/db/agents";
-import { getGitHubConnection } from "@/lib/db/github";
-import { getInstallationToken } from "@/lib/github/app";
 import { getTaskQueue, priorityToNumber, defaultTimeoutByType } from "@/lib/queue/tasks.queue";
 import type { JobPayload } from "@robin/shared-types";
 
@@ -83,36 +81,33 @@ export async function POST(request: Request) {
   }
 
   // ── Resolve repository metadata for the job payload ─────────────────────
-  // When repository_id is provided, build an authenticated clone URL using
-  // the GitHub App installation token so the orchestrator can clone private repos.
+  // When repository_id is provided, resolve the clone URL and local path.
+  // Auth is handled by the agent VPS at clone time using its stored GitHub App credentials.
   const reposBasePath = process.env["AGENT_REPOS_BASE_PATH"] ?? "/home/agent/repos";
   let resolvedRepositoryUrl = process.env["DEFAULT_REPOSITORY_URL"] ?? "";
   let resolvedRepositoryPath = process.env["DEFAULT_REPOSITORY_PATH"] ?? "/workspace/repo";
   let resolvedBranch = process.env["DEFAULT_BRANCH"] ?? "main";
 
   if (repository_id) {
-    const { data: repo } = await supabase
+    const { data: repo, error: repoError } = await supabase
       .from("repositories")
       .select("id, full_name, default_branch")
       .eq("id", repository_id)
       .eq("workspace_id", workspace.id)
-      .single();
+      .maybeSingle();
+
+    if (repoError) {
+      console.error("[POST /api/tasks] failed to fetch repository:", repoError.message);
+    }
 
     if (repo) {
       resolvedRepositoryPath = `${reposBasePath}/${repo.id}`;
       resolvedBranch = repo.default_branch ?? "main";
-      try {
-        const connection = await getGitHubConnection(workspace.id);
-        if (connection) {
-          const token = await getInstallationToken(connection.installation_id);
-          resolvedRepositoryUrl = `https://x-access-token:${token}@github.com/${repo.full_name}.git`;
-        } else {
-          resolvedRepositoryUrl = `https://github.com/${repo.full_name}.git`;
-        }
-      } catch (err) {
-        console.error("[POST /api/tasks] failed to build clone URL:", err);
-        resolvedRepositoryUrl = `https://github.com/${repo.full_name}.git`;
-      }
+      // Store the base URL without a token — the agent VPS generates a fresh token at clone time
+      // using its stored GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY_B64 / GITHUB_INSTALLATION_ID.
+      resolvedRepositoryUrl = `https://github.com/${repo.full_name}.git`;
+    } else if (!repoError) {
+      console.warn("[POST /api/tasks] repository_id provided but repo not found:", repository_id);
     }
   }
 
