@@ -48,6 +48,18 @@ export async function POST(
     );
   }
 
+  const tasksWithoutRepo = readyTasks.filter((t) => !t.repository_id);
+  if (tasksWithoutRepo.length > 0) {
+    return NextResponse.json(
+      {
+        error: `${tasksWithoutRepo.length} task non ha un repository assegnato.`,
+        hint: "Assegna una repository a ogni task prima di avviare lo sprint.",
+        tasks: tasksWithoutRepo.map((t) => ({ id: t.id, title: t.title })),
+      },
+      { status: 422 }
+    );
+  }
+
   const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
   if (!onlineAgent) {
     return NextResponse.json(

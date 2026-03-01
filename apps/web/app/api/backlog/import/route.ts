@@ -18,7 +18,7 @@ const parsedTaskSchema = z.object({
   type: z.enum(["feature", "bug", "spike", "chore"]),
   priority: z.enum(["high", "medium", "low"]),
   agent: z.string().optional(),
-  repository: z.string().optional(),
+  repository: z.string().min(1, "Il campo 'repository' è obbligatorio per ogni task"),
   depends_on: z.string().optional(),
   description: z.string().min(20).max(5000),
 });
@@ -82,6 +82,21 @@ export async function POST(request: Request) {
     }
   }
 
+  // Validate all repositories exist in this workspace
+  const unresolvedRepos = tasks
+    .filter((t) => repoMap[t.repository] === undefined)
+    .map((t) => t.repository);
+  if (unresolvedRepos.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Repository non trovate nel workspace.",
+        hint: "Collega le repository in Settings prima di importare. Usa il full_name (es. org/repo).",
+        repositories: [...new Set(unresolvedRepos)],
+      },
+      { status: 422 }
+    );
+  }
+
   // Build task rows for batch insert
   const taskRows = tasks.map((task) => {
     const dbType = DB_TYPE_MAP[task.type] ?? "feature";
@@ -89,10 +104,7 @@ export async function POST(request: Request) {
       task.agent !== undefined && agentMap[task.agent] !== undefined
         ? agentMap[task.agent]
         : undefined;
-    const repositoryId =
-      task.repository !== undefined && repoMap[task.repository] !== undefined
-        ? repoMap[task.repository]
-        : undefined;
+    const repositoryId = repoMap[task.repository] as string;
 
     return {
       workspace_id: workspace.id,
@@ -102,8 +114,8 @@ export async function POST(request: Request) {
       priority: task.priority,
       status: "backlog",
       created_by_user_id: userId,
+      repository_id: repositoryId,
       ...(preferredAgentId !== undefined && { preferred_agent_id: preferredAgentId }),
-      ...(repositoryId !== undefined && { repository_id: repositoryId }),
     };
   });
 
