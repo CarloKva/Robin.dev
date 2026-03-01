@@ -117,6 +117,11 @@ export function narrativize(event: NarrativizeInput): string {
       return `Task failed: ${p.message} (${p.error_code})`;
     }
 
+    case "task.pr_closed_without_merge": {
+      const p = payload as EventPayloadMap["task.pr_closed_without_merge"];
+      return `PR #${p.pr_number} chiusa senza merge — task tornata in review`;
+    }
+
     default: {
       const exhaustive: never = event_type;
       return `Unknown event: ${exhaustive}`;
