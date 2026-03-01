@@ -74,17 +74,26 @@ export class TaskPoller {
   }
 
   private buildPayload(task: Record<string, unknown>): JobPayload {
-    const taskType = (task["task_type"] as TaskType | undefined) ?? "feature";
+    const taskType = (task["type"] as TaskType | undefined) ?? "feature";
     const agentId =
       (task["assigned_agent_id"] as string | undefined) ??
       (process.env["AGENT_ID"] ?? "");
+
+    // Repository info is embedded via Supabase join (see getPendingUnqueued)
+    const repo = task["repositories"] as
+      | { id: string; full_name: string; default_branch: string }
+      | null
+      | undefined;
+
+    const repositoryUrl = repo ? `https://github.com/${repo.full_name}.git` : "";
+
     return {
       taskId: task["id"] as string,
       workspaceId: task["workspace_id"] as string,
       agentId,
-      repositoryUrl: (task["repository_url"] as string | undefined) ?? "",
+      repositoryUrl,
       branch: `feat/${task["id"] as string}`,
-      repositoryPath: this.resolveRepoPath(task),
+      repositoryPath: this.resolveRepoPath(task, repo ?? null),
       taskTitle: task["title"] as string,
       taskDescription: (task["description"] as string | undefined) ?? "",
       taskType,
@@ -94,10 +103,16 @@ export class TaskPoller {
     };
   }
 
-  private resolveRepoPath(task: Record<string, unknown>): string {
-    // Default: /home/agent/repos/<workspace-id>/<task-id>
-    // In Sprint 3+ this will be read from a workspace config table
+  private resolveRepoPath(
+    task: Record<string, unknown>,
+    repo: { id: string } | null
+  ): string {
     const agentHome = process.env["AGENT_HOME"] ?? "/home/agent";
+    // Use the repository's own UUID as directory name to match the web API convention
+    if (repo?.id) {
+      return `${agentHome}/repos/${repo.id}`;
+    }
+    // Fallback: workspace-scoped path when no repo is linked
     return `${agentHome}/repos/${task["workspace_id"] as string}`;
   }
 }
