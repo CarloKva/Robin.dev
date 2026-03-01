@@ -27,7 +27,7 @@ const schema = z.object({
     .max(5000, "Descrizione troppo lunga"),
   type: z.enum(["bug", "feature", "docs", "refactor", "chore", "accessibility", "security"]),
   priority: z.enum(["low", "medium", "high", "urgent", "critical"]),
-  repository_id: z.string().uuid().nullable(),
+  repository_id: z.string().uuid("Seleziona una repository"),
   preferred_agent_id: z.string().uuid().nullable(),
 });
 
@@ -167,7 +167,7 @@ export function TaskCreationForm({ workspaceId: _workspaceId, repositories, agen
     defaultValues: {
       type: "feature",
       priority: "medium",
-      repository_id: repositories.length === 1 ? (repositories[0]?.id ?? null) : null,
+      repository_id: repositories[0]?.id ?? "",
       preferred_agent_id: null,
     },
   });
@@ -207,9 +207,9 @@ export function TaskCreationForm({ workspaceId: _workspaceId, repositories, agen
     return () => controller.abort();
   }, [watchedRepoId]);
 
-  // Pre-select repo if only one is available
+  // Pre-select first repo if none selected
   useEffect(() => {
-    if (repositories.length === 1 && repositories[0] && !watchedRepoId) {
+    if (repositories.length > 0 && !watchedRepoId && repositories[0]) {
       setValue("repository_id", repositories[0].id);
     }
   }, [repositories, watchedRepoId, setValue]);
@@ -379,21 +379,31 @@ function FormPanel({
       {/* Repository + Agent row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <FieldLabel htmlFor="task-repo">Repository</FieldLabel>
-          <select
-            id="task-repo"
-            className={`mt-1 ${selectClass}`}
-            {...register("repository_id")}
-            disabled={isSubmitting}
-          >
-            <option value="">— Nessuna (usa default) —</option>
-            {repositories.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.full_name}
-              </option>
-            ))}
-          </select>
-          <PreflightIndicator state={preflight} />
+          <FieldLabel htmlFor="task-repo">Repository *</FieldLabel>
+          {repositories.length === 0 ? (
+            <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+              Nessuna repository collegata.{" "}
+              <a href="/settings" className="underline hover:no-underline">
+                Collega una repository in Settings.
+              </a>
+            </p>
+          ) : (
+            <>
+              <select
+                id="task-repo"
+                className={`mt-1 ${selectClass}`}
+                {...register("repository_id")}
+                disabled={isSubmitting}
+              >
+                {repositories.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.full_name}
+                  </option>
+                ))}
+              </select>
+              <PreflightIndicator state={preflight} />
+            </>
+          )}
           <FieldError message={errors.repository_id?.message} />
         </div>
 

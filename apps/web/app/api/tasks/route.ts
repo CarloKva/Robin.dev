@@ -11,7 +11,7 @@ const createTaskSchema = z.object({
   priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional().default("medium"),
   // Sprint B new fields
   sprint_id: z.string().uuid().nullable().optional(),
-  repository_id: z.string().uuid().nullable().optional(),
+  repository_id: z.string().uuid("Repository obbligatoria"),
   preferred_agent_id: z.string().uuid().nullable().optional(),
   context: z.string().max(5000).nullable().optional(),
   estimated_effort: z.enum(["xs", "s", "m", "l"]).nullable().optional(),
@@ -77,6 +77,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
+  // Verify repository belongs to this workspace
+  const { data: repoCheck } = await supabase
+    .from("repositories")
+    .select("id")
+    .eq("id", repository_id)
+    .eq("workspace_id", workspace.id)
+    .maybeSingle();
+  if (!repoCheck) {
+    return NextResponse.json(
+      { error: "Repository non trovata o non appartenente al workspace." },
+      { status: 422 }
+    );
+  }
+
   // Determine initial status:
   // - If sprint_id or add_to_sprint → sprint_ready (task assigned to sprint, pending sprint start)
   // - Otherwise → backlog (task will only execute when added to a sprint and sprint is started)
@@ -112,7 +126,7 @@ export async function POST(request: Request) {
       status: taskStatus,
       created_by_user_id: userId,
       ...(sprint_id !== undefined && sprint_id !== null && { sprint_id }),
-      ...(repository_id !== undefined && repository_id !== null && { repository_id }),
+      repository_id,
       ...(preferred_agent_id !== undefined && preferred_agent_id !== null && { preferred_agent_id }),
       ...(context !== undefined && context !== null && { context }),
       ...(estimated_effort !== undefined && estimated_effort !== null && { estimated_effort }),
