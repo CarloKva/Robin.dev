@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { Repository } from "@robin/shared-types";
 
@@ -137,7 +138,7 @@ export function AgentCreationForm({
         <div className="flex items-center gap-2">
           {/* Avatar preview */}
           {previewAvatarUrl && (
-            <img
+            <Image
               src={previewAvatarUrl}
               alt="Avatar anteprima"
               width={32}
