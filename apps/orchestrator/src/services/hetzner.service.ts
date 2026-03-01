@@ -271,6 +271,81 @@ ENVEOF
 
 echo "[robin] .env written"
 
+# ── GitHub token helper (Node ESM — no external deps) ────────────────────────
+cat > /opt/robin/get-github-token.mjs << 'JSEOF'
+import crypto from 'node:crypto';
+const appId = process.env.GITHUB_APP_ID;
+const privateKeyB64 = process.env.GITHUB_APP_PRIVATE_KEY_B64;
+const installationId = Number(process.env.GITHUB_INSTALLATION_ID);
+if (!appId || !privateKeyB64 || !installationId) process.exit(1);
+const privateKey = Buffer.from(privateKeyB64, 'base64').toString('utf-8');
+const now = Math.floor(Date.now() / 1000);
+const h = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+const p = Buffer.from(JSON.stringify({ iat: now - 60, exp: now + 600, iss: appId })).toString('base64url');
+const sign = crypto.createSign('RSA-SHA256');
+sign.update(h + '.' + p);
+const jwt = h + '.' + p + '.' + sign.sign(privateKey, 'base64url');
+const res = await fetch('https://api.github.com/app/installations/' + installationId + '/access_tokens', {
+  method: 'POST',
+  headers: {
+    Authorization: 'Bearer ' + jwt,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  },
+});
+const data = await res.json();
+if (data.token) process.stdout.write(data.token);
+else process.exit(1);
+JSEOF
+
+# ── Startup wrapper: pull latest main, rebuild if updated, then exec node ─────
+cat > /opt/robin/start.sh << 'STARTEOF'
+#!/bin/bash
+# Robin.dev orchestrator startup wrapper.
+# On every (re)start: refreshes GitHub token, pulls latest main,
+# rebuilds only if code changed, then hands off to node.
+APP_DIR=/opt/robin/app
+log() { echo "[robin-start] $*"; }
+log "=== Startup at $(date) ==="
+
+# ── Refresh GitHub App token so git pull works for private repos ──────────────
+TOKEN=$(node /opt/robin/get-github-token.mjs 2>/dev/null || true)
+if [ -n "\${TOKEN}" ]; then
+  BASE=$(git -C "$APP_DIR" remote get-url origin 2>/dev/null \
+    | sed 's|https://[^@]*@||;s|^https://||' || true)
+  if [ -n "\${BASE}" ]; then
+    git -C "$APP_DIR" remote set-url origin "https://x-access-token:\${TOKEN}@\${BASE}" 2>/dev/null || true
+    log "GitHub token refreshed"
+  fi
+else
+  log "Could not get GitHub token — git pull may fail for private repos"
+fi
+
+# ── Pull latest code from main ────────────────────────────────────────────────
+BEFORE=$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || echo "")
+if git -C "$APP_DIR" pull origin main --ff-only 2>&1; then
+  AFTER=$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || echo "")
+  if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
+    log "Updated \${BEFORE:0:7} → \${AFTER:0:7}, rebuilding..."
+    cd "$APP_DIR"
+    npm install --workspaces --if-present 2>/dev/null || true
+    npm run build --workspace=apps/orchestrator 2>/dev/null || true
+    log "Build complete"
+  else
+    log "Already up to date"
+  fi
+else
+  log "git pull failed — continuing with current code"
+fi
+
+# ── Hand off to orchestrator ──────────────────────────────────────────────────
+log "Starting orchestrator..."
+exec node "$APP_DIR/apps/orchestrator/dist/index.js"
+STARTEOF
+chmod +x /opt/robin/start.sh
+
+echo "[robin] Startup wrapper written"
+
 # ── Systemd service ───────────────────────────────────────────────────────────
 cat > /etc/systemd/system/robin-orchestrator.service << 'SVCEOF'
 [Unit]
@@ -280,8 +355,8 @@ After=network.target redis-server.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/robin/app/apps/orchestrator
-ExecStart=/usr/bin/node dist/index.js
+WorkingDirectory=/opt/robin
+ExecStart=/opt/robin/start.sh
 Restart=always
 RestartSec=10
 EnvironmentFile=/opt/robin/app/apps/orchestrator/.env
