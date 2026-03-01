@@ -48,7 +48,7 @@ function provisioningStatusToStepStatuses(
   vpsCreatedAt: string | null,
   vpsOnlineAt: string | null,
   provisionedAt: string | null,
-  provisioningError: string | null
+  _provisioningError: string | null
 ): Record<string, StepStatus> {
   const PENDING = {
     vps_created: "pending" as StepStatus,
@@ -171,7 +171,7 @@ interface ProvisioningTimelineProps {
 
 export function ProvisioningTimeline({
   agentId,
-  workspaceId,
+  workspaceId: _workspaceId,
   initial,
 }: ProvisioningTimelineProps) {
   const [data, setData] = useState<AgentProvisioningData>(initial);
@@ -220,7 +220,7 @@ export function ProvisioningTimeline({
     <div className="space-y-1">
       {data.provisioning_status === "online" && (
         <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
-          L'agente è online e pronto per ricevere task.
+          L&apos;agente è online e pronto per ricevere task.
         </div>
       )}
 

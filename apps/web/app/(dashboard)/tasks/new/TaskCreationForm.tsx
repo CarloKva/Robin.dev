@@ -113,7 +113,7 @@ interface Props {
   workspaceId: string;
 }
 
-export function TaskCreationForm({ hasOnlineAgent, workspaceId }: Props) {
+export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
