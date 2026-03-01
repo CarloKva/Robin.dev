@@ -20,18 +20,6 @@ export default async function BacklogPage() {
     getSprintsForWorkspace(workspace.id),
   ]);
 
-  // Load current active or planning sprint with its tasks for the Sprint tab
-  const activeSprintMeta = allSprints.find((s) => s.status === "active") ?? null;
-  const planningSprintMeta = allSprints.find((s) => s.status === "planning") ?? null;
-  const pastSprints = allSprints.filter((s) => ["completed", "cancelled"].includes(s.status));
-
-  const [activeSprint, planningSprint] = await Promise.all([
-    activeSprintMeta ? getSprintWithTasks(activeSprintMeta.id, workspace.id) : Promise.resolve(null),
-    planningSprintMeta && !activeSprintMeta
-      ? getSprintWithTasks(planningSprintMeta.id, workspace.id)
-      : Promise.resolve(null),
-  ]);
-
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
