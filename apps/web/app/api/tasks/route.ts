@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getOnlineAgentForWorkspace } from "@/lib/db/agents";
+import { getGitHubConnection } from "@/lib/db/github";
+import { getInstallationToken } from "@/lib/github/app";
 import { getTaskQueue, priorityToNumber, defaultTimeoutByType } from "@/lib/queue/tasks.queue";
 import type { JobPayload } from "@robin/shared-types";
 
@@ -80,6 +82,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
+  // ── Resolve repository metadata for the job payload ─────────────────────
+  // When repository_id is provided, build an authenticated clone URL using
+  // the GitHub App installation token so the orchestrator can clone private repos.
+  const reposBasePath = process.env["AGENT_REPOS_BASE_PATH"] ?? "/home/agent/repos";
+  let resolvedRepositoryUrl = process.env["DEFAULT_REPOSITORY_URL"] ?? "";
+  let resolvedRepositoryPath = process.env["DEFAULT_REPOSITORY_PATH"] ?? "/workspace/repo";
+  let resolvedBranch = process.env["DEFAULT_BRANCH"] ?? "main";
+
+  if (repository_id) {
+    const { data: repo } = await supabase
+      .from("repositories")
+      .select("id, full_name, default_branch")
+      .eq("id", repository_id)
+      .eq("workspace_id", workspace.id)
+      .single();
+
+    if (repo) {
+      resolvedRepositoryPath = `${reposBasePath}/${repo.id}`;
+      resolvedBranch = repo.default_branch ?? "main";
+      try {
+        const connection = await getGitHubConnection(workspace.id);
+        if (connection) {
+          const token = await getInstallationToken(connection.installation_id);
+          resolvedRepositoryUrl = `https://x-access-token:${token}@github.com/${repo.full_name}.git`;
+        } else {
+          resolvedRepositoryUrl = `https://github.com/${repo.full_name}.git`;
+        }
+      } catch (err) {
+        console.error("[POST /api/tasks] failed to build clone URL:", err);
+        resolvedRepositoryUrl = `https://github.com/${repo.full_name}.git`;
+      }
+    }
+  }
+
   // Determine initial status
   let taskStatus: string;
   let assignedAgentId: string | null = null;
@@ -90,9 +126,22 @@ export async function POST(request: Request) {
   } else if (add_to_sprint) {
     taskStatus = "sprint_ready";
   } else {
-    // Auto-routing: find online agent for workspace
-    const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
-    assignedAgentId = onlineAgent?.id ?? null;
+    // Routing: prefer explicit agent, fall back to auto-routing
+    if (preferred_agent_id) {
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const { data: preferredAgent } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("id", preferred_agent_id)
+        .eq("workspace_id", workspace.id)
+        .gt("last_seen_at", twoMinutesAgo)
+        .maybeSingle();
+      assignedAgentId = preferredAgent?.id ?? null;
+    }
+    if (!assignedAgentId) {
+      const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
+      assignedAgentId = onlineAgent?.id ?? null;
+    }
     taskStatus = assignedAgentId ? "queued" : "backlog";
   }
 
@@ -168,9 +217,9 @@ export async function POST(request: Request) {
         taskId: task.id,
         workspaceId: workspace.id,
         agentId: assignedAgentId,
-        repositoryUrl: process.env["DEFAULT_REPOSITORY_URL"] ?? "",
-        branch: process.env["DEFAULT_BRANCH"] ?? "main",
-        repositoryPath: process.env["DEFAULT_REPOSITORY_PATH"] ?? "/workspace/repo",
+        repositoryUrl: resolvedRepositoryUrl,
+        branch: resolvedBranch,
+        repositoryPath: resolvedRepositoryPath,
         taskTitle: title,
         taskDescription: description,
         taskType: type as JobPayload["taskType"],

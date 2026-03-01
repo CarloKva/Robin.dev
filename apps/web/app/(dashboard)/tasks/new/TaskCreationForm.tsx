@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +12,7 @@ import {
   qualitySuggestions,
   type QualityScore,
 } from "@/lib/tasks/descriptionQuality";
-import type { TaskType } from "@robin/shared-types";
+import type { TaskType, Repository, AgentWithStatus } from "@robin/shared-types";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 
@@ -25,11 +25,21 @@ const schema = z.object({
     .string()
     .min(20, "La descrizione deve avere almeno 20 caratteri")
     .max(5000, "Descrizione troppo lunga"),
-  type: z.enum(["bug", "feature", "docs", "refactor", "chore"]),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
+  type: z.enum(["bug", "feature", "docs", "refactor", "chore", "accessibility", "security"]),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]),
+  repository_id: z.string().uuid().nullable(),
+  preferred_agent_id: z.string().uuid().nullable(),
 });
 
 type FormValues = z.infer<typeof schema>;
+
+// ─── Preflight state ────────────────────────────────────────────────────────
+
+type PreflightState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "ok"; full_name: string }
+  | { status: "error"; error: string };
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
@@ -106,34 +116,66 @@ const selectClass =
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50";
 
+// ─── Preflight indicator ────────────────────────────────────────────────────
+
+function PreflightIndicator({ state }: { state: PreflightState }) {
+  if (state.status === "idle") return null;
+  if (state.status === "checking") {
+    return (
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+        Verifica accesso GitHub…
+      </p>
+    );
+  }
+  if (state.status === "ok") {
+    return (
+      <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+        ✓ Accessibile — {state.full_name}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">
+      ✗ {state.error}
+    </p>
+  );
+}
+
 // ─── Main form ─────────────────────────────────────────────────────────────
 
 interface Props {
   hasOnlineAgent: boolean;
   workspaceId: string;
+  repositories: Repository[];
+  agents: AgentWithStatus[];
 }
 
-export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: Props) {
+export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId, repositories, agents }: Props) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"form" | "preview">("form");
+  const [preflight, setPreflight] = useState<PreflightState>({ status: "idle" });
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       type: "feature",
       priority: "medium",
+      repository_id: repositories.length === 1 ? (repositories[0]?.id ?? null) : null,
+      preferred_agent_id: null,
     },
   });
 
-  // Watch values for quality indicator and preview
   const watchedDescription = watch("description") ?? "";
   const watchedType = (watch("type") ?? "feature") as TaskType;
+  const watchedRepoId = watch("repository_id");
   const qualityScore: QualityScore | null =
     watchedDescription.length > 0
       ? descriptionQualityScore(watchedDescription, watchedType)
@@ -141,12 +183,50 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: 
 
   const previewMd = buildTaskMd(watch());
 
-  // Keyboard shortcut: N → focus title input (from task list)
+  // Preflight: verify GitHub App access when a repo is selected
+  useEffect(() => {
+    if (!watchedRepoId) {
+      setPreflight({ status: "idle" });
+      return;
+    }
+    setPreflight({ status: "checking" });
+    const controller = new AbortController();
+    fetch(`/api/repositories/${watchedRepoId}/check`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: { accessible?: boolean; full_name?: string; error?: string }) => {
+        if (data.accessible) {
+          setPreflight({ status: "ok", full_name: data.full_name ?? "" });
+        } else {
+          setPreflight({ status: "error", error: data.error ?? "Repository non accessibile" });
+        }
+      })
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name !== "AbortError") {
+          setPreflight({ status: "error", error: "Errore di rete durante la verifica" });
+        }
+      });
+    return () => controller.abort();
+  }, [watchedRepoId]);
+
+  // Pre-select repo if only one is available
+  useEffect(() => {
+    if (repositories.length === 1 && repositories[0] && !watchedRepoId) {
+      setValue("repository_id", repositories[0].id);
+    }
+  }, [repositories, watchedRepoId, setValue]);
+
+  // Keyboard shortcut: N → focus title input
   const focusTitle = useCallback(() => {
     const el = document.getElementById("task-title");
     if (el) el.focus();
   }, []);
   useKeyboardShortcut("n", focusTitle);
+
+  // Online agents for the selector
+  const onlineAgents = agents.filter((a) => {
+    if (!a.last_seen_at) return false;
+    return Date.now() - new Date(a.last_seen_at).getTime() < 2 * 60 * 1000;
+  });
 
   const onSubmit = async (data: FormValues) => {
     setServerError(null);
@@ -166,8 +246,6 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: 
       }
 
       const { task } = (await res.json()) as { task: { id: string } };
-
-      // Redirect to task detail with success banner via search param
       router.push(`/tasks/${task.id}?created=1`);
       router.refresh();
     } catch {
@@ -177,7 +255,7 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: 
 
   return (
     <div className="flex gap-6 lg:gap-8">
-      {/* ── Mobile tab switcher (hidden on lg+) ── */}
+      {/* ── Mobile tab switcher ── */}
       <div className="flex w-full flex-col gap-4 lg:hidden">
         <div className="flex rounded-lg border border-border bg-muted/40 p-1">
           <button
@@ -216,6 +294,9 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: 
             handleSubmit={handleSubmit}
             onSubmit={onSubmit}
             onCancel={() => router.back()}
+            repositories={repositories}
+            onlineAgents={onlineAgents}
+            preflight={preflight}
           />
         ) : (
           <PreviewPanel markdown={previewMd} />
@@ -236,6 +317,9 @@ export function TaskCreationForm({ hasOnlineAgent, workspaceId: _workspaceId }: 
             handleSubmit={handleSubmit}
             onSubmit={onSubmit}
             onCancel={() => router.back()}
+            repositories={repositories}
+            onlineAgents={onlineAgents}
+            preflight={preflight}
           />
         </div>
         <div className="w-96 shrink-0">
@@ -261,6 +345,9 @@ interface FormPanelProps {
   handleSubmit: ReturnType<typeof useForm<FormValues>>["handleSubmit"];
   onSubmit: (data: FormValues) => Promise<void>;
   onCancel: () => void;
+  repositories: Repository[];
+  onlineAgents: AgentWithStatus[];
+  preflight: PreflightState;
 }
 
 function FormPanel({
@@ -274,6 +361,9 @@ function FormPanel({
   handleSubmit,
   onSubmit,
   onCancel,
+  repositories,
+  onlineAgents,
+  preflight,
 }: FormPanelProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
@@ -291,6 +381,49 @@ function FormPanel({
         <FieldError message={errors.title?.message} />
       </div>
 
+      {/* Repository + Agent row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <FieldLabel htmlFor="task-repo">Repository</FieldLabel>
+          <select
+            id="task-repo"
+            className={`mt-1 ${selectClass}`}
+            {...register("repository_id")}
+            disabled={isSubmitting}
+          >
+            <option value="">— Nessuna (usa default) —</option>
+            {repositories.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.full_name}
+              </option>
+            ))}
+          </select>
+          <PreflightIndicator state={preflight} />
+          <FieldError message={errors.repository_id?.message} />
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="task-agent">Agente</FieldLabel>
+          <select
+            id="task-agent"
+            className={`mt-1 ${selectClass}`}
+            {...register("preferred_agent_id")}
+            disabled={isSubmitting}
+          >
+            <option value="">— Automatico —</option>
+            {onlineAgents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          {onlineAgents.length === 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">Nessun agente online</p>
+          )}
+          <FieldError message={errors.preferred_agent_id?.message} />
+        </div>
+      </div>
+
       {/* Type + Priority row */}
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -306,6 +439,8 @@ function FormPanel({
             <option value="docs">📝 Docs</option>
             <option value="refactor">♻️ Refactor</option>
             <option value="chore">🔧 Chore</option>
+            <option value="accessibility">♿ Accessibility</option>
+            <option value="security">🔒 Security</option>
           </select>
           <FieldError message={errors.type?.message} />
         </div>
@@ -322,12 +457,13 @@ function FormPanel({
             <option value="medium">Media</option>
             <option value="high">Alta</option>
             <option value="urgent">Urgente</option>
+            <option value="critical">Critica</option>
           </select>
           <FieldError message={errors.priority?.message} />
         </div>
       </div>
 
-      {/* Agent status (auto-assigned — no manual selection) */}
+      {/* No online agent warning */}
       {!hasOnlineAgent && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
           <strong>Nessun agente online.</strong> La task verrà creata in stato{" "}
@@ -364,7 +500,7 @@ function FormPanel({
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || preflight.status === "error"}
           className="rounded-md bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
         >
           {isSubmitting ? "Creazione…" : hasOnlineAgent ? "Crea task" : "Crea task (backlog)"}
