@@ -1,15 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseRobinMd } from "../robin-md-parser";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeBlock(fields: string, description: string): string {
-  return `---TASK---\n${fields}\ndescription: |\n${description}\n---END---`;
-}
-
-const LONG_DESCRIPTION = "  Questa è una descrizione valida di almeno 20 caratteri per il test.";
-const SHORT_DESCRIPTION = "  Corta.";
-
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("parseRobinMd", () => {
