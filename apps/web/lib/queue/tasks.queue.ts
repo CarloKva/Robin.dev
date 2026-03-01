@@ -28,10 +28,10 @@ export function getTaskQueue(): Queue<JobPayload> {
 
 /** Maps task priority to BullMQ priority number (lower = higher priority). */
 export function priorityToNumber(
-  p: "low" | "medium" | "high" | "urgent"
+  p: "low" | "medium" | "high" | "urgent" | "critical"
 ): number {
-  const map = { urgent: 1, high: 2, medium: 5, low: 10 };
-  return map[p];
+  const map: Record<string, number> = { critical: 1, urgent: 1, high: 2, medium: 5, low: 10 };
+  return map[p] ?? 5;
 }
 
 /** Default timeout in minutes by task type. */

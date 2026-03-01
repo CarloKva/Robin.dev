@@ -42,4 +42,6 @@ export const qualitySuggestions: Record<TaskType, string> = {
   docs: 'Specifica quale sezione aggiornare, cosa aggiungere o modificare, e il pubblico di riferimento.',
   refactor: 'Descrivi il codice attuale, cosa vuoi migliorare e quali performance o metriche ti aspetti.',
   chore: 'Specifica cosa configurare/aggiornare, la versione target e eventuali dipendenze.',
+  accessibility: 'Descrivi la barriera di accessibilità, i componenti coinvolti e il criterio WCAG di riferimento.',
+  security: 'Descrivi la vulnerabilità, l\'impatto potenziale e il fix proposto.',
 };

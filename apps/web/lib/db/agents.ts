@@ -47,3 +47,43 @@ export async function getOnlineAgentForWorkspace(workspaceId: string): Promise<{
 
   return data ?? null;
 }
+
+/**
+ * Returns all online agents assigned to a specific repository.
+ * Used by the routing algorithm in sprint execution.
+ * Priority order: idle agents first, then by last_seen_at descending.
+ */
+export async function getOnlineAgentsForRepository(
+  repositoryId: string,
+  workspaceId: string
+): Promise<{ id: string; name: string; effective_status: string }[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("agents_with_status")
+    .select("id, name, effective_status")
+    .eq("workspace_id", workspaceId)
+    .in("effective_status", ["idle", "busy"])
+    .order("last_seen_at", { ascending: false });
+
+  if (error) {
+    console.error("[getOnlineAgentsForRepository]", error.message);
+    return [];
+  }
+
+  if (!data?.length) return [];
+
+  // Filter to only agents assigned to this repository
+  const supabase2 = await createSupabaseServerClient();
+  const { data: agentRepos } = await supabase2
+    .from("agent_repositories")
+    .select("agent_id")
+    .eq("repository_id", repositoryId);
+
+  const assignedIds = new Set((agentRepos ?? []).map((r: { agent_id: string }) => r.agent_id));
+  return data.filter((a: { id: string }) => assignedIds.has(a.id)) as {
+    id: string;
+    name: string;
+    effective_status: string;
+  }[];
+}

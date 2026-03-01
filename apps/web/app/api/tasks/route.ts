@@ -8,11 +8,54 @@ import { getTaskQueue, priorityToNumber, defaultTimeoutByType } from "@/lib/queu
 import type { JobPayload } from "@robin/shared-types";
 
 const createTaskSchema = z.object({
-  title: z.string().min(5, "Titolo troppo corto").max(200),
-  description: z.string().min(20, "Descrizione troppo corta").max(5000),
-  type: z.enum(["bug", "feature", "docs", "refactor", "chore"]),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
+  title: z.string().min(1, "Titolo obbligatorio").max(200),
+  description: z.string().max(5000).optional().default(""),
+  type: z.enum(["bug", "feature", "docs", "refactor", "chore", "accessibility", "security"]).optional().default("feature"),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional().default("medium"),
+  // Sprint B new fields
+  sprint_id: z.string().uuid().nullable().optional(),
+  repository_id: z.string().uuid().nullable().optional(),
+  preferred_agent_id: z.string().uuid().nullable().optional(),
+  context: z.string().max(5000).nullable().optional(),
+  estimated_effort: z.enum(["xs", "s", "m", "l"]).nullable().optional(),
+  // If sprint_id provided, initial status should be sprint_ready, not backlog
+  add_to_sprint: z.boolean().optional().default(false),
 });
+
+export async function GET(request: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const supabase = await createSupabaseServerClient();
+  const workspace = await getWorkspaceForUser(userId);
+  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status");
+  const type = url.searchParams.get("type");
+  const priority = url.searchParams.get("priority");
+  const search = url.searchParams.get("search");
+  const page = parseInt(url.searchParams.get("page") ?? "1", 10);
+  const pageSize = Math.min(parseInt(url.searchParams.get("pageSize") ?? "30", 10), 100);
+  const offset = (page - 1) * pageSize;
+
+  let query = supabase
+    .from("tasks")
+    .select("*", { count: "exact" })
+    .eq("workspace_id", workspace.id)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + pageSize - 1);
+
+  if (status) query = query.eq("status", status);
+  if (type) query = query.eq("type", type);
+  if (priority) query = query.eq("priority", priority);
+  if (search) query = query.ilike("title", `%${search}%`);
+
+  const { data, error, count } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ tasks: data, total: count, page, pageSize });
+}
 
 export async function POST(request: Request) {
   const { userId } = await auth();
@@ -29,7 +72,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { title, description, type, priority } = parsed.data;
+  const { title, description, type, priority, sprint_id, repository_id, preferred_agent_id, context, estimated_effort, add_to_sprint } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
   const workspace = await getWorkspaceForUser(userId);
@@ -37,11 +80,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
-  // Auto-routing: find online agent for workspace
-  const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
-  const assignedAgentId = onlineAgent?.id ?? null;
-  // If no agent is online, task lands in 'backlog' and will be picked up when agent comes online
-  const taskStatus = assignedAgentId ? "queued" : "backlog";
+  // Determine initial status
+  let taskStatus: string;
+  let assignedAgentId: string | null = null;
+
+  if (sprint_id) {
+    // Task is being added directly to a sprint — mark as sprint_ready
+    taskStatus = "sprint_ready";
+  } else if (add_to_sprint) {
+    taskStatus = "sprint_ready";
+  } else {
+    // Auto-routing: find online agent for workspace
+    const onlineAgent = await getOnlineAgentForWorkspace(workspace.id);
+    assignedAgentId = onlineAgent?.id ?? null;
+    taskStatus = assignedAgentId ? "queued" : "backlog";
+  }
+
+  // Determine sprint_order if adding to sprint
+  let sprint_order: number | null = null;
+  if (sprint_id) {
+    const { data: lastTask } = await supabase
+      .from("tasks")
+      .select("sprint_order")
+      .eq("sprint_id", sprint_id)
+      .order("sprint_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    sprint_order = (lastTask?.sprint_order ?? -1) + 1;
+  }
 
   // Insert task in Supabase
   const { data: task, error: taskError } = await supabase
@@ -55,6 +121,12 @@ export async function POST(request: Request) {
       status: taskStatus,
       assigned_agent_id: assignedAgentId,
       created_by_user_id: userId,
+      ...(sprint_id !== undefined && sprint_id !== null && { sprint_id }),
+      ...(repository_id !== undefined && repository_id !== null && { repository_id }),
+      ...(preferred_agent_id !== undefined && preferred_agent_id !== null && { preferred_agent_id }),
+      ...(context !== undefined && context !== null && { context }),
+      ...(estimated_effort !== undefined && estimated_effort !== null && { estimated_effort }),
+      ...(sprint_order !== null && { sprint_order }),
     })
     .select()
     .single();
@@ -88,7 +160,7 @@ export async function POST(request: Request) {
   });
 
   // Enqueue in BullMQ only when an agent is online (best-effort)
-  if (assignedAgentId) {
+  if (assignedAgentId && taskStatus === "queued") {
     try {
       const queue = getTaskQueue();
 
@@ -101,18 +173,17 @@ export async function POST(request: Request) {
         repositoryPath: process.env["DEFAULT_REPOSITORY_PATH"] ?? "/workspace/repo",
         taskTitle: title,
         taskDescription: description,
-        taskType: type,
-        priority,
-        timeoutMinutes: defaultTimeoutByType[type] ?? 30,
+        taskType: type as JobPayload["taskType"],
+        priority: priority as JobPayload["priority"],
+        timeoutMinutes: defaultTimeoutByType[type as keyof typeof defaultTimeoutByType] ?? 30,
         claudeMdPath: "CLAUDE.md",
       };
 
       await queue.add(title, jobPayload, {
-        priority: priorityToNumber(priority),
+        priority: priorityToNumber(priority as Parameters<typeof priorityToNumber>[0]),
         jobId: task.id,
       });
     } catch (err) {
-      // Log but don't fail — the task is created, orchestrator can poll if needed
       console.error("[POST /api/tasks] BullMQ enqueue error:", err);
     }
   }

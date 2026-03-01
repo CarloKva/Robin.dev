@@ -28,6 +28,7 @@ export const workerOptions: Omit<WorkerOptions, "connection"> = {
 /** Maps task priority to BullMQ priority number (lower = higher priority). */
 export function priorityToNumber(p: TaskPriority): number {
   const map: Record<TaskPriority, number> = {
+    critical: 1,
     urgent: 1,
     high: 2,
     medium: 5,

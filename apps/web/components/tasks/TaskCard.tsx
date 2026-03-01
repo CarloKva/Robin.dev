@@ -58,6 +58,26 @@ const statusConfig: Record<
     badge: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
     border: "border-l-neutral-200",
   },
+  sprint_ready: {
+    label: "Sprint ready",
+    badge: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+    border: "border-l-blue-400",
+  },
+  in_review: {
+    label: "In review",
+    badge: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+    border: "border-l-purple-400",
+  },
+  rework: {
+    label: "Rework",
+    badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+    border: "border-l-orange-400",
+  },
+  done: {
+    label: "Fatto",
+    badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+    border: "border-l-emerald-500",
+  },
 };
 
 // ── Priority config ───────────────────────────────────────────────────────────
@@ -67,6 +87,7 @@ const priorityConfig: Record<TaskPriority, { label: string; dot: string }> = {
   medium: { label: "Medium", dot: "bg-amber-400" },
   high: { label: "High", dot: "bg-orange-500" },
   urgent: { label: "Urgent", dot: "bg-red-600" },
+  critical: { label: "Critical", dot: "bg-red-700" },
 };
 
 // ── Type config ───────────────────────────────────────────────────────────────
@@ -80,6 +101,8 @@ const typeConfig: Record<
   docs: { label: "Docs", class: "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400" },
   refactor: { label: "Refactor", class: "bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400" },
   chore: { label: "Chore", class: "bg-neutral-50 text-neutral-600 dark:bg-neutral-950/30 dark:text-neutral-400" },
+  accessibility: { label: "A11y", class: "bg-cyan-50 text-cyan-600 dark:bg-cyan-950/30 dark:text-cyan-400" },
+  security: { label: "Security", class: "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400" },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────

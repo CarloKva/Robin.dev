@@ -1,4 +1,4 @@
-# Robin.dev — Sprint B Backlog
+# Robin.dev — Sprint B Backlog [IMPLEMENTATO 2026-03-01]
 ## Backlog Management + Sprint Planning
 
 **Versione 1.0 · Carlo Ferrero · Febbraio 2026**
