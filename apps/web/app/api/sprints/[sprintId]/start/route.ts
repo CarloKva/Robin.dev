@@ -107,7 +107,6 @@ export async function POST(
     .from("tasks")
     .update({
       status: "queued",
-      queued_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("sprint_id", sprintId)
