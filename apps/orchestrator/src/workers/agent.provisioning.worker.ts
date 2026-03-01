@@ -182,10 +182,10 @@ async function processProvisioningJob(
   log.info({ agentId, vpsId }, "Waiting for VPS to reach running status");
   vpsIp = await waitForServerRunning(vpsId);
 
-  // Save vps_ip
+  // Save vps_ip + vps_online_at — signals "VPS online" step in the UI timeline
   await supabase
     .from("agents")
-    .update({ vps_ip: vpsIp, vps_region: "nbg1" })
+    .update({ vps_ip: vpsIp, vps_region: "nbg1", vps_online_at: new Date().toISOString() })
     .eq("id", agentId);
 
   log.info({ agentId, vpsId, vpsIp }, "VPS running; waiting for agent heartbeat");

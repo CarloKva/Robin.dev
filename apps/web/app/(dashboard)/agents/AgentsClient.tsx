@@ -165,6 +165,18 @@ function AgentCard({ agent }: { agent: AgentRow }) {
             <dd className="font-mono text-foreground">v{agent.orchestrator_version}</dd>
           </>
         )}
+        {agent.claude_code_version && (
+          <>
+            <dt className="text-muted-foreground">Claude Code</dt>
+            <dd className="font-mono text-foreground">{agent.claude_code_version}</dd>
+          </>
+        )}
+        {agent.vps_id && (
+          <>
+            <dt className="text-muted-foreground">ID Server</dt>
+            <dd className="font-mono text-foreground">#{agent.vps_id}</dd>
+          </>
+        )}
         {!isProvisioning && (
           <>
             <dt className="text-muted-foreground">Ultimo heartbeat</dt>

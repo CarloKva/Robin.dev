@@ -22,6 +22,11 @@ const STEPS: Step[] = [
     description: "Richiesta al provider cloud in corso",
   },
   {
+    id: "vps_online",
+    label: "VPS online",
+    description: "Server raggiunto e pronto — avvio setup",
+  },
+  {
     id: "setup_running",
     label: "Setup in corso",
     description: "Installazione Node.js, Redis e orchestratore",
@@ -29,7 +34,7 @@ const STEPS: Step[] = [
   {
     id: "health_check",
     label: "Health check",
-    description: "Verifica che l'orchestratore risponda",
+    description: "Attesa primo heartbeat dall'orchestratore",
   },
   {
     id: "ready",
@@ -41,32 +46,46 @@ const STEPS: Step[] = [
 function provisioningStatusToStepStatuses(
   status: AgentProvisioningStatus,
   vpsCreatedAt: string | null,
+  vpsOnlineAt: string | null,
   provisionedAt: string | null,
   provisioningError: string | null
 ): Record<string, StepStatus> {
+  const PENDING = {
+    vps_created: "pending" as StepStatus,
+    vps_online: "pending" as StepStatus,
+    setup_running: "pending" as StepStatus,
+    health_check: "pending" as StepStatus,
+    ready: "pending" as StepStatus,
+  };
+
+  if (status === "pending") return PENDING;
+
   if (status === "error") {
-    // Show progress up to the step that failed
-    if (provisionedAt) return { vps_created: "done", setup_running: "done", health_check: "error", ready: "pending" };
-    if (vpsCreatedAt) return { vps_created: "done", setup_running: "error", health_check: "pending", ready: "pending" };
-    return { vps_created: "error", setup_running: "pending", health_check: "pending", ready: "pending" };
-  }
-
-  if (status === "pending") {
-    return { vps_created: "pending", setup_running: "pending", health_check: "pending", ready: "pending" };
-  }
-
-  if (status === "provisioning") {
-    if (vpsCreatedAt) {
-      return { vps_created: "done", setup_running: "in_progress", health_check: "pending", ready: "pending" };
-    }
-    return { vps_created: "in_progress", setup_running: "pending", health_check: "pending", ready: "pending" };
+    // Determine how far provisioning got before the failure
+    if (provisionedAt)  return { vps_created: "done", vps_online: "done", setup_running: "done", health_check: "error", ready: "pending" };
+    if (vpsOnlineAt)    return { vps_created: "done", vps_online: "done", setup_running: "error", health_check: "pending", ready: "pending" };
+    if (vpsCreatedAt)   return { vps_created: "done", vps_online: "error", setup_running: "pending", health_check: "pending", ready: "pending" };
+    return { ...PENDING, vps_created: "error" };
   }
 
   if (status === "online") {
-    return { vps_created: "done", setup_running: "done", health_check: "done", ready: "done" };
+    return { vps_created: "done", vps_online: "done", setup_running: "done", health_check: "done", ready: "done" };
   }
 
-  return { vps_created: "pending", setup_running: "pending", health_check: "pending", ready: "pending" };
+  if (status === "provisioning") {
+    // vps_online_at set: VPS is running, cloud-init + health-check in progress
+    if (vpsOnlineAt) {
+      return { vps_created: "done", vps_online: "done", setup_running: "in_progress", health_check: "pending", ready: "pending" };
+    }
+    // vps_created_at set: VPS requested, waiting for it to boot
+    if (vpsCreatedAt) {
+      return { vps_created: "done", vps_online: "in_progress", setup_running: "pending", health_check: "pending", ready: "pending" };
+    }
+    // nothing set yet: job just started
+    return { ...PENDING, vps_created: "in_progress" };
+  }
+
+  return PENDING;
 }
 
 // ─── Step item ────────────────────────────────────────────────────────────────
@@ -139,6 +158,7 @@ function StepItem({
 interface AgentProvisioningData {
   provisioning_status: AgentProvisioningStatus;
   vps_created_at: string | null;
+  vps_online_at: string | null;
   provisioned_at: string | null;
   provisioning_error: string | null;
 }
@@ -175,6 +195,7 @@ export function ProvisioningTimeline({
           setData({
             provisioning_status: row.provisioning_status,
             vps_created_at: row.vps_created_at,
+            vps_online_at: row.vps_online_at,
             provisioned_at: row.provisioned_at,
             provisioning_error: row.provisioning_error,
           });
@@ -190,6 +211,7 @@ export function ProvisioningTimeline({
   const stepStatuses = provisioningStatusToStepStatuses(
     data.provisioning_status,
     data.vps_created_at,
+    data.vps_online_at,
     data.provisioned_at,
     data.provisioning_error
   );
