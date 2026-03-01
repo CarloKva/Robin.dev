@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { JobPayload, JobResult, ADWPPhase } from "@robin/shared-types";
@@ -42,17 +43,18 @@ export class ClaudeRunner {
 
     // Ensure repository path exists — auto-clone if url is available
     if (!fs.existsSync(payload.repositoryPath)) {
-      if (payload.repositoryUrl) {
-        log.info(
-          { taskId: payload.taskId, repositoryPath: payload.repositoryPath, repositoryUrl: payload.repositoryUrl },
-          "Repository path not found — cloning"
-        );
-        await this.cloneRepository(payload.repositoryUrl, payload.repositoryPath);
-      } else {
+      if (!payload.repositoryUrl) {
         throw new RepositoryAccessError(
-          `Repository path not found: ${payload.repositoryPath}`
+          `Repository path not found and no repositoryUrl provided: ${payload.repositoryPath}`
         );
       }
+      // Inject a fresh GitHub App token before cloning to avoid stale/missing tokens
+      const cloneUrl = await this.buildAuthenticatedCloneUrl(payload.repositoryUrl);
+      log.info(
+        { taskId: payload.taskId, repositoryPath: payload.repositoryPath },
+        "Repository path not found — cloning"
+      );
+      await this.cloneRepository(cloneUrl, payload.repositoryPath);
     }
 
     // Write TASK.md
@@ -243,6 +245,82 @@ export class ClaudeRunner {
     if (commitMatch?.[1]) result.commitSha = commitMatch[1];
 
     return result;
+  }
+
+  /**
+   * Returns a GitHub HTTPS clone URL with a fresh installation token injected.
+   * Uses GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_B64, GITHUB_INSTALLATION_ID from env.
+   * Falls back to the original URL if credentials are not available.
+   */
+  private async buildAuthenticatedCloneUrl(repositoryUrl: string): Promise<string> {
+    const appId = process.env["GITHUB_APP_ID"];
+    const privateKeyB64 = process.env["GITHUB_APP_PRIVATE_KEY_B64"];
+    const installationIdStr = process.env["GITHUB_INSTALLATION_ID"];
+
+    if (!appId || !privateKeyB64 || !installationIdStr) {
+      log.warn({}, "GitHub App env vars not set — cloning without fresh token");
+      return repositoryUrl;
+    }
+
+    // Strip any existing token so we can inject a fresh one
+    const baseUrl = repositoryUrl.replace(/https:\/\/[^@]+@/, "https://");
+
+    if (!baseUrl.includes("github.com")) {
+      return repositoryUrl;
+    }
+
+    try {
+      const token = await this.generateInstallationToken(
+        appId,
+        privateKeyB64,
+        parseInt(installationIdStr, 10)
+      );
+      const authenticated = baseUrl.replace("https://", `https://x-access-token:${token}@`);
+      log.info({}, "Fresh GitHub App token injected for clone");
+      return authenticated;
+    } catch (err) {
+      log.warn({ err: String(err) }, "Failed to generate GitHub token — cloning with original URL");
+      return repositoryUrl;
+    }
+  }
+
+  /** Generates a short-lived GitHub App installation access token. */
+  private async generateInstallationToken(
+    appId: string,
+    privateKeyB64: string,
+    installationId: number
+  ): Promise<string> {
+    const privateKey = Buffer.from(privateKeyB64, "base64").toString("utf-8");
+    const now = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({ iat: now - 60, exp: now + 600, iss: appId })
+    ).toString("base64url");
+
+    const sign = crypto.createSign("RSA-SHA256");
+    sign.update(`${header}.${payload}`);
+    const signature = sign.sign(privateKey, "base64url");
+    const jwt = `${header}.${payload}.${signature}`;
+
+    const res = await fetch(
+      `https://api.github.com/app/installations/${installationId}/access_tokens`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`GitHub token exchange failed: ${res.status} ${body}`);
+    }
+
+    const data = (await res.json()) as { token: string };
+    return data.token;
   }
 
   /** Clone a git repository to targetPath, creating parent directories as needed. */
