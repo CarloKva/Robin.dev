@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SprintSection } from "./SprintSection";
 import { TaskRow } from "./TaskRow";
 import { BulkActionBar } from "./BulkActionBar";
+import { ImportPreviewModal } from "./ImportPreviewModal";
+import { parseRobinMd } from "@/lib/robin-md-parser";
 import type { Task, Repository, Sprint, SprintWithTasks } from "@robin/shared-types";
+import type { ParsedTask, ParseError } from "@/types/robin-md";
+
+const MAX_FILE_SIZE_BYTES = 500 * 1024; // 500 KB
 
 const TASK_TYPES = [
   { value: "", label: "Tipo ▾" },
@@ -46,6 +51,12 @@ export function BacklogPageClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [creatingBacklogTask, setCreatingBacklogTask] = useState(false);
   const [creatingSprint, setCreatingSprint] = useState(false);
+
+  // Import state
+  type ImportModal = { tasks: ParsedTask[]; errors: ParseError[]; truncated: boolean; originalCount: number };
+  const [importModal, setImportModal] = useState<ImportModal | null>(null);
+  const [importFileError, setImportFileError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -108,6 +119,37 @@ export function BacklogPageClient({
     }
   }
 
+  function handleImportClick() {
+    setImportFileError(null);
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset so the same file can be re-selected after closing
+    e.target.value = "";
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setImportFileError("Il file supera il limite di 500 KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target?.result;
+      if (typeof content !== "string") return;
+      const result = parseRobinMd(content);
+      setImportModal({
+        tasks: result.tasks,
+        errors: result.errors,
+        truncated: result.truncated === true,
+        originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
+      });
+    };
+    reader.readAsText(file);
+  }
+
   const filteredBacklog = useMemo(() => {
     return initialBacklog.filter((t) => {
       if (typeFilter && t.type !== typeFilter) return false;
@@ -136,6 +178,30 @@ export function BacklogPageClient({
 
   return (
     <div className="space-y-0">
+      {/* Hidden file input for .robin.md import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".md"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* Import preview modal */}
+      {importModal !== null && (
+        <ImportPreviewModal
+          tasks={importModal.tasks}
+          errors={importModal.errors}
+          truncated={importModal.truncated}
+          originalCount={importModal.originalCount}
+          onClose={() => setImportModal(null)}
+          onImported={() => {
+            setImportModal(null);
+            refresh();
+          }}
+        />
+      )}
+
       {/* Search + filter bar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -170,6 +236,21 @@ export function BacklogPageClient({
           >
             Azzera filtri
           </button>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Import button */}
+        <button
+          onClick={handleImportClick}
+          className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+          title="Importa task da file .robin.md"
+        >
+          ↑ Importa .robin.md
+        </button>
+        {importFileError !== null && (
+          <span className="text-xs text-red-600 dark:text-red-400">{importFileError}</span>
         )}
       </div>
 
