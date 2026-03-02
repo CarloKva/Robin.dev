@@ -12,6 +12,7 @@ import { createSprintControlWorker } from "./workers/sprint-control.worker";
 import { createGitHubEventsWorker } from "./workers/github-events.worker";
 import { repoWatchdog } from "./services/repo-watchdog.service";
 import { recoverPendingAgents } from "./services/provisioning-recovery.service";
+import { SelfUpdateService } from "./services/self-update.service";
 import { taskPoller } from "./services/task.poller";
 import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
@@ -41,6 +42,7 @@ async function main() {
   // ─── Mode-specific setup ─────────────────────────────────────────────────
   const workersToClose: Array<{ close: () => Promise<void> }> = [];
   let heartbeat: HeartbeatService | null = null;
+  const selfUpdate = new SelfUpdateService(IS_CONTROL_PLANE);
 
   if (IS_CONTROL_PLANE) {
     // Control-plane: provisioning + deprovisioning workers only (no task execution)
@@ -93,6 +95,9 @@ async function main() {
 
     log.info({}, "Agent workers started (task execution + heartbeat + poller)");
   }
+
+  // ─── Self-update: listen for remote restart commands via Redis pub/sub ────
+  await selfUpdate.start();
 
   // ─── Express: health endpoint + Bull Board ───────────────────────────────
   const app = express();
@@ -154,6 +159,7 @@ async function main() {
     log.info({ signal }, "Shutting down gracefully");
 
     heartbeat?.stop();
+    await selfUpdate.stop();
     if (!IS_CONTROL_PLANE) taskPoller.stop();
     if (IS_CONTROL_PLANE) repoWatchdog.stop();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -315,6 +315,8 @@ export function AgentsClient({
 }: AgentsClientProps) {
   const [agents, setAgents] = useState<AgentRow[]>(initialAgents);
   const [showModal, setShowModal] = useState(false);
+  const [updatePending, startUpdateTransition] = useTransition();
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
 
   // Subscribe to realtime on agents table
   useEffect(() => {
@@ -369,13 +371,42 @@ export function AgentsClient({
               online
             </span>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            + Crea agente
-          </button>
+          <div className="flex items-center gap-2">
+            {onlineCount > 0 && (
+              <button
+                onClick={() => {
+                  setUpdateMsg(null);
+                  startUpdateTransition(async () => {
+                    const res = await fetch("/api/admin/update-agents", { method: "POST" });
+                    const data = (await res.json().catch(() => ({}))) as { receiverCount?: number; error?: string };
+                    if (res.ok) {
+                      setUpdateMsg(`Aggiornamento inviato a ${data.receiverCount ?? 0} agenti`);
+                      setTimeout(() => setUpdateMsg(null), 5000);
+                    } else {
+                      setUpdateMsg(data.error ?? "Errore");
+                    }
+                  });
+                }}
+                disabled={updatePending}
+                className="rounded-md border border-border px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {updatePending ? "Invio..." : "Aggiorna tutti"}
+              </button>
+            )}
+            <button
+              onClick={() => setShowModal(true)}
+              className="rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              + Crea agente
+            </button>
+          </div>
         </div>
+
+        {updateMsg && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-400">
+            {updateMsg}
+          </div>
+        )}
 
         {/* Grid */}
         {visibleAgents.length === 0 ? (
