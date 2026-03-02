@@ -30,6 +30,13 @@ const EFFORT_OPTIONS = [
   { value: "l", label: "L", className: "text-slate-500" },
 ];
 
+const PRIORITY_ICONS: Record<string, { icon: string; className: string }> = {
+  critical: { icon: "↑↑", className: "text-red-600 font-bold" },
+  high: { icon: "↑", className: "text-orange-500 font-semibold" },
+  medium: { icon: "=", className: "text-yellow-600" },
+  low: { icon: "—", className: "text-slate-400" },
+};
+
 interface TaskRowProps {
   task: Task;
   selected: boolean;
@@ -81,11 +88,6 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
     label: r.full_name.split("/")[1] ?? r.full_name,
   }));
 
-  const createdDate = new Date(localTask.created_at).toLocaleDateString("it-IT", {
-    day: "2-digit",
-    month: "short",
-  });
-
   return (
     <div
       className={cn(
@@ -103,13 +105,13 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
         aria-label={`Seleziona "${localTask.title}"`}
       />
 
-      {/* Completeness indicator */}
+      {/* Status dot */}
       <span
         className={cn(
-          "h-2 w-2 shrink-0 rounded-full",
-          isComplete ? "bg-green-500" : "bg-muted-foreground/30"
+          "h-2.5 w-2.5 shrink-0 rounded-sm",
+          isComplete ? "bg-blue-400" : "bg-slate-300 dark:bg-slate-600"
         )}
-        title={isComplete ? "Task completa" : "Campi mancanti"}
+        title={isComplete ? "Pronta" : "Campi mancanti"}
       />
 
       {/* Title (double-click to edit) */}
@@ -161,21 +163,6 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
           disabled={!isEditable}
         />
 
-        <InlineSelect
-          value={localTask.priority}
-          options={PRIORITY_OPTIONS}
-          onSelect={(v) => handleInlineChange("priority", v)}
-          disabled={!isEditable}
-        />
-
-        <InlineSelect
-          value={localTask.estimated_effort ?? undefined}
-          options={EFFORT_OPTIONS}
-          onSelect={(v) => handleInlineChange("estimated_effort", v)}
-          placeholder="effort"
-          disabled={!isEditable}
-        />
-
         {repositories.length > 0 && (
           <InlineSelect
             value={localTask.repository_id ?? undefined}
@@ -187,7 +174,26 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
           />
         )}
 
-        <span className="text-xs text-muted-foreground">{createdDate}</span>
+        <InlineSelect
+          value={localTask.priority}
+          options={PRIORITY_OPTIONS}
+          onSelect={(v) => handleInlineChange("priority", v)}
+          disabled={!isEditable}
+        />
+
+        {/* Priority icon */}
+        {(() => {
+          const p = PRIORITY_ICONS[localTask.priority] ?? { icon: "—", className: "text-slate-400" };
+          return <span className={cn("w-5 text-center text-sm select-none", p.className)}>{p.icon}</span>;
+        })()}
+
+        <InlineSelect
+          value={localTask.estimated_effort ?? undefined}
+          options={EFFORT_OPTIONS}
+          onSelect={(v) => handleInlineChange("estimated_effort", v)}
+          placeholder="—"
+          disabled={!isEditable}
+        />
       </div>
     </div>
   );

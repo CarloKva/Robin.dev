@@ -1,6 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getBacklogTasks } from "@/lib/db/backlog";
 import { getSprintsForWorkspace, getSprintWithTasks } from "@/lib/db/sprints";
@@ -58,20 +57,14 @@ export default async function BacklogPage({ searchParams }: BacklogPageProps) {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Backlog</h1>
           <p className="text-sm text-muted-foreground">
-            Crea, affina e organizza le task prima di assegnarle a uno sprint.
+            Gestisci sprint e backlog in un unico posto.
           </p>
         </div>
-        <Link
-          href="/tasks/new"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 min-h-[44px] flex items-center"
-        >
-          + Nuova task
-        </Link>
       </div>
 
       <BacklogSprintTabs
