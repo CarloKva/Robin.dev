@@ -55,7 +55,7 @@ export function BacklogFilters({ repositories }: BacklogFiltersProps) {
   );
 
   const selectClass =
-    "rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring";
+    "rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground transition-colors hover:border-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -117,7 +117,7 @@ export function BacklogFilters({ repositories }: BacklogFiltersProps) {
             ["type", "priority", "effort", "repositoryId", "page"].forEach((k) => params.delete(k));
             router.push(`${pathname}?${params.toString()}`);
           }}
-          className="text-xs text-muted-foreground underline hover:text-foreground"
+          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           Rimuovi filtri
         </button>

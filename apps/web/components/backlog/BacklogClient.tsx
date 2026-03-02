@@ -33,6 +33,7 @@ export function BacklogClient({ tasks, total, page, pageSize, repositories, spri
   type ImportModal = { tasks: ParsedTask[]; errors: ParseError[]; truncated: boolean; originalCount: number };
   const [importModal, setImportModal] = useState<ImportModal | null>(null);
   const [importFileError, setImportFileError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function handleImportClick() {
@@ -48,8 +49,10 @@ export function BacklogClient({ tasks, total, page, pageSize, repositories, spri
       setImportFileError("Il file supera il limite di 500 KB.");
       return;
     }
+    setImporting(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
+      setImporting(false);
       const content = ev.target?.result;
       if (typeof content !== "string") return;
       const result = parseRobinMd(content);
@@ -60,6 +63,7 @@ export function BacklogClient({ tasks, total, page, pageSize, repositories, spri
         originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
       });
     };
+    reader.onerror = () => setImporting(false);
     reader.readAsText(file);
   }
 
@@ -95,7 +99,7 @@ export function BacklogClient({ tasks, total, page, pageSize, repositories, spri
   const readyCount = tasks.filter((t) => t.status === "sprint_ready").length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Hidden file input for .robin.md import */}
       <input
         ref={fileInputRef}
@@ -124,38 +128,46 @@ export function BacklogClient({ tasks, total, page, pageSize, repositories, spri
       {/* Filters + import button row */}
       <div className="flex flex-wrap items-center gap-2">
         <BacklogFilters repositories={repositories} />
-        <div className="flex-1" />
+        <div className="flex-1 min-w-4" />
         <button
           onClick={handleImportClick}
-          className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+          disabled={importing}
+          className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent hover:border-muted-foreground/40 disabled:opacity-60 disabled:cursor-wait"
           title="Importa task da file .robin.md"
         >
-          ↑ Importa .robin.md
+          {importing ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              Caricamento...
+            </span>
+          ) : (
+            "↑ Importa .robin.md"
+          )}
         </button>
         {importFileError !== null && (
           <span className="text-xs text-red-600 dark:text-red-400">{importFileError}</span>
         )}
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — minimal */}
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
         <span>{total} task totali</span>
         {backlogCount > 0 && <span>{backlogCount} in backlog</span>}
-        {readyCount > 0 && <span className="text-green-600">{readyCount} pronte per sprint</span>}
+        {readyCount > 0 && <span className="text-emerald-600 dark:text-emerald-400">{readyCount} pronte per sprint</span>}
       </div>
 
       {/* Task list */}
       {tasks.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-12 text-center">
+        <div className="rounded-lg border border-dashed border-border p-16 text-center">
           <p className="text-sm text-muted-foreground">Nessuna task trovata.</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Premi <kbd className="rounded border border-border px-1 py-0.5 font-mono text-xs">N</kbd> per crearne una.
+          <p className="mt-2 text-xs text-muted-foreground">
+            Premi <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-xs">N</kbd> per crearne una.
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-card">
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
           {/* Select all header */}
-          <div className="flex items-center gap-3 border-b border-border px-3 py-2">
+          <div className="flex items-center gap-3 border-b border-border px-3 py-2.5">
             <input
               type="checkbox"
               checked={selectedIds.size === tasks.length && tasks.length > 0}
@@ -185,21 +197,21 @@ export function BacklogClient({ tasks, total, page, pageSize, repositories, spri
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 pt-1">
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page <= 1}
-            className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-40"
+            className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
           >
             ←
           </button>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-foreground tabular-nums">
             Pagina {page} di {totalPages}
           </span>
           <button
             onClick={() => goToPage(page + 1)}
             disabled={page >= totalPages}
-            className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-40"
+            className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
           >
             →
           </button>

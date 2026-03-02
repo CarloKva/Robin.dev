@@ -50,16 +50,16 @@ export function SprintTabView({
 
   return (
     <div className="space-y-6">
-      {/* Current sprint header */}
-      <div className="flex items-start justify-between gap-4">
+      {/* Current sprint header — minimal */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold">{currentSprint.name}</h2>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                 currentSprint.status === "active"
-                  ? "bg-green-100 text-green-600 dark:bg-green-900/30"
-                  : "bg-blue-100 text-blue-600 dark:bg-blue-900/30"
+                  ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30"
+                  : "bg-sky-100 text-sky-600 dark:bg-sky-900/30"
               }`}
             >
               {currentSprint.status === "active" ? "Attivo" : "In pianificazione"}
@@ -71,11 +71,11 @@ export function SprintTabView({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!activeSprint && <CreateSprintButton />}
           <Link
             href={`/sprints/${currentSprint.id}`}
-            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent min-h-[44px] flex items-center"
+            className="rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent hover:border-muted-foreground/40 min-h-[44px] flex items-center"
           >
             Dettaglio sprint →
           </Link>
@@ -98,10 +98,10 @@ export function SprintTabView({
       {/* Past sprints (collapsed) */}
       {pastSprints.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Sprint passati
           </h2>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {pastSprints.slice(0, 4).map((s) => (
               <SprintCard key={s.id} sprint={s} />
             ))}

@@ -91,8 +91,8 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors",
-        "hover:bg-accent/40",
+        "group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors duration-150",
+        "hover:bg-accent/50",
         selected && "bg-accent/60"
       )}
     >
@@ -194,6 +194,25 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
           placeholder="—"
           disabled={!isEditable}
         />
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton for backlog task row during loading. */
+export function TaskRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 animate-pulse">
+      <div className="h-4 w-4 shrink-0 rounded border border-border bg-muted" />
+      <div className="h-2.5 w-2.5 shrink-0 rounded-sm bg-muted" />
+      <div className="min-w-0 flex-1">
+        <div className="h-4 w-48 max-w-full rounded bg-muted" />
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="h-5 w-14 rounded bg-muted" />
+        <div className="h-5 w-16 rounded bg-muted" />
+        <div className="h-5 w-12 rounded bg-muted" />
+        <div className="h-5 w-6 rounded bg-muted" />
       </div>
     </div>
   );
