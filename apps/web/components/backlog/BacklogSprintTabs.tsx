@@ -38,21 +38,21 @@ export function BacklogSprintTabs({
   const [activeTab, setActiveTab] = useState<"backlog" | "sprint">(defaultTab);
 
   return (
-    <div className="space-y-4">
-      {/* Tab switcher */}
-      <div className="flex rounded-lg border border-border bg-muted/40 p-1 w-fit">
+    <div className="space-y-6">
+      {/* Tab switcher — minimal, fluid */}
+      <div className="flex rounded-lg border border-border bg-muted/30 p-0.5 w-fit">
         <button
           type="button"
           onClick={() => setActiveTab("backlog")}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-all duration-200 ease-out ${
             activeTab === "backlog"
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground/80"
           }`}
         >
           Backlog
           {total > 0 && (
-            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+            <span className="ml-1.5 rounded-full bg-muted/80 px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
               {total}
             </span>
           )}
@@ -60,19 +60,19 @@ export function BacklogSprintTabs({
         <button
           type="button"
           onClick={() => setActiveTab("sprint")}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-all duration-200 ease-out ${
             activeTab === "sprint"
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground/80"
           }`}
         >
           Sprint
           {(activeSprint ?? planningSprint) && (
             <span
-              className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+              className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-medium ${
                 activeSprint
-                  ? "bg-green-100 text-green-600 dark:bg-green-900/30"
-                  : "bg-blue-100 text-blue-600 dark:bg-blue-900/30"
+                  ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30"
+                  : "bg-sky-100 text-sky-600 dark:bg-sky-900/30"
               }`}
             >
               {activeSprint ? "Attivo" : "Pianificazione"}

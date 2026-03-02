@@ -34,7 +34,10 @@ export function BulkActionBar({ selectedIds, sprints, onDone }: BulkActionBarPro
   return (
     <div className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-2xl md:bottom-6">
       <div className="flex items-center gap-2 rounded-xl border border-border bg-popover px-4 py-3 shadow-lg">
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-sm font-medium text-foreground inline-flex items-center gap-2">
+          {loading && (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          )}
           {selectedIds.length} task selezionate
         </span>
 
@@ -59,7 +62,7 @@ export function BulkActionBar({ selectedIds, sprints, onDone }: BulkActionBarPro
                   void bulkAction("add_to_sprint", { sprintId: selectedSprint });
                 }}
                 disabled={loading || !selectedSprint}
-                className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-wait"
               >
                 Aggiungi a sprint
               </button>

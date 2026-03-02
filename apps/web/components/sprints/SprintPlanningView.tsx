@@ -68,9 +68,9 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
 
   return (
     <div className="space-y-6">
-      {/* Sprint info */}
+      {/* Sprint info — minimal card */}
       <div className="rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">
               {tasks.length} task nello sprint · {readyCount} pronte
@@ -80,19 +80,26 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/backlog"
-              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent min-h-[44px] flex items-center"
+              className="rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent hover:border-muted-foreground/40 min-h-[44px] flex items-center"
             >
               + Aggiungi dal backlog
             </Link>
             <button
               onClick={() => void handleStart()}
               disabled={starting || readyCount === 0}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 min-h-[44px]"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px] inline-flex items-center justify-center gap-2"
             >
-              {starting ? "Avviando..." : "Avvia Sprint"}
+              {starting ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Avviando...
+                </>
+              ) : (
+                "Avvia Sprint"
+              )}
             </button>
           </div>
         </div>
@@ -112,10 +119,10 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
 
       {/* Task list */}
       {tasks.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-12 text-center">
+        <div className="rounded-lg border border-dashed border-border p-16 text-center">
           <p className="text-sm text-muted-foreground">Nessuna task nello sprint.</p>
-          <p className="mt-2">
-            <Link href="/backlog" className="text-sm text-primary hover:underline">
+          <p className="mt-3">
+            <Link href="/backlog" className="text-sm text-primary transition-colors hover:underline">
               Vai al backlog →
             </Link>
           </p>
@@ -126,7 +133,7 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
             <div
               key={task.id}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/20",
+                "flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-accent/40",
                 idx < tasks.length - 1 && "border-b border-border"
               )}
             >
