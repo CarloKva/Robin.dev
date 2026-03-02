@@ -75,6 +75,19 @@ enum actor_type {
   human
 }
 
+enum iteration_trigger {
+  initial
+  github_comment
+  dashboard
+}
+
+enum iteration_status {
+  pending
+  running
+  completed
+  failed
+}
+
 // -------------------------
 // Models
 // -------------------------
@@ -144,11 +157,17 @@ model tasks {
   created_at          DateTime      @default(now()) @db.Timestamptz(6)
   updated_at          DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
 
-  workspaces      workspaces       @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-  agents          agents?          @relation(fields: [assigned_agent_id], references: [id], onDelete: SetNull)
+  current_iteration       Int               @default(1)
+  rework_count            Int               @default(0)
+  last_rework_trigger     iteration_trigger?
+  pending_rework_comments Json?
+
+  workspaces      workspaces        @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  agents          agents?           @relation(fields: [assigned_agent_id], references: [id], onDelete: SetNull)
   task_artifacts  task_artifacts[]
   task_events     task_events[]
   agent_status    agent_status[]
+  task_iterations task_iterations[]
 }
 
 model task_artifacts {
@@ -169,12 +188,33 @@ model task_events {
   id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   task_id      String          @db.Uuid
   workspace_id String          @db.Uuid
-  event_type   task_event_type
-  actor_type   actor_type
-  actor_id     String
-  payload      Json            @default("{}")
-  created_at   DateTime        @default(now()) @db.Timestamptz(6)
+  event_type       task_event_type
+  actor_type       actor_type
+  actor_id         String
+  payload          Json            @default("{}")
+  iteration_number Int?
+  created_at       DateTime        @default(now()) @db.Timestamptz(6)
 
   tasks      tasks      @relation(fields: [task_id], references: [id], onDelete: Cascade)
   workspaces workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+}
+
+model task_iterations {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id              String            @db.Uuid
+  iteration_number     Int
+  trigger              iteration_trigger
+  triggered_by_user_id String?
+  github_comment_ids   Int[]
+  pr_url               String?
+  pr_number            Int?
+  started_at           DateTime?         @db.Timestamptz(6)
+  completed_at         DateTime?         @db.Timestamptz(6)
+  status               iteration_status  @default(pending)
+  context_snapshot_url String?
+  summary              String?
+  created_at           DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+
+  tasks tasks @relation(fields: [task_id], references: [id], onDelete: Cascade)
 }
