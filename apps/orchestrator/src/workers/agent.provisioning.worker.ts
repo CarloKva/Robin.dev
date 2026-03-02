@@ -22,6 +22,7 @@ import {
   createServer,
   waitForServerRunning,
   buildCloudInitScript,
+  buildSnapshotCloudInitScript,
 } from "../services/hetzner.service";
 import { getInstallationToken } from "../services/github.service";
 import { log } from "../utils/logger";
@@ -119,6 +120,8 @@ async function processProvisioningJob(
   const githubAppPrivateKeyB64 = process.env["GITHUB_APP_PRIVATE_KEY_B64"];
   const orchestratorRepoUrl = process.env["ORCHESTRATOR_REPO_URL"];
   const redisUrl = process.env["REDIS_URL_AGENT"];
+  const redisCaCert = process.env["REDIS_CA_CERT"];
+  const snapshotId = process.env["HETZNER_SNAPSHOT_ID"];
 
   if (!supabaseUrl || !supabaseServiceRoleKey || !anthropicApiKey || !githubAppId || !githubAppPrivateKeyB64) {
     throw new Error("Missing required environment variables for cloud-init script generation");
@@ -128,14 +131,13 @@ async function processProvisioningJob(
   let vpsIp: string | undefined;
 
   if (!vpsId) {
-    // Generate a short-lived GitHub token for git clone in cloud-init
     const githubCloneToken = await getInstallationToken(
       githubAppId,
       githubAppPrivateKeyB64,
       connection.installation_id as number
     );
 
-    const userData = buildCloudInitScript({
+    const commonParams = {
       agentId,
       workspaceId,
       supabaseUrl,
@@ -145,15 +147,28 @@ async function processProvisioningJob(
       githubAppPrivateKeyB64,
       githubInstallationId: connection.installation_id as number,
       githubCloneToken,
-      ...(redisUrl !== undefined && { redisUrl }),
-      ...(orchestratorRepoUrl !== undefined && { orchestratorRepoUrl }),
-    });
+    };
+
+    const useSnapshot = !!snapshotId;
+    const userData = useSnapshot
+      ? buildSnapshotCloudInitScript({
+          ...commonParams,
+          ...(redisUrl !== undefined && { redisUrl }),
+          ...(redisCaCert !== undefined && { redisCaCert }),
+        })
+      : buildCloudInitScript({
+          ...commonParams,
+          ...(redisUrl !== undefined && { redisUrl }),
+          ...(redisCaCert !== undefined && { redisCaCert }),
+          ...(orchestratorRepoUrl !== undefined && { orchestratorRepoUrl }),
+        });
 
     // ── 4. Create Hetzner VPS ───────────────────────────────────────────────
-    log.info({ agentId }, "Creating Hetzner VPS");
+    log.info({ agentId, useSnapshot }, "Creating Hetzner VPS");
     const server = await createServer({
       name: `robin-agent-${agentId.slice(0, 8)}`,
       userData,
+      ...(useSnapshot && { image: snapshotId }),
     });
 
     vpsId = server.id;

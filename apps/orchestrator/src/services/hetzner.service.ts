@@ -180,6 +180,50 @@ export async function waitForOrchestratorHealth(
   );
 }
 
+// ─── Snapshots ───────────────────────────────────────────────────────────────
+
+export async function createSnapshot(serverId: number, description?: string): Promise<{ id: number }> {
+  const res = await fetch(`${HETZNER_API}/servers/${serverId}/actions/create_image`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      type: "snapshot",
+      description: description ?? `robin-base-${new Date().toISOString().slice(0, 10)}`,
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Hetzner createSnapshot failed: ${res.status} ${errBody}`);
+  }
+
+  const data = (await res.json()) as { image: { id: number } };
+  return { id: data.image.id };
+}
+
+export async function powerOffServer(serverId: number): Promise<void> {
+  const res = await fetch(`${HETZNER_API}/servers/${serverId}/actions/shutdown`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({}),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Hetzner powerOff failed: ${res.status} ${errBody}`);
+  }
+}
+
+export async function waitForServerOff(serverId: number, timeoutMs = 3 * 60 * 1000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(5_000);
+    const status = await getServerStatus(serverId);
+    if (status === "off") return;
+  }
+  throw new Error(`Server ${serverId} did not power off within ${timeoutMs / 1000}s`);
+}
+
 // ─── Cloud-init script generation ────────────────────────────────────────────
 
 interface CloudInitParams {
@@ -193,6 +237,7 @@ interface CloudInitParams {
   githubInstallationId: number;
   githubCloneToken: string;
   redisUrl?: string;
+  redisCaCert?: string;
   orchestratorRepoUrl?: string;
 }
 
@@ -208,6 +253,9 @@ export function buildCloudInitScript(params: CloudInitParams): string {
   const baseRepoUrl = params.orchestratorRepoUrl ?? "https://github.com/CarloKva/Robin.dev.git";
   const repoUrl = baseRepoUrl.replace("https://", `https://x-access-token:${params.githubCloneToken}@`);
   const redisUrl = params.redisUrl ?? "redis://127.0.0.1:6379";
+  const redisCaCertLine = params.redisCaCert
+    ? `REDIS_CA_CERT=${params.redisCaCert}`
+    : "";
 
   return `#!/bin/bash
 set -euo pipefail
@@ -268,6 +316,7 @@ GITHUB_APP_ID=${params.githubAppId}
 GITHUB_APP_PRIVATE_KEY_B64=${params.githubAppPrivateKeyB64}
 GITHUB_INSTALLATION_ID=${params.githubInstallationId}
 REDIS_URL=${redisUrl}
+${redisCaCertLine}
 AGENT_HOME=/home/agent
 ENVEOF
 
@@ -390,6 +439,82 @@ for i in $(seq 1 30); do
 done
 
 echo "[robin] Cloud-init completed at $(date)"
+`;
+}
+
+// ─── Snapshot-based cloud-init (lightweight) ─────────────────────────────────
+
+interface SnapshotCloudInitParams {
+  agentId: string;
+  workspaceId: string;
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+  anthropicApiKey: string;
+  githubAppId: string;
+  githubAppPrivateKeyB64: string;
+  githubInstallationId: number;
+  githubCloneToken: string;
+  redisUrl?: string;
+  redisCaCert?: string;
+}
+
+/**
+ * Lightweight cloud-init for snapshot-based provisioning.
+ * Everything is pre-installed in the snapshot — this only:
+ *   1. Writes the agent-specific .env
+ *   2. Pulls latest code + rebuilds
+ *   3. Restarts the systemd service
+ */
+export function buildSnapshotCloudInitScript(params: SnapshotCloudInitParams): string {
+  const redisUrl = params.redisUrl ?? "redis://127.0.0.1:6379";
+  const redisCaCertLine = params.redisCaCert
+    ? `REDIS_CA_CERT=${params.redisCaCert}`
+    : "";
+
+  return `#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/cloud-init-output.log) 2>&1
+
+echo "[robin] Snapshot cloud-init starting at $(date)"
+
+# ── Write agent-specific .env ───────────────────────────────────────────────
+cat > /opt/robin/app/apps/orchestrator/.env << 'ENVEOF'
+AGENT_ID=${params.agentId}
+WORKSPACE_ID=${params.workspaceId}
+SUPABASE_URL=${params.supabaseUrl}
+SUPABASE_SERVICE_ROLE_KEY=${params.supabaseServiceRoleKey}
+ANTHROPIC_API_KEY=${params.anthropicApiKey}
+GITHUB_APP_ID=${params.githubAppId}
+GITHUB_APP_PRIVATE_KEY_B64=${params.githubAppPrivateKeyB64}
+GITHUB_INSTALLATION_ID=${params.githubInstallationId}
+REDIS_URL=${redisUrl}
+${redisCaCertLine}
+AGENT_HOME=/home/agent
+ENVEOF
+
+echo "[robin] .env written"
+
+# ── Pull latest code using a fresh GitHub token ────────────────────────────
+TOKEN=$(sudo -u agent node /opt/robin/get-github-token.mjs 2>/dev/null || true)
+if [ -n "\${TOKEN}" ]; then
+  APP_DIR=/opt/robin/app
+  BASE=$(git -C "$APP_DIR" remote get-url origin 2>/dev/null \\
+    | sed 's|https://[^@]*@||;s|^https://||' || true)
+  if [ -n "\${BASE}" ]; then
+    git -C "$APP_DIR" remote set-url origin "https://x-access-token:\${TOKEN}@\${BASE}"
+  fi
+  cd "$APP_DIR"
+  git pull origin main --ff-only 2>&1 || true
+  npm install --workspaces --if-present 2>/dev/null || true
+  npm run build --workspace=apps/orchestrator
+  chown -R agent:agent /opt/robin
+  echo "[robin] Code updated and rebuilt"
+fi
+
+# ── Restart the orchestrator service ────────────────────────────────────────
+systemctl restart robin-orchestrator
+
+echo "[robin] Snapshot cloud-init completed at $(date)"
 `;
 }
 
