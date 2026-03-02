@@ -1,6 +1,39 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Sprint, SprintWithTasks, Task } from "@robin/shared-types";
 
+export async function getSprintsWithTasksForBacklog(workspaceId: string): Promise<SprintWithTasks[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: sprints, error: sprintsError } = await supabase
+    .from("sprints")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .in("status", ["active", "planning"])
+    .order("created_at", { ascending: false });
+
+  if (sprintsError || !sprints?.length) return [];
+
+  const sprintIds = sprints.map((s) => s.id);
+  const { data: tasks } = await supabase
+    .from("tasks")
+    .select("*")
+    .in("sprint_id", sprintIds)
+    .eq("workspace_id", workspaceId)
+    .order("sprint_order", { ascending: true });
+
+  const tasksBySprint = (tasks ?? []).reduce<Record<string, Task[]>>((acc, task) => {
+    const key = task.sprint_id as string;
+    if (!acc[key]) acc[key] = [];
+    acc[key]!.push(task as Task);
+    return acc;
+  }, {});
+
+  return sprints.map((s) => ({
+    ...(s as Sprint),
+    tasks: tasksBySprint[s.id] ?? [],
+  }));
+}
+
 export async function getSprintsForWorkspace(workspaceId: string): Promise<Sprint[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

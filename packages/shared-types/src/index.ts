@@ -313,6 +313,7 @@ export type Agent = {
   workspace_id: string;
   name: string;
   type: string;
+  avatar_url: string | null;
   slug: string | null;
   github_account: string | null;
   vps_ip: string | null;

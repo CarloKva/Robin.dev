@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AgentCreationForm } from "@/components/agents/AgentCreationForm";
 import { cn } from "@/lib/utils";
@@ -88,7 +89,13 @@ type AgentRow = AgentWithStatus & {
   vps_created_at?: string | null;
   provisioned_at?: string | null;
   provisioning_error?: string | null;
+  avatar_url?: string | null;
 };
+
+function agentAvatarUrl(agent: Pick<AgentRow, "name" | "avatar_url">): string {
+  if (agent.avatar_url) return agent.avatar_url;
+  return `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(agent.name)}`;
+}
 
 // ─── Agent Card ───────────────────────────────────────────────────────────────
 
@@ -126,11 +133,20 @@ function AgentCard({ agent }: { agent: AgentRow }) {
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-foreground">{agent.name}</h3>
-          {agent.slug && (
-            <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{agent.slug}</p>
-          )}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Image
+            src={agentAvatarUrl(agent)}
+            alt={agent.name}
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
+          />
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold text-foreground">{agent.name}</h3>
+            {agent.slug && (
+              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{agent.slug}</p>
+            )}
+          </div>
         </div>
         <span
           className={cn(
