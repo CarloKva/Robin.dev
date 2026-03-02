@@ -17,6 +17,7 @@ const createAgentSchema = z.object({
   repository_ids: z
     .array(z.string().uuid())
     .min(1, "Seleziona almeno un repository"),
+  avatar_url: z.string().url().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, repository_ids } = parsed.data;
+  const { name, repository_ids, avatar_url } = parsed.data;
 
   const workspace = await getWorkspaceForUser(userId);
   if (!workspace) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 });
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
       name,
       type: "claude-code",
       provisioning_status: "pending",
+      ...(avatar_url != null ? { avatar_url } : {}),
     })
     .select()
     .single();
