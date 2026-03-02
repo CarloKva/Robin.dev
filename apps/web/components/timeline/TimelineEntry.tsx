@@ -46,8 +46,9 @@ const EVENT_META: Record<TaskEventType, EventMeta> = {
   "human.approved":        { icon: ThumbsUp,       iconClass: "text-green-600",   ringClass: "bg-green-100",   key: true  },
   "human.rejected":        { icon: ThumbsDown,     iconClass: "text-red-600",     ringClass: "bg-red-100",     key: true  },
   "human.commented":       { icon: MessageSquare,  iconClass: "text-purple-600",  ringClass: "bg-purple-100",  key: false },
-  "task.completed":        { icon: CheckCheck,     iconClass: "text-emerald-700", ringClass: "bg-emerald-100", key: true  },
-  "task.failed":           { icon: XCircle,        iconClass: "text-red-700",     ringClass: "bg-red-100",     key: true  },
+  "task.completed":               { icon: CheckCheck,     iconClass: "text-emerald-700", ringClass: "bg-emerald-100", key: true  },
+  "task.failed":                  { icon: XCircle,        iconClass: "text-red-700",     ringClass: "bg-red-100",     key: true  },
+  "task.pr_closed_without_merge": { icon: XCircle,        iconClass: "text-orange-600",  ringClass: "bg-orange-100",  key: true  },
 };
 
 const DEFAULT_META: EventMeta = {

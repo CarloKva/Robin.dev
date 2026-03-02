@@ -117,10 +117,25 @@ export class EventService {
     taskId: string,
     workspaceId: string,
     actorId: string,
-    durationSeconds?: number
+    durationSeconds?: number,
+    iterationNumber?: number
   ): Promise<void> {
     await this.emit(taskId, workspaceId, actorId, "task.completed", {
       ...(durationSeconds != null && { duration_seconds: durationSeconds }),
+      ...(iterationNumber != null && { iteration_number: iterationNumber }),
+    });
+  }
+
+  async taskPrClosedWithoutMerge(
+    taskId: string,
+    workspaceId: string,
+    actorId: string,
+    prNumber: number,
+    iterationNumber: number
+  ): Promise<void> {
+    await this.emit(taskId, workspaceId, actorId, "task.pr_closed_without_merge", {
+      pr_number: prNumber,
+      iteration_number: iterationNumber,
     });
   }
 
