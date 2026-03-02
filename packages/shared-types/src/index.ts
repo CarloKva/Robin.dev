@@ -487,6 +487,17 @@ export type RepoQueueJobPayload = {
   sprintOrder: number;
 };
 
+/**
+ * Payload for the sprint-control BullMQ queue.
+ * Sent by the web app when a sprint is started; consumed by the control-plane
+ * to ensure per-repo workers are active before jobs begin processing.
+ */
+export type SprintControlJobPayload = {
+  repositoryIds: string[];
+  sprintId: string;
+  workspaceId: string;
+};
+
 // ---------------------------------------------------------------
 // Task iterations — history of execution attempts
 // ---------------------------------------------------------------
