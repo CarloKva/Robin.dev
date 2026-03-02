@@ -8,7 +8,9 @@ import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
 import { createProvisioningWorker } from "./workers/agent.provisioning.worker";
 import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
 import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue.worker";
+import { createSprintControlWorker } from "./workers/sprint-control.worker";
 import { createGitHubEventsWorker } from "./workers/github-events.worker";
+import { repoWatchdog } from "./services/repo-watchdog.service";
 import { taskPoller } from "./services/task.poller";
 import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
@@ -45,15 +47,25 @@ async function main() {
     const deprovisioningWorker = createDeprovisioningWorker();
     workersToClose.push(provisioningWorker, deprovisioningWorker);
 
-    // Reconstruct per-repo queues for sprint execution (Sprint B)
+    // Reconstruct per-repo queues for tasks already queued at startup (idempotent)
     await reconstructRepoQueues();
     workersToClose.push({ close: closeAllRepoWorkers });
+
+    // Fix 1: SprintControlWorker — activates per-repo workers on sprint start (<1s)
+    const sprintControlWorker = createSprintControlWorker();
+    workersToClose.push(sprintControlWorker);
+
+    // Fix 2: RepoWatchdogService — periodic safety net every 60s
+    repoWatchdog.start();
 
     // GitHub webhook events worker (processes pull_request:closed events)
     const gitHubEventsWorker = createGitHubEventsWorker();
     workersToClose.push(gitHubEventsWorker);
 
-    log.info({}, "Control-plane workers started (provisioning + deprovisioning + repo-queues + github-events)");
+    log.info(
+      {},
+      "Control-plane workers started (provisioning + deprovisioning + repo-queues + sprint-control + watchdog + github-events)"
+    );
   } else {
     // Agent VPS: validate AGENT_ID
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -137,6 +149,7 @@ async function main() {
 
     heartbeat?.stop();
     if (!IS_CONTROL_PLANE) taskPoller.stop();
+    if (IS_CONTROL_PLANE) repoWatchdog.stop();
 
     // Give active jobs 30s to complete before forcing exit
     for (const w of workersToClose) {

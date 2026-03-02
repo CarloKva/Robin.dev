@@ -164,8 +164,26 @@ export async function POST(
       }
     }
   } catch (err) {
-    // BullMQ failure is non-fatal — orchestrator poller will pick up queued tasks
+    // BullMQ failure is non-fatal — watchdog will re-enqueue within 60s
     console.error("[POST /api/sprints/:id/start] BullMQ enqueue error:", err);
+  }
+
+  // ── 8. Signal control-plane to activate per-repo workers (Fix 1) ────────────
+  // The control-plane's SprintControlWorker reacts to this job and calls
+  // createRepoQueueWorker() for each repository — sub-second latency, no restart.
+  const activeRepoIds = [...tasksByRepo.keys()].filter((id) => id !== "__no_repo__");
+  if (activeRepoIds.length > 0) {
+    try {
+      const { getSprintControlQueue } = await import("@/lib/queue/sprint-control.queue");
+      await getSprintControlQueue().add(
+        `sprint:${sprintId}`,
+        { repositoryIds: activeRepoIds, sprintId, workspaceId: workspace.id },
+        { jobId: `sprint-control:${sprintId}` }
+      );
+    } catch (err) {
+      // Non-fatal — RepoWatchdogService (Fix 2) will activate workers within 60s
+      console.error("[POST /api/sprints/:id/start] sprint-control enqueue error:", err);
+    }
   }
 
   const updatedSprint = await getSprintWithTasks(sprintId, workspace.id);
