@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, ListTodo, Zap, BarChart2, Settings, Loader2 } from "lucide-react";
+import { ListTodo, Zap, BarChart2, Settings, Loader2 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/backlog", label: "Backlog", icon: ListTodo },
   { href: "/sprints", label: "Sprint", icon: Zap },
   { href: "/metrics", label: "Metriche", icon: BarChart2 },

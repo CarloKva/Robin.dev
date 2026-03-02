@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider
-      afterSignInUrl="/dashboard"
+      afterSignInUrl="/backlog"
       afterSignUpUrl="/onboarding/workspace"
     >
       <html lang="en" className={inter.variable}>
