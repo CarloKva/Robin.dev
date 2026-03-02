@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import type { Repository } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
 interface ImportPreviewModalProps {
@@ -9,6 +10,7 @@ interface ImportPreviewModalProps {
   errors: ParseError[];
   truncated: boolean;
   originalCount: number;
+  repositories: Repository[];
   onClose: () => void;
   onImported: () => void;
 }
@@ -44,24 +46,41 @@ export function ImportPreviewModal({
   errors,
   truncated,
   originalCount,
+  repositories,
   onClose,
   onImported,
 }: ImportPreviewModalProps) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [defaultRepo, setDefaultRepo] = useState<string>(() => repositories[0]?.full_name ?? "");
+
+  const tasksWithoutRepo = tasks.filter((t) => !t.repository);
+  const needsFallback = tasksWithoutRepo.length > 0;
+  const canImport = tasks.length > 0 && (!needsFallback || defaultRepo !== "");
 
   async function handleImport() {
     setLoading(true);
     setApiError(null);
     try {
+      // Inject fallback repository for tasks that don't specify one
+      const tasksToSend = tasks.map((t) => ({
+        ...t,
+        repository: t.repository ?? defaultRepo,
+      }));
+
       const res = await fetch("/api/backlog/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tasks }),
+        body: JSON.stringify({ tasks: tasksToSend }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; hint?: string; repositories?: string[] };
       if (!res.ok) {
-        setApiError(data.error ?? "Errore durante l'import");
+        const hint = data.hint ? ` — ${data.hint}` : "";
+        const missing =
+          data.repositories && data.repositories.length > 0
+            ? ` Repository mancanti: ${data.repositories.join(", ")}`
+            : "";
+        setApiError((data.error ?? "Errore durante l'import") + hint + missing);
         return;
       }
       onImported();
@@ -108,6 +127,36 @@ export function ImportPreviewModal({
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+          {/* Fallback repository selector */}
+          {needsFallback && (
+            <div className="rounded-lg border border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20 px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">
+                {tasksWithoutRepo.length === tasks.length
+                  ? "Nessuna task specifica una repository nel file."
+                  : `${tasksWithoutRepo.length} task non specificano una repository.`}
+                {" "}Scegli quella di default:
+              </p>
+              {repositories.length === 0 ? (
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  Nessuna repository collegata al workspace. Collegane una in Settings prima di importare.
+                </p>
+              ) : (
+                <select
+                  value={defaultRepo}
+                  onChange={(e) => setDefaultRepo(e.target.value)}
+                  className="h-8 w-full rounded-md border border-border bg-background px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">— Seleziona repository —</option>
+                  {repositories.map((r) => (
+                    <option key={r.id} value={r.full_name}>
+                      {r.full_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
           {/* Warnings for parse errors */}
           {errors.length > 0 && (
             <div className="rounded-lg border border-yellow-300 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20 px-4 py-3">
@@ -135,6 +184,7 @@ export function ImportPreviewModal({
               {tasks.map((task, i) => {
                 const descLines = task.description.split("\n").slice(0, 2);
                 const preview = descLines.join(" ").replace(/[#*_`]/g, "").trim();
+                const repoLabel = task.repository ?? (defaultRepo !== "" ? defaultRepo : null);
 
                 return (
                   <li key={i} className="px-4 py-3 hover:bg-accent/30 transition-colors">
@@ -166,6 +216,18 @@ export function ImportPreviewModal({
                           >
                             {PRIORITY_ICON[task.priority]} {task.priority}
                           </span>
+                          {repoLabel !== null ? (
+                            <span className="rounded px-1.5 py-0.5 text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 font-mono">
+                              {repoLabel}
+                              {!task.repository && (
+                                <span className="ml-1 text-blue-500 dark:text-blue-400">(default)</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="rounded px-1.5 py-0.5 text-xs bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">
+                              ⚠ repo mancante
+                            </span>
+                          )}
                           {task.agent !== undefined && (
                             <span className="rounded px-1.5 py-0.5 text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                               {task.agent}
@@ -211,7 +273,7 @@ export function ImportPreviewModal({
             </button>
             <button
               onClick={() => void handleImport()}
-              disabled={loading || tasks.length === 0}
+              disabled={loading || !canImport}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {loading ? "Importando…" : `Importa ${tasks.length} task`}
