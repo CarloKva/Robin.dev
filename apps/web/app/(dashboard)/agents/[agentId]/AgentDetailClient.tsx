@@ -266,9 +266,25 @@ export function AgentDetailClient({
   const [isPending, startTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [retryPending, startRetryTransition] = useTransition();
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const provStatus = (agent.provisioning_status ?? "online") as AgentProvisioningStatus;
   const isProvisioning = provStatus !== "online" && provStatus !== "deprovisioned" && provStatus !== "error";
+  const canRetry = provStatus === "pending" || provStatus === "error";
+
+  function handleRetryProvisioning() {
+    setRetryError(null);
+    startRetryTransition(async () => {
+      const res = await fetch(`/api/agents/${agent.id}/retry-provisioning`, { method: "POST" });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setRetryError(data.error ?? "Impossibile riprovare il provisioning");
+      }
+    });
+  }
 
   function handleDelete() {
     if (!confirmDelete) {
@@ -345,7 +361,21 @@ export function AgentDetailClient({
         <section className="space-y-4 rounded-xl border border-border p-6">
           {isProvisioning || provStatus === "error" ? (
             <>
-              <h2 className="text-base font-semibold">Provisioning</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold">Provisioning</h2>
+                {canRetry && (
+                  <button
+                    onClick={handleRetryProvisioning}
+                    disabled={retryPending}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {retryPending ? "Riprovando..." : "Riprova provisioning"}
+                  </button>
+                )}
+              </div>
+              {retryError && (
+                <p className="text-xs text-red-600 dark:text-red-400">{retryError}</p>
+              )}
               <ProvisioningTimeline
                 agentId={agent.id}
                 workspaceId={workspaceId}
