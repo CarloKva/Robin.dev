@@ -253,10 +253,9 @@ cd /opt/robin/app
 # ── Install dependencies ─────────────────────────────────────────────────────
 npm install --workspaces --if-present 2>/dev/null || npm install
 cd apps/orchestrator
-npm install --production 2>/dev/null || true
 
-# Build if needed
-npm run build 2>/dev/null || true
+# Build (devDependencies like @types/* are already installed by the workspace step)
+npm run build
 
 # ── Write .env ───────────────────────────────────────────────────────────────
 cat > /opt/robin/app/apps/orchestrator/.env << 'ENVEOF'
