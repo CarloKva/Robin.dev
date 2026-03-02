@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTaskTimeline, projectTaskState } from "@/lib/db/events";
+import { getTaskIterations } from "@/lib/db/iterations";
 import type { Task } from "@robin/shared-types";
 import { TaskDetailClient } from "./TaskDetailClient";
 
@@ -29,8 +30,12 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   const typedTask = task as Task;
 
-  // Load event history server-side for SSR
-  const initialEvents = await getTaskTimeline(taskId);
+  // Load event history and iteration history server-side for SSR
+  const [initialEvents, initialIterations] = await Promise.all([
+    getTaskTimeline(taskId),
+    getTaskIterations(taskId),
+  ]);
+
   const projectedState = projectTaskState(
     initialEvents.map((e) => ({
       id: e.id,
@@ -49,6 +54,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
       task={typedTask}
       initialEvents={initialEvents}
       initialProjectedState={projectedState}
+      initialIterations={initialIterations}
     />
   );
 }
