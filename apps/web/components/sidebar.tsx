@@ -7,7 +7,6 @@ import { Loader2 } from "lucide-react";
 
 const navItems = [
   { href: "/backlog", label: "Backlog" },
-  { href: "/metrics", label: "Metriche" },
   { href: "/agents", label: "Agents" },
   { href: "/settings", label: "Settings" },
 ];
