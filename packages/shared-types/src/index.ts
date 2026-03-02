@@ -158,16 +158,6 @@ export type EventPayloadMap = {
     description?: string;
     priority?: string;
   };
-  "user.task.updated": {
-    before?: Record<string, unknown>;
-    after?: Record<string, unknown>;
-  };
-  "user.task.deleted": {
-    task_id?: string;
-  };
-  "user.rework.initiated": {
-    note?: string;
-  };
 };
 
 /**
