@@ -349,6 +349,7 @@ export class ClaudeRunner {
   }
 
   private buildTaskMd(payload: JobPayload): string {
+    const baseBranch = payload.branch === `feat/${payload.taskId}` ? "main" : payload.branch;
     return `# Task: ${payload.taskTitle}
 
 **Type:** ${payload.taskType}
@@ -361,15 +362,31 @@ ${payload.taskDescription}
 
 ## Required Steps (ALL mandatory — do not skip any)
 
-1. Run \`git checkout -b feat/${payload.taskId}\` to create a new branch
+1. Sync with \`${baseBranch}\` and create a new branch from the latest upstream to avoid merge conflicts:
+   \`\`\`bash
+   git fetch origin
+   git checkout -b feat/${payload.taskId} origin/${baseBranch}
+   \`\`\`
 2. Implement the task: create or edit files as needed
-3. Run \`git add -A && git commit -m "<descriptive message>"\`
-4. Run \`git push origin feat/${payload.taskId}\`
-5. Open a Pull Request from \`feat/${payload.taskId}\` to \`${payload.branch === `feat/${payload.taskId}` ? "main" : payload.branch}\`
-6. Output the PR URL on the **very last line** of your response in this exact format:
+3. Run lint and type-check — **both must pass before committing** (see \`${payload.claudeMdPath}\` for exact commands):
+   \`\`\`bash
+   # example — use the commands defined in CLAUDE.md for this project
+   npm run lint
+   npx tsc --noEmit
+   \`\`\`
+   Fix all errors and warnings before continuing. Do not commit with failing checks.
+4. Run \`git add -A && git commit -m "<descriptive message>"\`
+5. Run \`git push origin feat/${payload.taskId}\`
+6. Open a Pull Request from \`feat/${payload.taskId}\` to \`${baseBranch}\`
+7. After opening the PR, verify CI status checks pass:
+   \`\`\`bash
+   gh pr checks <PR_URL> --watch
+   \`\`\`
+   If any check fails (lint, typecheck, build), fix the issue, push to the same branch, and wait for CI again before reporting.
+8. Output the PR URL on the **very last line** of your response in this exact format:
    \`{"pr_url":"<url>","branch":"feat/${payload.taskId}"}\`
 
-> IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 3–6.
+> IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 4–8.
 > If you only output text without committing and creating a PR, the task will be considered failed.
 > If you cannot proceed, write your question to \`BLOCKED.md\` in the repository root instead.
 

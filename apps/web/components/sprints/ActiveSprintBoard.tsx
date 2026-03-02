@@ -8,23 +8,28 @@ import type { Task } from "@robin/shared-types";
 
 const ACTIVE_GROUPS = [
   {
-    label: "In esecuzione",
-    statuses: ["in_progress", "in_review", "rework"],
-    emptyLabel: "Nessuna task in esecuzione",
-  },
-  {
     label: "In coda",
-    statuses: ["queued", "sprint_ready"],
+    statuses: ["queued", "sprint_ready", "pending"],
     emptyLabel: "Nessuna task in coda",
   },
   {
+    label: "In esecuzione",
+    statuses: ["in_progress", "rework"],
+    emptyLabel: "Nessuna task in esecuzione",
+  },
+  {
+    label: "In review",
+    statuses: ["in_review", "review_pending"],
+    emptyLabel: "Nessuna task in review",
+  },
+  {
     label: "Completate",
-    statuses: ["done", "completed"],
+    statuses: ["done", "completed", "approved"],
     emptyLabel: "Nessuna task completata",
   },
   {
     label: "Fallite / Annullate",
-    statuses: ["failed", "cancelled"],
+    statuses: ["failed", "cancelled", "rejected"],
     emptyLabel: null,
   },
 ];
@@ -73,7 +78,7 @@ export function ActiveSprintBoard({ initialTasks, sprintId, workspaceId }: Activ
     <div className="space-y-6">
       <SprintProgressBar tasks={tasks} />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         {ACTIVE_GROUPS.map(({ label, statuses, emptyLabel }) => {
           const grouped = tasks.filter((t) => statuses.includes(t.status));
           if (grouped.length === 0 && emptyLabel === null) return null;
