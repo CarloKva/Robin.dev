@@ -41,7 +41,11 @@ export type TaskEventType =
   | "human.commented"
   | "task.completed"
   | "task.failed"
-  | "task.pr_closed_without_merge";
+  | "task.pr_closed_without_merge"
+  | "user.task.created"
+  | "user.task.updated"
+  | "user.task.deleted"
+  | "user.rework.initiated";
 
 export type ActorType = "agent" | "human";
 
@@ -132,6 +136,24 @@ export type EventPayloadMap = {
   "task.pr_closed_without_merge": {
     pr_number: number;
     iteration_number: number;
+  };
+  "user.task.created": {
+    title: string;
+    description?: string;
+    priority?: string;
+    type?: string;
+  };
+  "user.task.updated": {
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+  };
+  "user.task.deleted": {
+    task_id: string;
+    title?: string;
+  };
+  "user.rework.initiated": {
+    reason?: string;
+    iteration_number?: number;
   };
 };
 
