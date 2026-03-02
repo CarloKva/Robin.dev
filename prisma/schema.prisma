@@ -66,8 +66,12 @@ enum task_event_type {
   human_approved       @map("human.approved")
   human_rejected       @map("human.rejected")
   human_commented      @map("human.commented")
-  task_completed       @map("task.completed")
-  task_failed          @map("task.failed")
+  task_completed        @map("task.completed")
+  task_failed           @map("task.failed")
+  user_task_created     @map("user.task.created")
+  user_task_updated     @map("user.task.updated")
+  user_task_deleted     @map("user.task.deleted")
+  user_rework_initiated @map("user.rework.initiated")
 }
 
 enum actor_type {
