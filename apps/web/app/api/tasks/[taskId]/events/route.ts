@@ -4,6 +4,37 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 
+/**
+ * Fetch task events for a task (used by the inline terminal panel).
+ * Capped at 500 events, ordered chronologically.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { taskId } = await params;
+  const supabase = await createSupabaseServerClient();
+  const workspace = await getWorkspaceForUser(userId);
+  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+
+  const { data, error } = await supabase
+    .from("task_events")
+    .select("*")
+    .eq("task_id", taskId)
+    .eq("workspace_id", workspace.id)
+    .order("created_at", { ascending: true })
+    .limit(500);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ events: data ?? [] });
+}
+
 const eventSchema = z.discriminatedUnion("event_type", [
   z.object({
     event_type: z.literal("human.approved"),
