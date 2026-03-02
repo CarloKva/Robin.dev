@@ -104,7 +104,6 @@ model workspaces {
   tasks             tasks[]
   task_artifacts    task_artifacts[]
   task_events       task_events[]
-  task_iterations   task_iterations[]
 }
 
 model workspace_members {
