@@ -5,7 +5,7 @@ import { ExpressAdapter } from "@bull-board/express";
 import { BULL_BOARD_PORT } from "./config/bullmq.config";
 import { taskQueue } from "./queues/task.queue";
 import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
-import { createProvisioningWorker } from "./workers/agent.provisioning.worker";
+import { createProvisioningWorker, resolveRedisUrlForAgents } from "./workers/agent.provisioning.worker";
 import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
 import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue.worker";
 import { createSprintControlWorker } from "./workers/sprint-control.worker";
@@ -45,6 +45,10 @@ async function main() {
   const selfUpdate = new SelfUpdateService(IS_CONTROL_PLANE);
 
   if (IS_CONTROL_PLANE) {
+    // Fail fast if agent Redis URL config is missing (e.g. REDIS_AGENT_HOST not set)
+    const agentRedisUrl = resolveRedisUrlForAgents();
+    log.info({ agentRedisHost: new URL(agentRedisUrl.replace(/^rediss?:\/\//, "https://")).hostname }, "Agent Redis URL resolved");
+
     // Control-plane: provisioning + deprovisioning workers only (no task execution)
     const provisioningWorker = createProvisioningWorker();
     const deprovisioningWorker = createDeprovisioningWorker();

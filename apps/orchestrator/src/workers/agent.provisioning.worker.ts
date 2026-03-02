@@ -29,6 +29,39 @@ import { log } from "../utils/logger";
 
 export const PROVISIONING_QUEUE_NAME = "agent-provisioning";
 
+// ─── Redis URL for agents ────────────────────────────────────────────────────
+
+/**
+ * Agents must connect to the control-plane's Redis (shared queues).
+ * REDIS_URL_AGENT: explicit URL for agents (must not use 127.0.0.1).
+ * Else: derive from REDIS_URL by replacing host with REDIS_AGENT_HOST (control-plane public IP).
+ */
+export function resolveRedisUrlForAgents(): string {
+  const explicit = process.env["REDIS_URL_AGENT"];
+  if (explicit) {
+    try {
+      const u = new URL(explicit.replace(/^redis:\/\//, "http://").replace(/^rediss:\/\//, "https://"));
+      if (u.hostname !== "127.0.0.1" && u.hostname !== "localhost") return explicit;
+    } catch {
+      /* invalid URL, fall through */
+    }
+  }
+
+  const baseUrl = process.env["REDIS_URL"];
+  const agentHost = process.env["REDIS_AGENT_HOST"];
+  if (!baseUrl || !agentHost) {
+    throw new Error(
+      "Agents need Redis on the control-plane. Set REDIS_URL_AGENT=rediss://:<password>@<control-plane-ip>:6379 " +
+        "or REDIS_URL + REDIS_AGENT_HOST=<control-plane-public-ip>"
+    );
+  }
+
+  const parsed = new URL(baseUrl.replace(/^redis:\/\//, "http://").replace(/^rediss:\/\//, "https://"));
+  const userinfo = (parsed.username ? `${parsed.username}:` : ":") + (parsed.password || "");
+  const scheme = baseUrl.startsWith("rediss") ? "rediss" : "redis";
+  return `${scheme}://${userinfo}@${agentHost}:${parsed.port || 6379}`;
+}
+
 // ─── Heartbeat-based health check ────────────────────────────────────────────
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -126,7 +159,7 @@ async function processProvisioningJob(
   const githubAppId = process.env["GITHUB_APP_ID"];
   const githubAppPrivateKeyB64 = process.env["GITHUB_APP_PRIVATE_KEY_B64"];
   const orchestratorRepoUrl = process.env["ORCHESTRATOR_REPO_URL"];
-  const redisUrl = process.env["REDIS_URL_AGENT"];
+  const redisUrl = resolveRedisUrlForAgents();
   const redisCaCert = process.env["REDIS_CA_CERT"];
   const snapshotId = process.env["HETZNER_SNAPSHOT_ID"];
 
