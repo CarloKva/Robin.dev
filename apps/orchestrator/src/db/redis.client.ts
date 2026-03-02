@@ -1,21 +1,13 @@
 import { Redis, type RedisOptions } from "ioredis";
-import type { ConnectionOptions as TlsOptions } from "node:tls";
 
 let _redis: Redis | null = null;
-
-function buildTlsOptions(url: string): TlsOptions | undefined {
-  if (!url.startsWith("rediss://")) return undefined;
-
-  const caCert = process.env["REDIS_CA_CERT"];
-  if (caCert) return { ca: caCert };
-  return { rejectUnauthorized: false };
-}
 
 /**
  * Singleton Redis connection shared by Queue and Worker.
  *
- * For self-signed TLS certs, set REDIS_CA_CERT to the PEM-encoded CA
- * certificate. If omitted, certificate verification is disabled.
+ * We parse REDIS_URL manually instead of passing it to ioredis directly
+ * because ioredis's internal `rediss://` handling ignores user-provided
+ * TLS options on some runtimes (notably Vercel's Node.js).
  */
 export function getRedisConnection(): Redis {
   if (_redis) return _redis;
@@ -25,16 +17,27 @@ export function getRedisConnection(): Redis {
     throw new Error("Missing REDIS_URL environment variable.");
   }
 
+  const parsed = new URL(url);
+  const isTls = parsed.protocol === "rediss:";
+
   const opts: RedisOptions = {
+    host: parsed.hostname,
+    port: parseInt(parsed.port || "6379", 10),
+    ...(parsed.password && { password: decodeURIComponent(parsed.password) }),
+    ...(parsed.username && parsed.username !== "default" && {
+      username: decodeURIComponent(parsed.username),
+    }),
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: false,
   };
 
-  const tls = buildTlsOptions(url);
-  if (tls) opts.tls = tls;
+  if (isTls) {
+    const caCert = process.env["REDIS_CA_CERT"];
+    opts.tls = caCert ? { ca: caCert } : { rejectUnauthorized: false };
+  }
 
-  _redis = new Redis(url, opts);
+  _redis = new Redis(opts);
 
   _redis.on("error", (err) => {
     // Log but don't throw — ioredis handles reconnection automatically

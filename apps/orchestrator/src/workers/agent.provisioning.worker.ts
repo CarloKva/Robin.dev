@@ -33,10 +33,17 @@ export const PROVISIONING_QUEUE_NAME = "agent-provisioning";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** Snapshot: ~1–2 min. From-scratch: ~7–8 min. Override via PROVISIONING_HEARTBEAT_TIMEOUT_SEC. */
+function getHeartbeatTimeoutMs(useSnapshot: boolean): number {
+  const envSec = process.env["PROVISIONING_HEARTBEAT_TIMEOUT_SEC"];
+  if (envSec) return parseInt(envSec, 10) * 1000;
+  return (useSnapshot ? 5 : 12) * 60 * 1000;
+}
+
 async function waitForAgentHeartbeat(
   supabase: SupabaseClient,
   agentId: string,
-  timeoutMs = 5 * 60 * 1000
+  timeoutMs: number
 ): Promise<void> {
   const start = Date.now();
 
@@ -203,13 +210,15 @@ async function processProvisioningJob(
     .update({ vps_ip: vpsIp, vps_region: "nbg1", vps_online_at: new Date().toISOString() })
     .eq("id", agentId);
 
-  log.info({ agentId, vpsId, vpsIp }, "VPS running; waiting for agent heartbeat");
+  const useSnapshot = !!process.env["HETZNER_SNAPSHOT_ID"];
+  const heartbeatTimeoutMs = getHeartbeatTimeoutMs(useSnapshot);
+  log.info({ agentId, vpsId, vpsIp, useSnapshot, timeoutSec: heartbeatTimeoutMs / 1000 }, "VPS running; waiting for agent heartbeat");
 
   // ── 6. Wait for agent heartbeat in DB ──────────────────────────────────────
   // The agent VPS binds its health endpoint to loopback (127.0.0.1) so we
   // can't reach it from the control-plane. Instead, poll Supabase for the
   // agent's heartbeat (last_seen_at) which the HeartbeatService updates.
-  await waitForAgentHeartbeat(supabase, agentId);
+  await waitForAgentHeartbeat(supabase, agentId, heartbeatTimeoutMs);
 
   // ── 7. Mark agent online ───────────────────────────────────────────────────
   const { error: onlineErr } = await supabase
