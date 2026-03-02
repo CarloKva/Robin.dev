@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { Sprint } from "@robin/shared-types";
 
@@ -26,8 +25,8 @@ export function SprintCard({ sprint, taskCount }: SprintCardProps) {
     : null;
 
   return (
-    <Link href={`/sprints/${sprint.id}`}>
-      <div className="rounded-lg border border-border bg-card p-4 transition-all duration-150 hover:border-muted-foreground/30 hover:bg-accent/40">
+    <div>
+      <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="truncate font-semibold">{sprint.name}</h3>
@@ -60,7 +59,7 @@ export function SprintCard({ sprint, taskCount }: SprintCardProps) {
           )}
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

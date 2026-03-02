@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
     // devDependency availability issues in production build environments.
     ignoreDuringBuilds: true,
   },
+  async redirects() {
+    return [
+      {
+        source: "/sprints/:id",
+        destination: "/sprints",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
