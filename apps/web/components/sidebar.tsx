@@ -29,7 +29,11 @@ export function Sidebar() {
 
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive =
+          pathname === item.href ||
+          pathname.startsWith(`${item.href}/`) ||
+          // Mark Backlog active when on sprint detail pages
+          (item.href === "/backlog" && pathname.startsWith("/sprints"));
           const isLoading = loadingHref === item.href;
           return (
             <Link

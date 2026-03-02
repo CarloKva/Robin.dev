@@ -77,20 +77,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
-  // Verify repository belongs to this workspace
-  const { data: repoCheck } = await supabase
-    .from("repositories")
-    .select("id")
-    .eq("id", repository_id)
-    .eq("workspace_id", workspace.id)
-    .maybeSingle();
-  if (!repoCheck) {
-    return NextResponse.json(
-      { error: "Repository non trovata o non appartenente al workspace." },
-      { status: 422 }
-    );
-  }
-
   // Determine initial status:
   // - If sprint_id or add_to_sprint → sprint_ready (task assigned to sprint, pending sprint start)
   // - Otherwise → backlog (task will only execute when added to a sprint and sprint is started)

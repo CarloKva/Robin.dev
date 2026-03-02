@@ -8,6 +8,7 @@ import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
 import { createProvisioningWorker } from "./workers/agent.provisioning.worker";
 import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
 import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue.worker";
+import { createGitHubEventsWorker } from "./workers/github-events.worker";
 import { taskPoller } from "./services/task.poller";
 import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
@@ -48,7 +49,11 @@ async function main() {
     await reconstructRepoQueues();
     workersToClose.push({ close: closeAllRepoWorkers });
 
-    log.info({}, "Control-plane workers started (provisioning + deprovisioning + repo-queues)");
+    // GitHub webhook events worker (processes pull_request:closed events)
+    const gitHubEventsWorker = createGitHubEventsWorker();
+    workersToClose.push(gitHubEventsWorker);
+
+    log.info({}, "Control-plane workers started (provisioning + deprovisioning + repo-queues + github-events)");
   } else {
     // Agent VPS: validate AGENT_ID
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

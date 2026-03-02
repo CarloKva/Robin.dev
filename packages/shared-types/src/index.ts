@@ -40,7 +40,8 @@ export type TaskEventType =
   | "human.rejected"
   | "human.commented"
   | "task.completed"
-  | "task.failed";
+  | "task.failed"
+  | "task.pr_closed_without_merge";
 
 export type ActorType = "agent" | "human";
 
@@ -122,10 +123,15 @@ export type EventPayloadMap = {
   };
   "task.completed": {
     duration_seconds?: number;
+    iteration_number?: number;
   };
   "task.failed": {
     error_code: string;
     message: string;
+  };
+  "task.pr_closed_without_merge": {
+    pr_number: number;
+    iteration_number: number;
   };
 };
 

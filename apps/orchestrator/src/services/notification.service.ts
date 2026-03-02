@@ -44,6 +44,22 @@ export class NotificationService {
     log.info({ taskId: task.id, errorCode }, "Notification: task failed");
   }
 
+  async notifyPrMerged(task: TaskInfo, prNumber: number): Promise<void> {
+    const text = `✅ *Task completata — PR #${prNumber} mergiata*\n*${task.title}*\n<${this.appUrl}/tasks/${task.id}|View task>`;
+    await this.sendSlack(text);
+    log.info({ taskId: task.id, prNumber }, "Notification: PR merged — task done");
+  }
+
+  async notifyPrClosedWithoutMerge(task: TaskInfo, prNumber: number): Promise<void> {
+    const text = `⚠️ *PR #${prNumber} chiusa senza merge*\n*${task.title}*\nLa task è tornata in review.\n<${this.appUrl}/tasks/${task.id}|View task>`;
+    await this.sendSlack(text);
+    await this.sendEmail({
+      subject: `[Robin.dev] PR #${prNumber} chiusa senza merge: ${task.title}`,
+      html: `<p>La PR <strong>#${prNumber}</strong> per la task <strong>${task.title}</strong> è stata chiusa senza merge.</p><p>La task è tornata in review.</p><p><a href="${this.appUrl}/tasks/${task.id}">View task →</a></p>`,
+    });
+    log.info({ taskId: task.id, prNumber }, "Notification: PR closed without merge");
+  }
+
   async notifyDLQAlert(failedCount: number): Promise<void> {
     const text = `⚠️ *DLQ alert* — ${failedCount} failed jobs in queue\n<${this.appUrl}|Open Robin.dev>`;
     await this.sendSlack(text);
