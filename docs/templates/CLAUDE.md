@@ -63,8 +63,14 @@ Format of `BLOCKED.md`:
 ### Robin.dev Integration
 
 - Task instructions arrive via `TASK.md` in the repository root
-- Branch convention: `feat/<task_id>` (create before making any changes)
+- Branch convention: `feat/<task_id>` — always create from the latest upstream main to avoid conflicts:
+  ```bash
+  git fetch origin
+  git checkout -b feat/<task_id> origin/{{MAIN_BRANCH}}
+  ```
+- Before committing: run `{{LINT_COMMAND}}` and `{{TYPECHECK_COMMAND}}` — both must pass
 - After completing the task: commit all changes, then open a Pull Request
+- After opening the PR: run `gh pr checks <PR_URL> --watch` and fix any failing CI checks before reporting
 - PR title format: `feat(<scope>): <short description> [<task_id>]`
 - The PR will be reviewed by a human operator before merging
 - Do not merge your own PRs
