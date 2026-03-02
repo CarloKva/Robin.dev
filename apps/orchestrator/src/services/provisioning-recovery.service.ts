@@ -18,8 +18,8 @@ export async function recoverPendingAgents(): Promise<void> {
 
   const { data: pendingAgents, error } = await supabase
     .from("agents")
-    .select("id, workspace_id")
-    .eq("provisioning_status", "pending");
+    .select("id, workspace_id, vps_id")
+    .in("provisioning_status", ["pending", "error"]);
 
   if (error) {
     log.warn({ error: error.message }, "Failed to query pending agents for recovery");
@@ -30,7 +30,7 @@ export async function recoverPendingAgents(): Promise<void> {
 
   log.info(
     { count: pendingAgents.length },
-    "Found pending agents — checking for missing provisioning jobs"
+    "Found pending/error agents — checking for missing provisioning jobs"
   );
 
   const queue = new Queue<AgentProvisioningJobPayload>(PROVISIONING_QUEUE_NAME, {
@@ -40,13 +40,31 @@ export async function recoverPendingAgents(): Promise<void> {
   try {
     for (const agent of pendingAgents) {
       const jobId = `provision-${agent.id}`;
+
+      // Skip agents that already have a VPS — they need manual cleanup first
+      if (agent.vps_id) {
+        log.info({ agentId: agent.id, vpsId: agent.vps_id }, "Agent has existing VPS — skipping auto-recovery");
+        continue;
+      }
+
       const existingJob = await queue.getJob(jobId);
 
       if (existingJob) {
         const state = await existingJob.getState();
-        log.info({ agentId: agent.id, jobState: state }, "Provisioning job already exists");
-        continue;
+        if (state === "failed" || state === "completed") {
+          await existingJob.remove();
+          log.info({ agentId: agent.id, jobState: state }, "Removed stale provisioning job");
+        } else {
+          log.info({ agentId: agent.id, jobState: state }, "Provisioning job already exists");
+          continue;
+        }
       }
+
+      // Reset to pending before re-enqueuing
+      await supabase
+        .from("agents")
+        .update({ provisioning_status: "pending", provisioning_error: null })
+        .eq("id", agent.id);
 
       log.info({ agentId: agent.id }, "Re-enqueuing lost provisioning job");
       await queue.add(
