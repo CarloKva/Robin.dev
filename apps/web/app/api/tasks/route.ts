@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { trackUserAction } from "@/lib/events/trackUserAction";
 
 const createTaskSchema = z.object({
   title: z.string().min(1, "Titolo obbligatorio").max(200),
@@ -147,6 +148,14 @@ export async function POST(request: Request) {
     actor_type: "human",
     actor_id: userId,
     payload: { from: "pending", to: taskStatus },
+  });
+
+  // Audit trail: track founder action
+  await trackUserAction(supabase, workspace.id, userId, task.id, "user.task.created", {
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    type: task.type,
   });
 
   // Tasks are NOT enqueued at creation time. Execution only starts when the sprint is started

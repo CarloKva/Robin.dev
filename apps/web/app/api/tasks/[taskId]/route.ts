@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { trackUserAction } from "@/lib/events/trackUserAction";
 
 const patchSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -77,25 +78,24 @@ export async function PATCH(
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
-  // Emit state change event if status is changing
-  if (updates.status) {
-    const { data: currentTask } = await supabase
-      .from("tasks")
-      .select("status")
-      .eq("id", taskId)
-      .eq("workspace_id", workspace.id)
-      .single();
+  // Fetch current task state for diff and state-change event
+  const { data: currentTask } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("id", taskId)
+    .eq("workspace_id", workspace.id)
+    .single();
 
-    if (currentTask && currentTask.status !== updates.status) {
-      await supabase.from("task_events").insert({
-        task_id: taskId,
-        workspace_id: workspace.id,
-        event_type: "task.state.changed",
-        actor_type: "human",
-        actor_id: userId,
-        payload: { from: currentTask.status, to: updates.status },
-      });
-    }
+  // Emit state change event if status is changing
+  if (updates.status && currentTask && currentTask.status !== updates.status) {
+    await supabase.from("task_events").insert({
+      task_id: taskId,
+      workspace_id: workspace.id,
+      event_type: "task.state.changed",
+      actor_type: "human",
+      actor_id: userId,
+      payload: { from: currentTask.status, to: updates.status },
+    });
   }
 
   const { data: task, error } = await supabase
@@ -111,5 +111,68 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Audit trail: compute diff and track founder action
+  if (currentTask) {
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    for (const key of Object.keys(updates) as (keyof typeof updates)[]) {
+      const oldVal = (currentTask as Record<string, unknown>)[key as string];
+      const newVal = updates[key];
+      if (oldVal !== newVal) {
+        before[key as string] = oldVal;
+        after[key as string] = newVal;
+      }
+    }
+    if (Object.keys(before).length > 0) {
+      await trackUserAction(supabase, workspace.id, userId, taskId, "user.task.updated", { before, after });
+    }
+  }
+
   return NextResponse.json({ task });
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { taskId } = await params;
+  const supabase = await createSupabaseServerClient();
+  const workspace = await getWorkspaceForUser(userId);
+  if (!workspace) {
+    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  }
+
+  // Fetch task before deletion for the audit event
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("title, status")
+    .eq("id", taskId)
+    .eq("workspace_id", workspace.id)
+    .single();
+
+  // Audit trail: emit before deletion so the event is persisted
+  if (task) {
+    await trackUserAction(supabase, workspace.id, userId, taskId, "user.task.deleted", {
+      title: task.title,
+      status: task.status,
+    });
+  }
+
+  const { error } = await supabase
+    .from("tasks")
+    .delete()
+    .eq("id", taskId)
+    .eq("workspace_id", workspace.id);
+
+  if (error) {
+    console.error("[DELETE /api/tasks/:id] error:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return new NextResponse(null, { status: 204 });
 }

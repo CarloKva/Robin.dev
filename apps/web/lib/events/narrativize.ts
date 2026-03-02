@@ -122,6 +122,22 @@ export function narrativize(event: NarrativizeInput): string {
       return `PR #${p.pr_number} chiusa senza merge — task tornata in review`;
     }
 
+    case "user.task.created": {
+      return "Task creata";
+    }
+
+    case "user.task.updated": {
+      return "Task modificata";
+    }
+
+    case "user.task.deleted": {
+      return "Task eliminata";
+    }
+
+    case "user.rework.initiated": {
+      return "Rework avviato dalla dashboard";
+    }
+
     default: {
       const exhaustive: never = event_type;
       return `Unknown event: ${exhaustive}`;
