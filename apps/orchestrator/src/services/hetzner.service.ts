@@ -278,14 +278,6 @@ apt-get install -y -qq nodejs
 
 echo "[robin] Node.js $(node --version) installed"
 
-# ── Redis (local, loopback only) ─────────────────────────────────────────────
-apt-get install -y -qq redis-server
-sed -i 's/^bind 127.0.0.1.*/bind 127.0.0.1/' /etc/redis/redis.conf
-systemctl enable redis-server
-systemctl start redis-server
-
-echo "[robin] Redis started"
-
 # ── Claude Code CLI ──────────────────────────────────────────────────────────
 npm install -g @anthropic-ai/claude-code 2>/dev/null || true
 echo "[robin] Claude Code: $(claude --version 2>/dev/null || echo 'not found')"
@@ -406,7 +398,7 @@ echo "[robin] Startup wrapper written"
 cat > /etc/systemd/system/robin-orchestrator.service << 'SVCEOF'
 [Unit]
 Description=Robin.dev Orchestrator
-After=network.target redis-server.service
+After=network.target
 
 [Service]
 Type=simple
