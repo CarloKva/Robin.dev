@@ -5,6 +5,7 @@ import { getSprintsForWorkspace } from "@/lib/db/sprints";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { SprintCard } from "@/components/sprints/SprintCard";
 import { CreateSprintButton } from "@/components/sprints/CreateSprintButton";
+import { SprintArchiveTable } from "@/components/sprints/SprintArchiveTable";
 
 export default async function SprintsPage() {
   const { userId } = await auth();
@@ -69,14 +70,11 @@ export default async function SprintsPage() {
       )}
 
       {pastSprints.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Sprint passati</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {pastSprints.map((s) => (
-              <SprintCard key={s.id} sprint={s} taskCount={taskCountMap[s.id]} />
-            ))}
-          </div>
-        </section>
+        <SprintArchiveTable
+          sprints={pastSprints}
+          taskCountMap={taskCountMap}
+          defaultExpanded={activeSprints.length === 0}
+        />
       )}
 
       {sprints.length === 0 && (
