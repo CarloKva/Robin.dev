@@ -138,19 +138,25 @@ export type EventPayloadMap = {
     iteration_number: number;
   };
   "user.task.created": {
+    title: string;
+    description?: string;
+    priority?: string;
+    type?: string;
+  };
+  "user.task.updated": {
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+  };
+  "user.task.deleted": {
+    task_id: string;
+    title?: string;
+  };
+  "user.rework.initiated": {
+    reason?: string;
+    iteration_number?: number;
     title?: string;
     description?: string;
     priority?: string;
-  };
-  "user.task.updated": {
-    before?: Record<string, unknown>;
-    after?: Record<string, unknown>;
-  };
-  "user.task.deleted": {
-    task_id?: string;
-  };
-  "user.rework.initiated": {
-    note?: string;
   };
 };
 

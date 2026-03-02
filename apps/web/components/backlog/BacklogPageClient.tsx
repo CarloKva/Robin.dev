@@ -194,6 +194,7 @@ export function BacklogPageClient({
           errors={importModal.errors}
           truncated={importModal.truncated}
           originalCount={importModal.originalCount}
+          repositories={repositories}
           onClose={() => setImportModal(null)}
           onImported={() => {
             setImportModal(null);
