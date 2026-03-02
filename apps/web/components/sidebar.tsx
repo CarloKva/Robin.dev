@@ -1,23 +1,74 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { RepoSelector } from "./RepoSelector";
+import type { Repository } from "@robin/shared-types";
 
-const navItems = [
+interface SidebarProps {
+  repositories?: Repository[];
+  workspaceId?: string;
+}
+
+const NAV_ITEMS = [
   { href: "/backlog", label: "Backlog" },
   { href: "/agents", label: "Agents" },
   { href: "/settings", label: "Settings" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ repositories = [], workspaceId }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [loadingHref, setLoadingHref] = useState<string | null>(null);
+  const [activeRepoId, setActiveRepoId] = useState<string | null>(null);
+
+  const storageKey = workspaceId ? `robin:activeRepoId:${workspaceId}` : null;
+
+  // Load persisted repo from localStorage on mount
+  useEffect(() => {
+    if (!storageKey || repositories.length === 0) return;
+    const stored = localStorage.getItem(storageKey);
+    if (stored && repositories.some((r) => r.id === stored)) {
+      setActiveRepoId(stored);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setLoadingHref(null);
   }, [pathname]);
+
+  function handleRepoSelect(id: string | null) {
+    setActiveRepoId(id);
+
+    // Persist to localStorage
+    if (storageKey) {
+      if (id) {
+        localStorage.setItem(storageKey, id);
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+    }
+
+    // Update URL params on pages that support repo filtering
+    if (pathname.startsWith("/backlog")) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (id) {
+        params.set("repositoryId", id);
+      } else {
+        params.delete("repositoryId");
+      }
+      params.delete("page");
+      router.push(`/backlog?${params.toString()}`);
+    }
+  }
+
+  // Backlog link includes active repo filter when one is selected
+  const backlogHref = activeRepoId
+    ? `/backlog?repositoryId=${activeRepoId}`
+    : "/backlog";
 
   return (
     <aside className="hidden w-56 flex-col border-r border-border bg-background md:flex">
@@ -25,8 +76,24 @@ export function Sidebar() {
         <span className="text-lg font-bold tracking-tight">Robin.dev</span>
       </div>
 
+      {/* Repository selector */}
+      {repositories.length > 0 && workspaceId && (
+        <div className="border-b border-border px-3 py-2">
+          <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Repository
+          </p>
+          <RepoSelector
+            repositories={repositories}
+            activeRepoId={activeRepoId}
+            onSelect={handleRepoSelect}
+          />
+        </div>
+      )}
+
       <nav className="flex flex-1 flex-col gap-1 p-3">
-        {navItems.map((item) => {
+        {NAV_ITEMS.map((item) => {
+          // Use backlogHref for the backlog item
+          const href = item.href === "/backlog" ? backlogHref : item.href;
           const isActive =
             pathname === item.href ||
             pathname.startsWith(`${item.href}/`) ||
@@ -36,7 +103,7 @@ export function Sidebar() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               onClick={() => {
                 if (!isActive) setLoadingHref(item.href);
               }}
