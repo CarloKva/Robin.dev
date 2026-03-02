@@ -44,10 +44,19 @@ export async function POST(
     );
   }
 
-  // Reset to pending (clears any previous error)
+  // Reset to pending and clear all VPS fields so provisioning starts fresh
   await supabase
     .from("agents")
-    .update({ provisioning_status: "pending", provisioning_error: null })
+    .update({
+      provisioning_status: "pending",
+      provisioning_error: null,
+      vps_id: null,
+      vps_ip: null,
+      vps_region: null,
+      vps_created_at: null,
+      vps_online_at: null,
+      provisioned_at: null,
+    })
     .eq("id", agentId);
 
   try {
