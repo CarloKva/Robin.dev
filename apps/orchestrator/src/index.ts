@@ -11,6 +11,7 @@ import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue
 import { createSprintControlWorker } from "./workers/sprint-control.worker";
 import { createGitHubEventsWorker } from "./workers/github-events.worker";
 import { repoWatchdog } from "./services/repo-watchdog.service";
+import { recoverPendingAgents } from "./services/provisioning-recovery.service";
 import { taskPoller } from "./services/task.poller";
 import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
@@ -65,6 +66,11 @@ async function main() {
     log.info(
       {},
       "Control-plane workers started (provisioning + deprovisioning + repo-queues + sprint-control + watchdog + github-events)"
+    );
+
+    // Recover agents stuck in "pending" with no BullMQ job (fire-and-forget)
+    recoverPendingAgents().catch((err) =>
+      log.warn({ error: String(err) }, "Provisioning recovery check failed")
     );
   } else {
     // Agent VPS: validate AGENT_ID
