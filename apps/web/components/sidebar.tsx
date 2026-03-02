@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
   { href: "/backlog", label: "Backlog" },
   { href: "/metrics", label: "Metriche" },
   { href: "/agents", label: "Agents" },

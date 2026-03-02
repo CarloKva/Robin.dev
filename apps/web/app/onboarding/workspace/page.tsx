@@ -69,7 +69,7 @@ export default function WorkspaceOnboardingPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/backlog");
     } catch {
       setError("Network error. Please check your connection and try again.");
     } finally {
