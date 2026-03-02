@@ -32,7 +32,7 @@ export function createRepoQueueWorker(repositoryId: string): Worker<RepoQueueJob
   if (existing) return existing;
 
   const worker = new Worker<RepoQueueJobPayload>(
-    `repo-queue:${repositoryId}`,
+    `repo-queue-${repositoryId}`,
     async (job: Job<RepoQueueJobPayload>) => {
       return processRepoJob(job);
     },
@@ -273,7 +273,7 @@ export async function reconstructRepoQueues(): Promise<void> {
   for (const [repositoryId, tasks] of byRepo) {
     createRepoQueueWorker(repositoryId);
 
-    const queue = new Queue<RepoQueueJobPayload>(`repo-queue:${repositoryId}`, {
+    const queue = new Queue<RepoQueueJobPayload>(`repo-queue-${repositoryId}`, {
       connection: getRedisConnection(),
     });
 

@@ -6,14 +6,14 @@ const queues = new Map<string, Queue<RepoQueueJobPayload>>();
 
 /**
  * Returns (or creates) a per-repository BullMQ queue.
- * Queue name: `repo-queue:{repositoryId}`
+ * Queue name: `repo-queue-{repositoryId}` (dash, not colon — BullMQ v5 forbids colons)
  * concurrency=1 is enforced at the worker level, ensuring sequential execution per repo.
  */
 export function getRepoQueue(repositoryId: string): Queue<RepoQueueJobPayload> {
   const existing = queues.get(repositoryId);
   if (existing) return existing;
 
-  const queue = new Queue<RepoQueueJobPayload>(`repo-queue:${repositoryId}`, {
+  const queue = new Queue<RepoQueueJobPayload>(`repo-queue-${repositoryId}`, {
     connection: createRedisConnection(),
     defaultJobOptions: {
       attempts: 1,
