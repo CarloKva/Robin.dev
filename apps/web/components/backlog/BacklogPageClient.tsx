@@ -49,7 +49,7 @@ export function BacklogPageClient({
     return s;
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [creatingBacklogTask, setCreatingBacklogTask] = useState(false);
+  const [isCreatingTask, startCreateTaskTransition] = useTransition();
   const [creatingSprint, setCreatingSprint] = useState(false);
 
   // Import state
@@ -110,13 +110,10 @@ export function BacklogPageClient({
     }
   }
 
-  async function handleCreateTask() {
-    setCreatingBacklogTask(true);
-    try {
+  function handleCreateTask() {
+    startCreateTaskTransition(() => {
       router.push("/tasks/new");
-    } finally {
-      setCreatingBacklogTask(false);
-    }
+    });
   }
 
   function handleImportClick() {
@@ -323,7 +320,7 @@ export function BacklogPageClient({
               disabled={creatingSprint}
               className="shrink-0 rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
             >
-              {creatingSprint ? "..." : "Crea sprint"}
+              {creatingSprint ? "Creando sprint..." : "Crea sprint"}
             </button>
           </div>
 
@@ -360,12 +357,12 @@ export function BacklogPageClient({
               {/* + Crea */}
               <div className="border-t border-border">
                 <button
-                  onClick={() => void handleCreateTask()}
-                  disabled={creatingBacklogTask}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                  onClick={handleCreateTask}
+                  disabled={isCreatingTask}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors disabled:opacity-50"
                 >
                   <span>+</span>
-                  <span>Crea task</span>
+                  <span>{isCreatingTask ? "Caricamento..." : "Crea task"}</span>
                 </button>
               </div>
             </div>

@@ -244,7 +244,7 @@ export function SprintSection({
                 disabled={loading}
                 className="rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
               >
-                {loading ? "..." : "Completa lo sprint"}
+                {loading ? "Completando..." : "Completa lo sprint"}
               </button>
             </>
           )}
@@ -255,7 +255,7 @@ export function SprintSection({
               className="rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-40"
               title={readyCount === 0 ? "Nessuna task pronta" : "Avvia lo sprint"}
             >
-              {loading ? "..." : "Avvia sprint"}
+              {loading ? "Avviando..." : "Avvia sprint"}
             </button>
           )}
         </div>
