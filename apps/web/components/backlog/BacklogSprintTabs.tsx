@@ -31,7 +31,7 @@ export function BacklogSprintTabs({
   sprints,
   activeSprint,
   planningSprint,
-  pastSprints,
+  pastSprints: _pastSprints,
   workspaceId,
   defaultTab,
 }: BacklogSprintTabsProps) {
@@ -95,7 +95,6 @@ export function BacklogSprintTabs({
         <SprintTabView
           activeSprint={activeSprint}
           planningSprint={planningSprint}
-          pastSprints={pastSprints}
           workspaceId={workspaceId}
         />
       )}

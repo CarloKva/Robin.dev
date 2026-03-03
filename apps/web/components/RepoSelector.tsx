@@ -8,9 +8,10 @@ interface RepoSelectorProps {
   repositories: Repository[];
   activeRepoId: string | null;
   onSelect: (id: string | null) => void;
+  align?: "left" | "right";
 }
 
-export function RepoSelector({ repositories, activeRepoId, onSelect }: RepoSelectorProps) {
+export function RepoSelector({ repositories, activeRepoId, onSelect, align = "left" }: RepoSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -62,7 +63,7 @@ export function RepoSelector({ repositories, activeRepoId, onSelect }: RepoSelec
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border shadow-lg bg-white">
+        <div className={`absolute top-full z-50 mt-1 min-w-full rounded-md border border-border bg-popover shadow-lg ${align === "right" ? "right-0" : "left-0 right-0"}`}>
           {showSearch && (
             <div className="border-b border-border p-1.5">
               <div className="flex items-center gap-1.5 rounded border border-border px-2 py-1">

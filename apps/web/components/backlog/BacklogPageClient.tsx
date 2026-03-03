@@ -53,6 +53,8 @@ export function BacklogPageClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [creatingSprint, setCreatingSprint] = useState(false);
+  const [startingFromBacklog, setStartingFromBacklog] = useState(false);
+  const [startFromBacklogError, setStartFromBacklogError] = useState<string | null>(null);
 
   // Import state
   type ImportModal = { tasks: ParsedTask[]; errors: ParseError[]; truncated: boolean; originalCount: number };
@@ -109,6 +111,22 @@ export function BacklogPageClient({
       if (res.ok) refresh();
     } finally {
       setCreatingSprint(false);
+    }
+  }
+
+  async function handleStartFromBacklog() {
+    setStartFromBacklogError(null);
+    setStartingFromBacklog(true);
+    try {
+      const res = await fetch("/api/sprints/from-backlog", { method: "POST" });
+      const body = await res.json() as { error?: string; hint?: string };
+      if (!res.ok) {
+        setStartFromBacklogError(body.error ?? "Errore nell'avvio dello sprint.");
+        return;
+      }
+      refresh();
+    } finally {
+      setStartingFromBacklog(false);
     }
   }
 
@@ -246,17 +264,30 @@ export function BacklogPageClient({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Import button */}
-        <button
-          onClick={handleImportClick}
-          className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
-          title="Importa task da file .robin.md"
-        >
-          ↑ Importa .robin.md
-        </button>
-        {importFileError !== null && (
-          <span className="text-xs text-red-600 dark:text-red-400">{importFileError}</span>
-        )}
+        {/* Right actions: import + avvia sprint */}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <button
+            onClick={handleImportClick}
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+            title="Importa task da file .robin.md"
+          >
+            ↑ Importa .robin.md
+          </button>
+          {importFileError !== null && (
+            <span className="text-xs text-red-600 dark:text-red-400">{importFileError}</span>
+          )}
+          <button
+            onClick={() => void handleStartFromBacklog()}
+            disabled={startingFromBacklog || initialBacklog.length === 0}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            title="Crea uno sprint con tutte le task in backlog e avvialo"
+          >
+            {startingFromBacklog ? "Avviando..." : "▶ Avvia sprint"}
+          </button>
+          {startFromBacklogError !== null && (
+            <span className="max-w-xs text-right text-xs text-red-600 dark:text-red-400">{startFromBacklogError}</span>
+          )}
+        </div>
       </div>
 
       {/* Sprint sections */}

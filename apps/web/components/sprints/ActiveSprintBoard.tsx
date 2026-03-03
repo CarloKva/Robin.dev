@@ -1,37 +1,42 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
-import { TaskStatusCard } from "./TaskStatusCard";
 import { SprintProgressBar } from "./SprintProgressBar";
+import { cn } from "@/lib/utils";
 import type { Task } from "@robin/shared-types";
 
-const ACTIVE_GROUPS = [
-  {
-    label: "In coda",
-    statuses: ["queued", "sprint_ready", "pending"],
-    emptyLabel: "Nessuna task in coda",
-  },
-  {
-    label: "In esecuzione",
-    statuses: ["in_progress", "rework"],
-    emptyLabel: "Nessuna task in esecuzione",
-  },
-  {
-    label: "In review",
-    statuses: ["in_review", "review_pending"],
-    emptyLabel: "Nessuna task in review",
-  },
-  {
-    label: "Completate",
-    statuses: ["done", "completed", "approved"],
-    emptyLabel: "Nessuna task completata",
-  },
-  {
-    label: "Fallite / Annullate",
-    statuses: ["failed", "cancelled", "rejected"],
-    emptyLabel: null,
-  },
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  backlog:        { label: "Backlog",       className: "text-slate-500 bg-slate-100 dark:bg-slate-800" },
+  sprint_ready:   { label: "Pronta",        className: "text-blue-500 bg-blue-50 dark:bg-blue-900/20" },
+  pending:        { label: "In attesa",     className: "text-slate-500 bg-slate-100 dark:bg-slate-800" },
+  queued:         { label: "In coda",       className: "text-slate-600 bg-slate-100 dark:bg-slate-800" },
+  in_progress:    { label: "In esecuzione", className: "text-blue-600 bg-blue-100 dark:bg-blue-900/30" },
+  rework:         { label: "Rework",        className: "text-orange-600 bg-orange-100 dark:bg-orange-900/30" },
+  in_review:      { label: "In review",     className: "text-purple-600 bg-purple-100 dark:bg-purple-900/30" },
+  review_pending: { label: "Review pending", className: "text-purple-500 bg-purple-50 dark:bg-purple-900/20" },
+  approved:       { label: "Approvata",     className: "text-green-600 bg-green-100 dark:bg-green-900/30" },
+  done:           { label: "Completata",    className: "text-green-600 bg-green-100 dark:bg-green-900/30" },
+  completed:      { label: "Completata",    className: "text-green-600 bg-green-100 dark:bg-green-900/30" },
+  rejected:       { label: "Rifiutata",     className: "text-red-600 bg-red-100 dark:bg-red-900/30" },
+  failed:         { label: "Fallita",       className: "text-red-600 bg-red-100 dark:bg-red-900/30" },
+  cancelled:      { label: "Annullata",     className: "text-slate-400 bg-slate-100 dark:bg-slate-800" },
+};
+
+const PRIORITY_CONFIG: Record<string, { label: string; icon: string; className: string }> = {
+  critical: { label: "Critical", icon: "↑↑", className: "text-red-600" },
+  urgent:   { label: "Urgent",   icon: "↑↑", className: "text-orange-600" },
+  high:     { label: "High",     icon: "↑",  className: "text-yellow-600" },
+  medium:   { label: "Medium",   icon: "=",  className: "text-slate-500" },
+  low:      { label: "Low",      icon: "—",  className: "text-slate-400" },
+};
+
+// Sort order for statuses
+const STATUS_ORDER = [
+  "in_progress", "rework", "in_review", "review_pending",
+  "queued", "sprint_ready", "pending", "backlog",
+  "approved", "done", "completed", "rejected", "failed", "cancelled",
 ];
 
 interface ActiveSprintBoardProps {
@@ -49,7 +54,6 @@ export function ActiveSprintBoard({ initialTasks, sprintId, workspaceId }: Activ
       process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"]!
     );
 
-    // Subscribe to task changes for this sprint
     const channel = supabase
       .channel(`sprint-board:${sprintId}`)
       .on(
@@ -74,40 +78,71 @@ export function ActiveSprintBoard({ initialTasks, sprintId, workspaceId }: Activ
     };
   }, [sprintId, workspaceId]);
 
+  const sorted = [...tasks].sort((a, b) => {
+    const ai = STATUS_ORDER.indexOf(a.status);
+    const bi = STATUS_ORDER.indexOf(b.status);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <SprintProgressBar tasks={tasks} />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-        {ACTIVE_GROUPS.map(({ label, statuses, emptyLabel }) => {
-          const grouped = tasks.filter((t) => statuses.includes(t.status));
-          if (grouped.length === 0 && emptyLabel === null) return null;
+      {tasks.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nessuna task in questo sprint.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-2.5 text-left font-medium">Titolo</th>
+                <th className="px-4 py-2.5 text-left font-medium">Stato</th>
+                <th className="px-4 py-2.5 text-left font-medium">Priorità</th>
+                <th className="px-4 py-2.5 text-left font-medium">Tipo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {sorted.map((task) => {
+                const status = STATUS_CONFIG[task.status] ?? { label: task.status, className: "text-muted-foreground bg-muted" };
+                const priority = task.priority ? PRIORITY_CONFIG[task.priority] : null;
 
-          return (
-            <div key={label} className="space-y-2">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                {label}{" "}
-                {grouped.length > 0 && (
-                  <span className="font-normal text-foreground">({grouped.length})</span>
-                )}
-              </h3>
-              {grouped.length === 0 ? (
-                emptyLabel && (
-                  <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-                    {emptyLabel}
-                  </p>
-                )
-              ) : (
-                <div className="space-y-2">
-                  {grouped.map((task) => (
-                    <TaskStatusCard key={task.id} task={task} />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                return (
+                  <tr
+                    key={task.id}
+                    className="transition-colors hover:bg-accent/30"
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/tasks/${task.id}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {task.title}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", status.className)}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {priority ? (
+                        <span className={cn("font-medium", priority.className)}>
+                          {priority.icon} {priority.label}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 capitalize text-muted-foreground">
+                      {task.type ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
