@@ -221,7 +221,7 @@ export function CreateTaskDrawer({
         aria-modal="true"
         aria-label="Crea nuova task"
         className={[
-          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-card shadow-2xl transition-transform duration-300 ease-in-out sm:w-[520px] sm:border-l sm:border-border",
+          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out sm:w-[520px] sm:border-l sm:border-border",
           isOpen ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
