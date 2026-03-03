@@ -7,8 +7,6 @@ import { getAgentsForWorkspace } from "@/lib/db/agents";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { SprintPlanningView } from "@/components/sprints/SprintPlanningView";
 import { SprintActiveTable } from "@/components/sprints/SprintActiveTable";
-import { SprintSummary } from "@/components/sprints/SprintSummary";
-import { CompleteSprintButton } from "@/components/sprints/CompleteSprintButton";
 
 interface SprintDetailPageProps {
   params: Promise<{ sprintId: string }>;
@@ -49,9 +47,6 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
           )}
         </div>
 
-        {sprint.status === "active" && (
-          <CompleteSprintButton sprintId={sprint.id} />
-        )}
       </div>
 
       {/* Content based on sprint status */}
@@ -70,7 +65,9 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
       )}
 
       {sprint.status === "completed" && (
-        <SprintSummary sprint={sprint} />
+        <div className="rounded-lg border border-border bg-card p-8 text-center">
+          <p className="text-muted-foreground">Sprint completato.</p>
+        </div>
       )}
 
       {sprint.status === "cancelled" && (

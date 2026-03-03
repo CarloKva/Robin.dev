@@ -239,12 +239,6 @@ export function SprintSection({
         <div className="flex items-center gap-1 shrink-0">
           {isActive && (
             <>
-              <Link
-                href={`/sprints/${sprint.id}`}
-                className="rounded border border-border px-2.5 py-1 text-xs hover:bg-accent transition-colors"
-              >
-                Apri board
-              </Link>
               <button
                 onClick={() => void handleComplete()}
                 disabled={loading}

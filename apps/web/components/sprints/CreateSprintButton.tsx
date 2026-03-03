@@ -22,8 +22,7 @@ export function CreateSprintButton({ className }: CreateSprintButtonProps) {
         body: JSON.stringify({}),
       });
       if (res.ok) {
-        const { sprint } = await res.json();
-        startTransition(() => router.push(`/sprints/${sprint.id}`));
+        startTransition(() => router.push("/sprints"));
       }
     } finally {
       setLoading(false);

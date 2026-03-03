@@ -1,53 +1,50 @@
-# Task: Audit trail delle azioni del founder
+# Task: Backlog "per repo" con repo selector in sidebar
 
 **Type:** feature
-**Priority:** medium
-**Task ID:** c8543089-8661-421e-b451-7227a2b2dd92
+**Priority:** high
+**Task ID:** 7a6ca2e1-8ea5-45ab-9319-e23da0585dcb
 
 ## Description
 
-Ogni azione del founder sulla task deve essere tracciata in modo permanente
-e distinta dagli eventi dell'agente nella timeline.
+Il backlog deve mostrare solo le task della repository attualmente selezionata. Selezione tramite select custom nella sidebar sotto il logo Robin.dev, UX ispirata al workspace switcher Vercel: dropdown con lista repo, indicatore repo attiva, ricerca. Cambio repo aggiorna scope di backlog e sprint.
 
-**Cosa implementare:**
+FASE 1: Verificare tabella repositories e relazione con workspaces; come le task referenziano la repo; dove è la sidebar e stato globale; meccanismo "repo attiva" esistente; come backlog fetcha le task.
 
-Funzione `trackUserAction(userId, taskId, action, payload)`:
-- Scrive un evento user.* su task_events
-- Non può fallire silenziosamente — se la scrittura fallisce, logga ma non blocca l'operazione principale
-- Il record è immutabile per design (nessun endpoint di update/delete sugli eventi)
+FASE 2: Persistenza repo: URL param (?repo=slug) + localStorage; componente RepoSelector (usa Select TASK-UI-01, icona/avatar, ricerca se repo > 5); propagazione filtro; empty state "nessuna repo selezionata".
 
-Aggiungere il tracking ai Route Handler esistenti:
-- POST /api/tasks → dopo la creazione, emetti user.task.created con il payload della task
-- PATCH /api/tasks/{id} → dopo l'aggiornamento, emetti user.task.updated con diff dei campi (before/after)
-- DELETE /api/tasks/{id} → prima della cancellazione, emetti user.task.deleted
+FASE 3: Creare context/store repo attiva; RepoSelector in sidebar; modificare query backlog per repository_id; modificare pagina sprint; persistenza URL + localStorage; empty state.
 
-Aggiornamento visualizzazione nella timeline:
-- Gli eventi user.* devono essere visibili nella timeline della task
-- Distinguerli visivamente dagli eventi agent.*: usa un'icona persona o avatar invece dell'icona agente
-- Testo in linguaggio naturale per ogni tipo:
-  - user.task.created → "Task creata"
-  - user.task.updated → "Task modificata"
-  - user.task.deleted → "Task eliminata"
-  - user.rework.initiated → "Rework avviato dalla dashboard" (per uso futuro)
+FASE 4: Verificare filtro RLS; comportamento repo rimossa da localStorage; valutare indicatore "agente attivo"; URL ?repo=slug condivisibile.
 
-**Acceptance Criteria:**
-- Funzione trackUserAction implementata e importabile
-- Tracking aggiunto a POST, PATCH, DELETE /api/tasks
-- Eventi user.* visibili nella timeline con icona distinta
-- Il tracking non blocca mai l'operazione principale (try/catch interno)
-- TypeScript strict: zero errori di tipo
+Criteri di accettazione: RepoSelector in sidebar sotto logo (usa Select TASK-UI-01); nome repo attiva con icona; dropdown tutte le repo workspace; persistenza localStorage; /backlog filtra per repo; sprint filtra per repo; empty state se nessuna repo; URL ?repo=slug per link diretti.
 
 ## Required Steps (ALL mandatory — do not skip any)
 
-1. Run `git checkout -b feat/c8543089-8661-421e-b451-7227a2b2dd92` to create a new branch
+1. Sync with `main` and create a new branch from the latest upstream to avoid merge conflicts:
+   ```bash
+   git fetch origin
+   git checkout -b feat/7a6ca2e1-8ea5-45ab-9319-e23da0585dcb origin/main
+   ```
 2. Implement the task: create or edit files as needed
-3. Run `git add -A && git commit -m "<descriptive message>"`
-4. Run `git push origin feat/c8543089-8661-421e-b451-7227a2b2dd92`
-5. Open a Pull Request from `feat/c8543089-8661-421e-b451-7227a2b2dd92` to `main`
-6. Output the PR URL on the **very last line** of your response in this exact format:
-   `{"pr_url":"<url>","branch":"feat/c8543089-8661-421e-b451-7227a2b2dd92"}`
+3. Run lint and type-check — **both must pass before committing** (see `CLAUDE.md` for exact commands):
+   ```bash
+   # example — use the commands defined in CLAUDE.md for this project
+   npm run lint
+   npx tsc --noEmit
+   ```
+   Fix all errors and warnings before continuing. Do not commit with failing checks.
+4. Run `git add -A && git commit -m "<descriptive message>"`
+5. Run `git push origin feat/7a6ca2e1-8ea5-45ab-9319-e23da0585dcb`
+6. Open a Pull Request from `feat/7a6ca2e1-8ea5-45ab-9319-e23da0585dcb` to `main`
+7. After opening the PR, verify CI status checks pass:
+   ```bash
+   gh pr checks <PR_URL> --watch
+   ```
+   If any check fails (lint, typecheck, build), fix the issue, push to the same branch, and wait for CI again before reporting.
+8. Output the PR URL on the **very last line** of your response in this exact format:
+   `{"pr_url":"<url>","branch":"feat/7a6ca2e1-8ea5-45ab-9319-e23da0585dcb"}`
 
-> IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 3–6.
+> IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 4–8.
 > If you only output text without committing and creating a PR, the task will be considered failed.
 > If you cannot proceed, write your question to `BLOCKED.md` in the repository root instead.
 

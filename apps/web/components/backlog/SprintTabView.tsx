@@ -73,12 +73,6 @@ export function SprintTabView({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!activeSprint && <CreateSprintButton />}
-          <Link
-            href={`/sprints/${currentSprint.id}`}
-            className="rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent hover:border-muted-foreground/40 min-h-[44px] flex items-center"
-          >
-            Dettaglio sprint →
-          </Link>
         </div>
       </div>
 
