@@ -499,6 +499,23 @@ export type SprintControlJobPayload = {
 };
 
 // ---------------------------------------------------------------
+// Context documents (AI Brainstorm feature)
+// ---------------------------------------------------------------
+
+export type ContextDocument = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  content: string;
+  source_repo_full_name: string | null;
+  source_path: string | null;
+  source_sha: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ---------------------------------------------------------------
 // Task iterations — history of execution attempts
 // ---------------------------------------------------------------
 

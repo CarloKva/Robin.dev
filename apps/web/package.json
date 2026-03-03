@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@clerk/nextjs": "^6.9.9",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.2.1",
