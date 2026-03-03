@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useTransition, useMemo, useRef } from "react";
+import { useState, useTransition, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SprintSection } from "./SprintSection";
 import { TaskRow } from "./TaskRow";
 import { BulkActionBar } from "./BulkActionBar";
 import { ImportPreviewModal } from "./ImportPreviewModal";
+import { CreateTaskDrawer } from "./CreateTaskDrawer";
 import { parseRobinMd } from "@/lib/robin-md-parser";
+import { useKeyboardShortcut } from "@/lib/hooks/useKeyboardShortcut";
 import type { Task, Repository, Sprint, SprintWithTasks } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
@@ -49,7 +51,7 @@ export function BacklogPageClient({
     return s;
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isCreatingTask, startCreateTaskTransition] = useTransition();
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [creatingSprint, setCreatingSprint] = useState(false);
 
   // Import state
@@ -110,11 +112,8 @@ export function BacklogPageClient({
     }
   }
 
-  function handleCreateTask() {
-    startCreateTaskTransition(() => {
-      router.push("/tasks/new");
-    });
-  }
+  const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
+  useKeyboardShortcut("n", openDrawer);
 
   function handleImportClick() {
     setImportFileError(null);
@@ -199,6 +198,14 @@ export function BacklogPageClient({
           }}
         />
       )}
+
+      {/* Create task drawer */}
+      <CreateTaskDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onCreated={refresh}
+        repositories={repositories}
+      />
 
       {/* Search + filter bar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -335,8 +342,18 @@ export function BacklogPageClient({
                   {!search && !typeFilter && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       Premi{" "}
-                      <kbd className="rounded border border-border px-1 py-0.5 font-mono text-xs">N</kbd>{" "}
-                      per creare una task.
+                      <kbd
+                        className="rounded border border-border px-1 py-0.5 font-mono text-xs cursor-pointer hover:bg-accent"
+                        onClick={openDrawer}
+                      >N</kbd>{" "}
+                      o clicca{" "}
+                      <button
+                        onClick={openDrawer}
+                        className="underline hover:no-underline"
+                      >
+                        + Crea task
+                      </button>{" "}
+                      per aggiungere una task.
                     </p>
                   )}
                 </div>
@@ -357,12 +374,11 @@ export function BacklogPageClient({
               {/* + Crea */}
               <div className="border-t border-border">
                 <button
-                  onClick={handleCreateTask}
-                  disabled={isCreatingTask}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors disabled:opacity-50"
+                  onClick={openDrawer}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
                 >
                   <span>+</span>
-                  <span>{isCreatingTask ? "Caricamento..." : "Crea task"}</span>
+                  <span>Crea task</span>
                 </button>
               </div>
             </div>
