@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 import { SprintPlanningView } from "@/components/sprints/SprintPlanningView";
 import { ActiveSprintBoard } from "@/components/sprints/ActiveSprintBoard";
 import { SprintCard } from "@/components/sprints/SprintCard";
@@ -20,7 +22,21 @@ export function SprintTabView({
   pastSprints,
   workspaceId,
 }: SprintTabViewProps) {
-  const currentSprint = activeSprint ?? planningSprint;
+  const searchParams = useSearchParams();
+  const repositoryId = searchParams.get("repositoryId");
+
+  // Filter sprint tasks by selected repository if one is active
+  const filteredActiveSprint = useMemo(() => {
+    if (!activeSprint || !repositoryId) return activeSprint;
+    return { ...activeSprint, tasks: activeSprint.tasks.filter((t) => t.repository_id === repositoryId) };
+  }, [activeSprint, repositoryId]);
+
+  const filteredPlanningSprint = useMemo(() => {
+    if (!planningSprint || !repositoryId) return planningSprint;
+    return { ...planningSprint, tasks: planningSprint.tasks.filter((t) => t.repository_id === repositoryId) };
+  }, [planningSprint, repositoryId]);
+
+  const currentSprint = filteredActiveSprint ?? filteredPlanningSprint;
 
   if (!currentSprint) {
     return (
