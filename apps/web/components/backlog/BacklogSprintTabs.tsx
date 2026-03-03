@@ -95,7 +95,6 @@ export function BacklogSprintTabs({
         <SprintTabView
           activeSprint={activeSprint}
           planningSprint={planningSprint}
-          pastSprints={pastSprints}
           workspaceId={workspaceId}
         />
       )}

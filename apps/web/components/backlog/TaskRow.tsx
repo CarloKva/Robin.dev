@@ -170,7 +170,7 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
             onSelect={(v) => handleInlineChange("repository_id", v)}
             placeholder="repo"
             disabled={!isEditable}
-            triggerClassName="max-w-[100px] truncate"
+            triggerClassName="max-w-[100px] truncate bg-white"
           />
         )}
 
@@ -193,6 +193,7 @@ export function TaskRow({ task, selected, onSelectToggle, repositories, disabled
           onSelect={(v) => handleInlineChange("estimated_effort", v)}
           placeholder="—"
           disabled={!isEditable}
+          triggerClassName="bg-white"
         />
       </div>
     </div>

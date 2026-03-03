@@ -60,7 +60,7 @@ export function InlineSelect({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[120px] rounded-md border border-border bg-popover shadow-md">
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[120px] rounded-md border border-border bg-white shadow-md">
           {options.map((opt) => (
             <button
               key={opt.value}
