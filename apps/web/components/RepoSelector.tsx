@@ -62,7 +62,7 @@ export function RepoSelector({ repositories, activeRepoId, onSelect }: RepoSelec
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-popover shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border shadow-lg bg-white">
           {showSearch && (
             <div className="border-b border-border p-1.5">
               <div className="flex items-center gap-1.5 rounded border border-border px-2 py-1">
