@@ -247,7 +247,7 @@ function CreationModal({
       }}
     >
       <div
-        className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="relative w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">

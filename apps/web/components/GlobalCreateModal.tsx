@@ -402,7 +402,7 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
       {/* Backdrop */}
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
 
-      <div className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-popover shadow-2xl">
+      <div className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 pt-4 pb-0">
           <div className="flex gap-0">
