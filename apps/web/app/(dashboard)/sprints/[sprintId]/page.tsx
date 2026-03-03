@@ -3,8 +3,10 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getSprintWithTasks } from "@/lib/db/sprints";
+import { getAgentsForWorkspace } from "@/lib/db/agents";
+import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { SprintPlanningView } from "@/components/sprints/SprintPlanningView";
-import { ActiveSprintBoard } from "@/components/sprints/ActiveSprintBoard";
+import { SprintActiveTable } from "@/components/sprints/SprintActiveTable";
 import { SprintSummary } from "@/components/sprints/SprintSummary";
 import { CompleteSprintButton } from "@/components/sprints/CompleteSprintButton";
 
@@ -22,6 +24,14 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
   const { sprintId } = await params;
   const sprint = await getSprintWithTasks(sprintId, workspace.id);
   if (!sprint) notFound();
+
+  // Fetch agents and repositories for the active sprint table
+  const [agents, repositories] = sprint.status === "active"
+    ? await Promise.all([
+        getAgentsForWorkspace(workspace.id),
+        getRepositoriesForWorkspace(workspace.id),
+      ])
+    : [[], []];
 
   return (
     <div className="space-y-6">
@@ -50,10 +60,12 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
       )}
 
       {sprint.status === "active" && (
-        <ActiveSprintBoard
+        <SprintActiveTable
           initialTasks={sprint.tasks}
           sprintId={sprint.id}
           workspaceId={workspace.id}
+          agents={agents}
+          repositories={repositories}
         />
       )}
 
