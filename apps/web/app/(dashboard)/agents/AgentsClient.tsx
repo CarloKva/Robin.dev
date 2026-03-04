@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -282,7 +283,7 @@ function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 p-12 text-center">
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <span className="text-2xl">🤖</span>
+        <Bot className="h-6 w-6 text-muted-foreground" />
       </div>
       <h3 className="text-sm font-semibold text-foreground">Nessun agente creato</h3>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">

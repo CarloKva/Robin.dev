@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { ContextDocument } from "@robin/shared-types";
 
 interface ContextDocCardProps {
@@ -48,9 +49,10 @@ export function ContextDocCard({ doc, deleting, onEdit, onDelete }: ContextDocCa
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
+                className="rounded p-1 text-muted-foreground hover:bg-accent transition-colors"
+                aria-label="Annulla"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </>
           ) : (

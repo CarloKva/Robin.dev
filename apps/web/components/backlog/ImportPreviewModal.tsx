@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Repository } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
@@ -121,7 +122,7 @@ export function ImportPreviewModal({
             className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="Chiudi"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -160,8 +161,8 @@ export function ImportPreviewModal({
           {/* Warnings for parse errors */}
           {errors.length > 0 && (
             <div className="rounded-lg border border-yellow-300 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20 px-4 py-3">
-              <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-300 mb-2">
-                ⚠ {errors.length} {errors.length === 1 ? "task saltata" : "task saltate"} (dati non validi)
+              <p className="flex items-center gap-1 text-xs font-semibold text-yellow-800 dark:text-yellow-300 mb-2">
+                <AlertTriangle className="h-3.5 w-3.5" /> {errors.length} {errors.length === 1 ? "task saltata" : "task saltate"} (dati non validi)
               </p>
               <ul className="space-y-1.5">
                 {errors.map((err, i) => (
@@ -224,8 +225,8 @@ export function ImportPreviewModal({
                               )}
                             </span>
                           ) : (
-                            <span className="rounded px-1.5 py-0.5 text-xs bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">
-                              ⚠ repo mancante
+                            <span className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">
+                              <AlertTriangle className="h-3 w-3" /> repo mancante
                             </span>
                           )}
                           {task.agent !== undefined && (

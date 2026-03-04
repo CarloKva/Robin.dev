@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { Sparkles, X, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { parseRobinMd } from "@/lib/robin-md-parser";
 import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
@@ -182,7 +183,7 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-5 py-4 shrink-0">
             <div>
-              <h2 className="font-semibold text-base">✦ Genera task con AI</h2>
+              <h2 className="flex items-center gap-1.5 font-semibold text-base"><Sparkles className="h-4 w-4" /> Genera task con AI</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Descrivi cosa vuoi implementare — Robin genererà le task.
               </p>
@@ -192,7 +193,7 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
               className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               aria-label="Chiudi"
             >
-              ✕
+              <X className="h-4 w-4" />
             </button>
           </div>
 
@@ -204,7 +205,7 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                 {messages.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                    <p className="text-4xl mb-3">✦</p>
+                    <Sparkles className="h-10 w-10 text-muted-foreground mb-3" />
                     <p className="text-sm font-medium">Inizia descrivendo la feature o il problema</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Es. &quot;Voglio aggiungere l&apos;autenticazione con Google al progetto&quot;
@@ -250,9 +251,10 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
                           originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
                         });
                       }}
-                      className="rounded-lg border border-primary/40 bg-primary/10 px-3.5 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3.5 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
                     >
-                      📋 Vedi e importa task
+                      <ClipboardList className="h-4 w-4" />
+                      Vedi e importa task
                     </button>
                   </div>
                 )}

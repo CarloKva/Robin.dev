@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo, useRef, useCallback } from "react";
+import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SprintSection } from "./SprintSection";
@@ -228,9 +229,7 @@ export function BacklogPageClient({
       {/* Search + filter bar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative">
-          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-            🔍
-          </span>
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             value={search}
