@@ -3,7 +3,6 @@
 import { useEffect, useState, useTransition } from "react";
 import { Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AgentCreationForm } from "@/components/agents/AgentCreationForm";
 import { cn } from "@/lib/utils";
@@ -135,11 +134,10 @@ function AgentCard({ agent }: { agent: AgentRow }) {
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={agentAvatarUrl(agent)}
             alt={agent.name}
-            width={32}
-            height={32}
             className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
           />
           <div className="min-w-0">

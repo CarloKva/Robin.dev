@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { Dices } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { Repository } from "@robin/shared-types";
 
@@ -139,11 +138,10 @@ export function AgentCreationForm({
         <div className="flex items-center gap-2">
           {/* Avatar preview */}
           {previewAvatarUrl && (
-            <Image
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
               src={previewAvatarUrl}
               alt="Avatar anteprima"
-              width={32}
-              height={32}
               className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
             />
           )}
