@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/backlog", label: "Backlog", icon: ListTodo },
+  { href: "/backlog", label: "Planning", icon: ListTodo },
   { href: "/context", label: "Contesto", icon: FileText },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/reports", label: "Report", icon: BarChart2 },
