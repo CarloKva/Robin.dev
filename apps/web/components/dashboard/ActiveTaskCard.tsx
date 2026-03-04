@@ -11,7 +11,7 @@ const phaseConfig: Record<
   { label: string; class: string }
 > = {
   analysis: { label: "Analysis", class: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400" },
-  design: { label: "Design", class: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  design: { label: "Design", class: "bg-gray-100 text-gray-700 dark:bg-gray-800/30 dark:text-gray-400" },
   write: { label: "Write", class: "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400" },
   proof: { label: "Proof", class: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
 };

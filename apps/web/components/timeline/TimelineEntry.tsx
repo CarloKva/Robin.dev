@@ -49,14 +49,14 @@ const EVENT_META: Record<TaskEventType, EventMeta> = {
   "agent.blocked":         { icon: AlertCircle,    iconClass: "text-amber-600",   ringClass: "bg-amber-100",   key: true  },
   "human.approved":        { icon: ThumbsUp,       iconClass: "text-green-600",   ringClass: "bg-green-100",   key: true  },
   "human.rejected":        { icon: ThumbsDown,     iconClass: "text-red-600",     ringClass: "bg-red-100",     key: true  },
-  "human.commented":       { icon: MessageSquare,  iconClass: "text-purple-600",  ringClass: "bg-purple-100",  key: false },
+  "human.commented":       { icon: MessageSquare,  iconClass: "text-gray-600",    ringClass: "bg-gray-100",    key: false },
   "task.completed":               { icon: CheckCheck,     iconClass: "text-emerald-700", ringClass: "bg-emerald-100", key: true  },
   "task.failed":                  { icon: XCircle,        iconClass: "text-red-700",     ringClass: "bg-red-100",     key: true  },
   "task.pr_closed_without_merge": { icon: XCircle,        iconClass: "text-orange-600",  ringClass: "bg-orange-100",  key: true  },
   "user.task.created":            { icon: UserPlus,       iconClass: "text-blue-700",    ringClass: "bg-blue-100",    key: false },
   "user.task.updated":            { icon: UserPen,        iconClass: "text-amber-700",   ringClass: "bg-amber-100",   key: false },
   "user.task.deleted":            { icon: UserX,          iconClass: "text-red-700",     ringClass: "bg-red-100",     key: true  },
-  "user.rework.initiated":        { icon: RotateCcw,      iconClass: "text-violet-700",  ringClass: "bg-violet-100",  key: true  },
+  "user.rework.initiated":        { icon: RotateCcw,      iconClass: "text-gray-700",    ringClass: "bg-gray-100",    key: true  },
 };
 
 const DEFAULT_META: EventMeta = {

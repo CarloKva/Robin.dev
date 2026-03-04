@@ -25,7 +25,7 @@ const TYPE_LABEL: Record<ParsedTask["type"], string> = {
 const TYPE_CLASS: Record<ParsedTask["type"], string> = {
   feature: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   bug: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  spike: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  spike: "bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-300",
   chore: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
 };
 

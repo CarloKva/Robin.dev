@@ -16,7 +16,7 @@ const PRIORITY_OPTIONS = [
 const TYPE_OPTIONS = [
   { value: "bug", label: "Bug", className: "text-red-700 bg-red-100 dark:bg-red-900/30" },
   { value: "feature", label: "Feature", className: "text-blue-700 bg-blue-100 dark:bg-blue-900/30" },
-  { value: "refactor", label: "Refactor", className: "text-purple-700 bg-purple-100 dark:bg-purple-900/30" },
+  { value: "refactor", label: "Refactor", className: "text-gray-700 bg-gray-100 dark:bg-gray-800/30" },
   { value: "chore", label: "Chore", className: "text-slate-600 bg-slate-100 dark:bg-slate-800" },
   { value: "docs", label: "Docs", className: "text-green-700 bg-green-100 dark:bg-green-900/30" },
   { value: "accessibility", label: "A11y", className: "text-cyan-700 bg-cyan-100 dark:bg-cyan-900/30" },

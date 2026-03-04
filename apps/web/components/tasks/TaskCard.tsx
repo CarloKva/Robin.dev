@@ -65,8 +65,8 @@ const statusConfig: Record<
   },
   in_review: {
     label: "In review",
-    badge: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    border: "border-l-purple-400",
+    badge: "bg-gray-100 text-gray-700 dark:bg-gray-800/30 dark:text-gray-400",
+    border: "border-l-gray-400",
   },
   rework: {
     label: "Rework",
@@ -99,7 +99,7 @@ const typeConfig: Record<
   bug: { label: "Bug", class: "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400" },
   feature: { label: "Feature", class: "bg-brand-50 text-brand-600 dark:bg-brand-950/30 dark:text-brand-400" },
   docs: { label: "Docs", class: "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400" },
-  refactor: { label: "Refactor", class: "bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400" },
+  refactor: { label: "Refactor", class: "bg-gray-50 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400" },
   chore: { label: "Chore", class: "bg-neutral-50 text-neutral-600 dark:bg-neutral-950/30 dark:text-neutral-400" },
   accessibility: { label: "A11y", class: "bg-cyan-50 text-cyan-600 dark:bg-cyan-950/30 dark:text-cyan-400" },
   security: { label: "Security", class: "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400" },
