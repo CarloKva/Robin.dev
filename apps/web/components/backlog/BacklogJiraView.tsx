@@ -611,7 +611,7 @@ export function BacklogJiraView({
       </div>
 
       {/* ── Divider ────────────────────────────────────────────────────────── */}
-      <div className="my-3 flex items-center gap-3">
+      <div className="my-6 py-2 flex items-center gap-3">
         <div className="flex-1 border-t border-border" />
         <ArrowUpDown className="h-4 w-4 text-muted-foreground select-none" aria-label="Separa sprint da backlog" />
         <div className="text-xs text-muted-foreground tabular-nums">
