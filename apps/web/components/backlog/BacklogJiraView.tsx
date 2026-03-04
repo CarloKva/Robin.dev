@@ -7,7 +7,7 @@ import {
   useCallback,
   useEffect,
 } from "react";
-import { Search, Sparkles, X, ChevronRight, ArrowUpDown } from "lucide-react";
+import { Search, X, ChevronRight, ArrowUpDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
@@ -131,7 +131,6 @@ export function BacklogJiraView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [creatingSprint, setCreatingSprint] = useState(false);
-  const [isBrainstormOpen, setIsBrainstormOpen] = useState(false);
 
   // DnD state
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -336,13 +335,10 @@ export function BacklogJiraView({
 
   return (
     <div className="space-y-0">
-      {isBrainstormOpen && (
-        <BrainstormModal
-          repositories={repositories}
-          onClose={() => setIsBrainstormOpen(false)}
-          onImported={() => { setIsBrainstormOpen(false); refresh(); }}
-        />
-      )}
+      <BrainstormModal
+        repositories={repositories}
+        onImported={refresh}
+      />
 
       <CreateTaskDrawer
         isOpen={isDrawerOpen}
@@ -386,14 +382,6 @@ export function BacklogJiraView({
         )}
 
         <div className="flex-1" />
-
-        <button
-          onClick={() => setIsBrainstormOpen(true)}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Genera task con AI
-        </button>
       </div>
 
       {/* ── Sprint sections ────────────────────────────────────────────────── */}

@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, ClipboardList } from "lucide-react";
-import Link from "next/link";
+import { Sparkles, X } from "lucide-react";
 import { parseRobinMd } from "@/lib/robin-md-parser";
 import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
-import { ImportPreviewModal } from "./ImportPreviewModal";
-import type { ContextDocument, Repository } from "@robin/shared-types";
+import { ImportPreviewCard } from "./ImportPreviewCard";
+import type { Repository } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
 interface Message {
@@ -14,52 +13,32 @@ interface Message {
   content: string;
 }
 
-interface BrainstormModalProps {
+interface BrainstormWidgetProps {
   repositories: Repository[];
-  onClose: () => void;
   onImported: () => void;
 }
 
-type ImportModal = {
+type ImportData = {
   tasks: ParsedTask[];
   errors: ParseError[];
   truncated: boolean;
   originalCount: number;
 };
 
-export function BrainstormModal({ repositories, onClose, onImported }: BrainstormModalProps) {
+export function BrainstormModal({ repositories, onImported }: BrainstormWidgetProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [contextDocs, setContextDocs] = useState<ContextDocument[]>([]);
-  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
-  const [loadingDocs, setLoadingDocs] = useState(true);
-  const [importModal, setImportModal] = useState<ImportModal | null>(null);
+  const [importData, setImportData] = useState<ImportData | null>(null);
+  const [imported, setImported] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load context docs on mount
   useEffect(() => {
-    fetch("/api/context")
-      .then((r) => r.json())
-      .then((data: { docs: ContextDocument[] }) => setContextDocs(data.docs ?? []))
-      .catch(() => undefined)
-      .finally(() => setLoadingDocs(false));
-  }, []);
-
-  // Auto-scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  function toggleDocId(id: string) {
-    setSelectedDocIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isOpen]);
 
   async function handleSend() {
     const text = input.trim();
@@ -70,8 +49,9 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
     setMessages(newMessages);
     setInput("");
     setStreaming(true);
+    setImportData(null);
+    setImported(false);
 
-    // Placeholder for assistant response
     const assistantPlaceholder: Message = { role: "assistant", content: "" };
     setMessages([...newMessages, assistantPlaceholder]);
 
@@ -79,10 +59,7 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
       const res = await fetch("/api/ai/brainstorm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages,
-          contextDocIds: [...selectedDocIds],
-        }),
+        body: JSON.stringify({ messages: newMessages, contextDocIds: [] }),
       });
 
       if (!res.ok || !res.body) {
@@ -132,12 +109,11 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
         });
       }
 
-      // Check for generated tasks in the final response
       const tasksContent = extractGeneratedTasks(accumulated);
       if (tasksContent) {
         const result = parseRobinMd(tasksContent);
         if (result.tasks.length > 0 || result.errors.length > 0) {
-          setImportModal({
+          setImportData({
             tasks: result.tasks,
             errors: result.errors,
             truncated: result.truncated === true,
@@ -148,10 +124,7 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
     } catch {
       setMessages((prev) => {
         const next = [...prev];
-        next[next.length - 1] = {
-          role: "assistant",
-          content: "Errore di rete. Riprova.",
-        };
+        next[next.length - 1] = { role: "assistant", content: "Errore di rete. Riprova." };
         return next;
       });
     } finally {
@@ -166,30 +139,19 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
     }
   }
 
-  // Find the last assistant message to see if it has tasks
-  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
-  const lastMsgHasTasks = lastAssistantMsg
-    ? extractGeneratedTasks(lastAssistantMsg.content) !== null
-    : false;
-
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-        {/* Backdrop */}
-        <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
-
-        {/* Modal */}
-        <div className="relative z-10 mx-0 sm:mx-4 w-full sm:max-w-4xl max-h-[95vh] flex flex-col rounded-t-xl sm:rounded-xl border border-border bg-card shadow-2xl">
+      {/* Chat panel */}
+      {isOpen && (
+        <div className="fixed bottom-20 right-4 z-50 flex w-[400px] max-h-[560px] flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border px-5 py-4 shrink-0">
-            <div>
-              <h2 className="flex items-center gap-1.5 font-semibold text-base"><Sparkles className="h-4 w-4" /> Genera task con AI</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Descrivi cosa vuoi implementare — Robin genererà le task.
-              </p>
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="text-sm font-semibold">Genera task con AI</span>
             </div>
             <button
-              onClick={onClose}
+              onClick={() => setIsOpen(false)}
               className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               aria-label="Chiudi"
             >
@@ -197,179 +159,101 @@ export function BrainstormModal({ repositories, onClose, onImported }: Brainstor
             </button>
           </div>
 
-          {/* Body: two-panel layout */}
-          <div className="flex flex-1 min-h-0 gap-0 overflow-hidden">
-            {/* Chat panel */}
-            <div className="flex flex-col flex-1 min-w-0">
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-                {messages.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                    <Sparkles className="h-10 w-10 text-muted-foreground mb-3" />
-                    <p className="text-sm font-medium">Inizia descrivendo la feature o il problema</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Es. &quot;Voglio aggiungere l&apos;autenticazione con Google al progetto&quot;
-                    </p>
-                  </div>
-                )}
-
-                {messages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-accent text-accent-foreground"
-                      }`}
-                    >
-                      {msg.content || (streaming && i === messages.length - 1 ? (
-                        <span className="inline-flex gap-1 items-center text-muted-foreground">
-                          <span className="animate-bounce delay-0">·</span>
-                          <span className="animate-bounce delay-75">·</span>
-                          <span className="animate-bounce delay-150">·</span>
-                        </span>
-                      ) : "")}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Import button after last AI message with tasks */}
-                {!streaming && lastMsgHasTasks && importModal === null && (
-                  <div className="flex justify-start">
-                    <button
-                      onClick={() => {
-                        const tasksContent = extractGeneratedTasks(lastAssistantMsg!.content);
-                        if (!tasksContent) return;
-                        const result = parseRobinMd(tasksContent);
-                        setImportModal({
-                          tasks: result.tasks,
-                          errors: result.errors,
-                          truncated: result.truncated === true,
-                          originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
-                        });
-                      }}
-                      className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3.5 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
-                    >
-                      <ClipboardList className="h-4 w-4" />
-                      Vedi e importa task
-                    </button>
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+                <Sparkles className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm font-medium">Descrivi la feature o il problema</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Es. &quot;Aggiungi autenticazione con Google&quot;
+                </p>
               </div>
+            )}
 
-              {/* Input area */}
-              <div className="border-t border-border px-4 py-3 shrink-0">
-                <div className="flex gap-2 items-end">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    disabled={streaming}
-                    placeholder="Descrivi cosa vuoi implementare… (Invio per inviare, Shift+Invio per a-capo)"
-                    rows={2}
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-                  />
-                  <button
-                    onClick={() => void handleSend()}
-                    disabled={streaming || !input.trim()}
-                    className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
-                  >
-                    {streaming ? "…" : "Invia"}
-                  </button>
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-accent text-accent-foreground"
+                  }`}
+                >
+                  {msg.content || (streaming && i === messages.length - 1 ? (
+                    <span className="inline-flex gap-1 items-center text-muted-foreground">
+                      <span className="animate-bounce">·</span>
+                      <span className="animate-bounce delay-75">·</span>
+                      <span className="animate-bounce delay-150">·</span>
+                    </span>
+                  ) : "")}
                 </div>
               </div>
-            </div>
+            ))}
 
-            {/* Context panel */}
-            <div className="hidden sm:flex flex-col w-64 shrink-0 border-l border-border">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Contesto
-                </span>
-                {selectedDocIds.size > 0 && (
-                  <span className="rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5 font-medium">
-                    {selectedDocIds.size} selezionati
-                  </span>
-                )}
-              </div>
+            {/* Inline import card */}
+            {!streaming && importData !== null && !imported && (
+              <ImportPreviewCard
+                tasks={importData.tasks}
+                errors={importData.errors}
+                truncated={importData.truncated}
+                originalCount={importData.originalCount}
+                repositories={repositories}
+                onDismiss={() => setImportData(null)}
+                onImported={() => {
+                  setImported(true);
+                  setImportData(null);
+                  onImported();
+                }}
+              />
+            )}
 
-              <div className="flex-1 overflow-y-auto px-3 py-2">
-                {loadingDocs && (
-                  <p className="text-xs text-muted-foreground animate-pulse px-1 py-2">Caricamento…</p>
-                )}
-                {!loadingDocs && contextDocs.length === 0 && (
-                  <div className="px-1 py-2 text-center">
-                    <p className="text-xs text-muted-foreground">Nessun documento di contesto.</p>
-                    <Link
-                      href="/context"
-                      target="_blank"
-                      className="text-xs text-primary underline hover:no-underline mt-1 block"
-                    >
-                      Aggiungi documenti →
-                    </Link>
-                  </div>
-                )}
-                {!loadingDocs && contextDocs.map((doc) => (
-                  <label
-                    key={doc.id}
-                    className="flex items-start gap-2 rounded-md px-2 py-2 cursor-pointer hover:bg-accent/40 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedDocIds.has(doc.id)}
-                      onChange={() => toggleDocId(doc.id)}
-                      className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium leading-snug line-clamp-2">{doc.title}</p>
-                      {doc.source_path && (
-                        <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
-                          {doc.source_path}
-                        </p>
-                      )}
-                    </div>
-                  </label>
-                ))}
-              </div>
-
-              {contextDocs.length > 0 && (
-                <div className="px-3 py-2 border-t border-border shrink-0">
-                  <Link
-                    href="/context"
-                    target="_blank"
-                    className="text-xs text-muted-foreground hover:text-foreground underline hover:no-underline"
-                  >
-                    Gestisci documenti →
-                  </Link>
+            {imported && (
+              <div className="flex justify-start">
+                <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">
+                  Task importate nel backlog.
                 </div>
-              )}
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="shrink-0 border-t border-border px-3 py-2.5">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={streaming}
+                placeholder="Descrivi cosa vuoi implementare… (Invio per inviare)"
+                rows={2}
+                className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+              />
+              <button
+                onClick={() => void handleSend()}
+                disabled={streaming || !input.trim()}
+                className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {streaming ? "…" : "Invia"}
+              </button>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Import preview modal */}
-      {importModal !== null && (
-        <ImportPreviewModal
-          tasks={importModal.tasks}
-          errors={importModal.errors}
-          truncated={importModal.truncated}
-          originalCount={importModal.originalCount}
-          repositories={repositories}
-          onClose={() => setImportModal(null)}
-          onImported={() => {
-            setImportModal(null);
-            onImported();
-            onClose();
-          }}
-        />
       )}
+
+      {/* Floating trigger button */}
+      <button
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-colors hover:bg-foreground/90"
+        aria-label={isOpen ? "Chiudi AI brainstorm" : "Apri AI brainstorm"}
+      >
+        {isOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+      </button>
     </>
   );
 }
