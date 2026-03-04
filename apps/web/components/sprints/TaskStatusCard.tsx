@@ -7,7 +7,7 @@ import type { Task } from "@robin/shared-types";
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   queued: { label: "In coda", className: "text-slate-500 bg-slate-100 dark:bg-slate-800" },
   in_progress: { label: "In esecuzione", className: "text-blue-600 bg-blue-100 dark:bg-blue-900/30 animate-pulse" },
-  in_review: { label: "In review", className: "text-purple-600 bg-purple-100 dark:bg-purple-900/30" },
+  in_review: { label: "In review", className: "text-gray-700 bg-gray-100 dark:bg-gray-800/30" },
   rework: { label: "Rework", className: "text-orange-600 bg-orange-100 dark:bg-orange-900/30" },
   done: { label: "Completata", className: "text-green-600 bg-green-100 dark:bg-green-900/30" },
   completed: { label: "Completata", className: "text-green-600 bg-green-100 dark:bg-green-900/30" },

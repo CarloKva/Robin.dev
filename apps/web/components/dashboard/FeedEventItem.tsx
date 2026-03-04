@@ -16,8 +16,8 @@ const eventDotClass: Partial<Record<TaskEventType, string>> = {
   "agent.blocked": "bg-amber-500",
   "human.approved": "bg-emerald-400",
   "human.rejected": "bg-red-400",
-  "agent.phase.started": "bg-purple-400",
-  "agent.phase.completed": "bg-purple-300",
+  "agent.phase.started": "bg-gray-500",
+  "agent.phase.completed": "bg-gray-400",
   "task.state.changed": "bg-slate-400",
 };
 

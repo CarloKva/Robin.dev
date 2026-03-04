@@ -11,8 +11,8 @@
     --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 9%;
-    /* Brand primary: violet-500 */
-    --primary: 262 80% 63%;
+    /* Brand primary: black */
+    --primary: 0 0% 9%;
     --primary-foreground: 0 0% 100%;
     /* Secondary surface */
     --secondary: 0 0% 96%;
@@ -20,16 +20,16 @@
     /* Muted surface */
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 32%;
-    /* Accent: violet for hover states */
-    --accent: 262 80% 96%;
-    --accent-foreground: 262 80% 30%;
+    /* Accent: neutral gray for hover states */
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 9%;
     /* Destructive: red-500 */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     /* Borders */
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 262 80% 63%;
+    --ring: 0 0% 9%;
     --radius: 0.5rem;
   }
 
@@ -41,8 +41,8 @@
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 7%;
     --popover-foreground: 0 0% 98%;
-    /* Brand primary: violet-400 (più chiaro su sfondo scuro) */
-    --primary: 262 70% 70%;
+    /* Brand primary: white (su sfondo scuro) */
+    --primary: 0 0% 98%;
     --primary-foreground: 0 0% 9%;
     /* Secondary surface */
     --secondary: 0 0% 9%;
@@ -50,16 +50,16 @@
     /* Muted surface */
     --muted: 0 0% 9%;
     --muted-foreground: 0 0% 64%;
-    /* Accent: violet scuro per hover */
-    --accent: 262 40% 15%;
-    --accent-foreground: 262 70% 80%;
+    /* Accent: neutro scuro per hover */
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 90%;
     /* Destructive: red scuro */
     --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
     /* Borders */
     --border: 0 0% 15%;
     --input: 0 0% 15%;
-    --ring: 262 70% 70%;
+    --ring: 0 0% 98%;
   }
 }
 
