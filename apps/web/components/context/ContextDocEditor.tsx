@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { ContextDocument } from "@robin/shared-types";
 
 interface ContextDocEditorProps {
@@ -61,7 +62,7 @@ export function ContextDocEditor({ doc, onClose, onSaved }: ContextDocEditorProp
             className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             aria-label="Chiudi"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </div>
 

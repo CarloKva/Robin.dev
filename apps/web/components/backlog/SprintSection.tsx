@@ -261,7 +261,7 @@ export function SprintSection({
           aria-expanded={isExpanded}
           aria-label={isExpanded ? "Comprimi sprint" : "Espandi sprint"}
         >
-          <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isExpanded ? "rotate-90" : "")} />
+          <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0", isExpanded ? "rotate-90" : "")} />
         </button>
 
         {/* Sprint name — inline editable */}

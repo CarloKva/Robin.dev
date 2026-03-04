@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
 } from "react";
+import { Search, Sparkles, X, ChevronRight, ArrowUpDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
@@ -17,7 +18,7 @@ import { useKeyboardShortcut } from "@/lib/hooks/useKeyboardShortcut";
 import type { Task, Repository, Sprint, SprintWithTasks } from "@robin/shared-types";
 
 const TASK_TYPES = [
-  { value: "", label: "Tipo ▾" },
+  { value: "", label: "Tipo" },
   { value: "bug", label: "Bug" },
   { value: "feature", label: "Feature" },
   { value: "refactor", label: "Refactor" },
@@ -353,9 +354,7 @@ export function BacklogJiraView({
       {/* ── Filter bar ─────────────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative">
-          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-            🔍
-          </span>
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             value={search}
@@ -390,9 +389,10 @@ export function BacklogJiraView({
 
         <button
           onClick={() => setIsBrainstormOpen(true)}
-          className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+          className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
         >
-          ✦ Genera task con AI
+          <Sparkles className="h-3.5 w-3.5" />
+          Genera task con AI
         </button>
       </div>
 
@@ -452,9 +452,7 @@ export function BacklogJiraView({
                     className="flex items-center gap-2 min-w-0 flex-1 text-left"
                     aria-expanded={isExpanded}
                   >
-                    <span className={cn("text-xs text-muted-foreground transition-transform shrink-0", isExpanded ? "rotate-90" : "")}>
-                      ▶
-                    </span>
+                    <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0", isExpanded ? "rotate-90" : "")} />
                     <span className="font-semibold text-sm truncate">{sprint.name}</span>
                     {isActive && startedDate && (
                       <span className="text-xs text-muted-foreground shrink-0">avviato {startedDate}</span>
@@ -592,10 +590,10 @@ export function BacklogJiraView({
                               {isPlanning && (
                                 <button
                                   onClick={() => void handleRemoveFromSprint(task.id, sprint.id)}
-                                  className="shrink-0 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                  className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
                                   aria-label="Rimuovi dallo sprint"
                                 >
-                                  ✕
+                                  <X className="h-3.5 w-3.5" />
                                 </button>
                               )}
                             </div>
@@ -627,7 +625,7 @@ export function BacklogJiraView({
       {/* ── Divider ────────────────────────────────────────────────────────── */}
       <div className="my-3 flex items-center gap-3">
         <div className="flex-1 border-t border-border" />
-        <span className="text-muted-foreground text-sm select-none" title="Separa sprint da backlog">⇕</span>
+        <ArrowUpDown className="h-4 w-4 text-muted-foreground select-none" aria-label="Separa sprint da backlog" />
         <div className="text-xs text-muted-foreground tabular-nums">
           {localBacklog.length} {localBacklog.length === 1 ? "ticket" : "ticket"} · Stima: {
             localBacklog.reduce((sum, t) => {
@@ -666,9 +664,7 @@ export function BacklogJiraView({
             onClick={() => toggleExpand("backlog")}
             className="flex items-center gap-2 min-w-0 flex-1 text-left"
           >
-            <span className={cn("text-xs text-muted-foreground transition-transform shrink-0", expanded.has("backlog") ? "rotate-90" : "")}>
-              ▶
-            </span>
+            <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0", expanded.has("backlog") ? "rotate-90" : "")} />
             <span className="font-semibold text-sm">Backlog</span>
             <span className="text-xs text-muted-foreground">
               ({filteredBacklog.length} {filteredBacklog.length === 1 ? "ticket" : "ticket"})

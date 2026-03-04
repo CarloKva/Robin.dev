@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -240,7 +241,7 @@ export function CreateTaskDrawer({
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             aria-label="Chiudi"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -307,13 +308,13 @@ export function CreateTaskDrawer({
                   {...register("type")}
                   disabled={isSubmitting}
                 >
-                  <option value="bug">🐛 Bug</option>
-                  <option value="feature">✨ Feature</option>
-                  <option value="docs">📝 Docs</option>
-                  <option value="refactor">♻️ Refactor</option>
-                  <option value="chore">🔧 Chore</option>
-                  <option value="accessibility">♿ Accessibility</option>
-                  <option value="security">🔒 Security</option>
+                  <option value="bug">Bug</option>
+                  <option value="feature">Feature</option>
+                  <option value="docs">Docs</option>
+                  <option value="refactor">Refactor</option>
+                  <option value="chore">Chore</option>
+                  <option value="accessibility">Accessibility</option>
+                  <option value="security">Security</option>
                 </select>
                 <FieldError message={errors.type?.message} />
               </div>

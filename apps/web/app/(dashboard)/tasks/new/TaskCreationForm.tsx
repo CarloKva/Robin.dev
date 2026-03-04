@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,14 +131,14 @@ function PreflightIndicator({ state }: { state: PreflightState }) {
   }
   if (state.status === "ok") {
     return (
-      <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-        ✓ Accessibile — {state.full_name}
+      <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+        <Check className="h-3.5 w-3.5" /> Accessibile — {state.full_name}
       </p>
     );
   }
   return (
-    <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">
-      ✗ {state.error}
+    <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+      <X className="h-3.5 w-3.5" /> {state.error}
     </p>
   );
 }
@@ -439,13 +440,13 @@ function FormPanel({
             {...register("type")}
             disabled={isSubmitting}
           >
-            <option value="bug">🐛 Bug</option>
-            <option value="feature">✨ Feature</option>
-            <option value="docs">📝 Docs</option>
-            <option value="refactor">♻️ Refactor</option>
-            <option value="chore">🔧 Chore</option>
-            <option value="accessibility">♿ Accessibility</option>
-            <option value="security">🔒 Security</option>
+            <option value="bug">Bug</option>
+            <option value="feature">Feature</option>
+            <option value="docs">Docs</option>
+            <option value="refactor">Refactor</option>
+            <option value="chore">Chore</option>
+            <option value="accessibility">Accessibility</option>
+            <option value="security">Security</option>
           </select>
           <FieldError message={errors.type?.message} />
         </div>

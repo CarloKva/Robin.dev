@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AgentProvisioningStatus } from "@robin/shared-types";
@@ -134,8 +135,8 @@ function StepItem({
           {status === "in_progress" && (
             <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
           )}
-          {status === "error" && "✕"}
-          {status === "pending" && "·"}
+          {status === "error" && <X className="h-3.5 w-3.5" />}
+          {status === "pending" && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
         </div>
         {!isLast && (
           <div

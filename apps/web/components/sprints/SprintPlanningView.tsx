@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -180,10 +181,10 @@ export function SprintPlanningView({ sprint, tasks: initialTasks }: SprintPlanni
 
               <button
                 onClick={() => void removeFromSprint(task.id)}
-                className="shrink-0 text-xs text-muted-foreground hover:text-destructive"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
                 aria-label="Rimuovi dallo sprint"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
