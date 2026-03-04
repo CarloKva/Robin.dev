@@ -24,7 +24,7 @@ export default async function BacklogPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Backlog</h1>
+          <h1 className="text-2xl font-bold">Planning</h1>
           <p className="text-sm text-muted-foreground">
             Gestisci sprint e backlog in un unico posto.
           </p>

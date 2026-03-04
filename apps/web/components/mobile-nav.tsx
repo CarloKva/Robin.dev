@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ListTodo, Zap, Settings, Loader2 } from "lucide-react";
 
 const navItems = [
-  { href: "/backlog", label: "Backlog", icon: ListTodo },
+  { href: "/backlog", label: "Planning", icon: ListTodo },
   { href: "/sprints", label: "Sprint", icon: Zap },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

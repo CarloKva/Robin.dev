@@ -44,7 +44,7 @@ export function RepoSelector({ repositories, activeRepoId, onSelect, align = "le
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+        className="flex w-full items-center justify-between gap-1.5 rounded-md border border-border px-2 py-1.5 text-sm transition-colors hover:bg-accent"
         aria-label="Seleziona repository"
       >
         <div className="flex min-w-0 items-center gap-1.5">
