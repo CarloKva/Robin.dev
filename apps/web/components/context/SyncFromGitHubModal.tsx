@@ -94,7 +94,7 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
-      <div className="relative z-10 mx-0 sm:mx-4 w-full sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-xl sm:rounded-xl border border-border bg-card shadow-2xl">
+      <div className="relative z-10 mx-0 sm:mx-4 w-full sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-xl sm:rounded-xl border border-border bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4 shrink-0">
           <h2 className="font-semibold text-base">Sincronizza da GitHub</h2>
