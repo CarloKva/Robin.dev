@@ -7,6 +7,7 @@ import { getAgentsForWorkspace } from "@/lib/db/agents";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { SprintPlanningView } from "@/components/sprints/SprintPlanningView";
 import { SprintActiveTable } from "@/components/sprints/SprintActiveTable";
+import { SprintNameInlineEditor } from "@/components/sprints/SprintNameInlineEditor";
 
 interface SprintDetailPageProps {
   params: Promise<{ sprintId: string }>;
@@ -41,7 +42,9 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
               ← Backlog / Sprint
             </Link>
           </div>
-          <h1 className="mt-1 truncate text-2xl font-bold">{sprint.name}</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            <SprintNameInlineEditor sprintId={sprint.id} initialName={sprint.name} />
+          </h1>
           {sprint.goal && (
             <p className="mt-0.5 text-sm text-muted-foreground italic">&ldquo;{sprint.goal}&rdquo;</p>
           )}

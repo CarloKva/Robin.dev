@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import React, { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { Bug, Sparkles, RefreshCw, Settings, FileText, Accessibility, Lock, ChevronUp, ChevronDown, ChevronRight, X } from "lucide-react";
 import type { Task, SprintWithTasks } from "@robin/shared-types";
 
 type TaskStatus = Task["status"];
@@ -55,14 +56,14 @@ const PRIORITY_ICONS: Record<string, { icon: string; className: string }> = {
   low: { icon: "—", className: "text-slate-400" },
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  bug: "🐛",
-  feature: "✨",
-  refactor: "♻️",
-  chore: "⚙️",
-  docs: "📄",
-  accessibility: "♿",
-  security: "🔒",
+const TYPE_ICON_MAP: Record<string, React.ElementType> = {
+  bug: Bug,
+  feature: Sparkles,
+  refactor: RefreshCw,
+  chore: Settings,
+  docs: FileText,
+  accessibility: Accessibility,
+  security: Lock,
 };
 
 interface SprintSectionProps {
@@ -87,8 +88,70 @@ export function SprintSection({
   const [tasks, setTasks] = useState<Task[]>(sprint.tasks);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Inline sprint name editing
+  const [sprintName, setSprintName] = useState(sprint.name);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(sprint.name);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
   const [, startTransition] = useTransition();
   const router = useRouter();
+
+  useEffect(() => {
+    if (editingName) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [editingName]);
+
+  async function handleSaveName() {
+    const trimmed = nameValue.trim();
+    if (!trimmed) {
+      setNameError("Il nome non può essere vuoto");
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (trimmed === sprintName) {
+      setEditingName(false);
+      setNameError(null);
+      return;
+    }
+    setNameSaving(true);
+    setNameError(null);
+    try {
+      const res = await fetch(`/api/sprints/${sprint.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        setNameError("Errore nel salvataggio");
+        setNameSaving(false);
+        nameInputRef.current?.focus();
+        return;
+      }
+      setSprintName(trimmed);
+      setEditingName(false);
+    } catch {
+      setNameError("Errore nel salvataggio");
+      setNameSaving(false);
+      nameInputRef.current?.focus();
+    }
+  }
+
+  function handleNameKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void handleSaveName();
+    } else if (e.key === "Escape") {
+      setNameValue(sprintName);
+      setEditingName(false);
+      setNameError(null);
+    }
+  }
 
   const isActive = sprint.status === "active";
   const isPlanning = sprint.status === "planning";
@@ -191,16 +254,43 @@ export function SprintSection({
           aria-label="Seleziona tutto nello sprint"
         />
 
-        {/* Expand/collapse */}
+        {/* Expand/collapse chevron (separate from name for independent click) */}
         <button
           onClick={onToggle}
-          className="flex items-center gap-2 min-w-0 flex-1 text-left"
+          className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors p-0.5"
           aria-expanded={isExpanded}
+          aria-label={isExpanded ? "Comprimi sprint" : "Espandi sprint"}
         >
-          <span className={cn("text-xs text-muted-foreground transition-transform shrink-0", isExpanded ? "rotate-90" : "")}>
-            ▶
-          </span>
-          <span className="font-semibold text-sm truncate">{sprint.name}</span>
+          <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isExpanded ? "rotate-90" : "")} />
+        </button>
+
+        {/* Sprint name — inline editable */}
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          {editingName ? (
+            <span className="flex flex-col gap-0.5 min-w-0">
+              <input
+                ref={nameInputRef}
+                value={nameValue}
+                onChange={(e) => { setNameValue(e.target.value); setNameError(null); }}
+                onBlur={() => void handleSaveName()}
+                onKeyDown={handleNameKeyDown}
+                disabled={nameSaving}
+                maxLength={100}
+                className="rounded border border-primary bg-background px-2 py-0.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 min-w-0 w-full max-w-[240px]"
+              />
+              {nameError && (
+                <span className="text-xs font-normal text-destructive">{nameError}</span>
+              )}
+            </span>
+          ) : (
+            <span
+              onClick={() => { setNameValue(sprintName); setEditingName(true); }}
+              title="Clicca per modificare il nome"
+              className="font-semibold text-sm truncate cursor-text underline decoration-dashed underline-offset-4 decoration-muted-foreground/30 hover:decoration-muted-foreground/60 transition-colors"
+            >
+              {sprintName}
+            </span>
+          )}
           {isActive && startedDate && (
             <span className="text-xs text-muted-foreground shrink-0">avviato {startedDate}</span>
           )}
@@ -217,7 +307,7 @@ export function SprintSection({
               Pianificazione
             </span>
           )}
-        </button>
+        </div>
 
         {/* Status counts */}
         <div className="flex items-center gap-1 shrink-0">
@@ -238,15 +328,13 @@ export function SprintSection({
         {/* Action button */}
         <div className="flex items-center gap-1 shrink-0">
           {isActive && (
-            <>
-              <button
-                onClick={() => void handleComplete()}
-                disabled={loading}
-                className="rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
-              >
-                {loading ? "Completando..." : "Completa lo sprint"}
-              </button>
-            </>
+            <button
+              onClick={() => void handleComplete()}
+              disabled={loading}
+              className="rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              {loading ? "Completando..." : "Completa lo sprint"}
+            </button>
           )}
           {isPlanning && (
             <button
@@ -317,7 +405,7 @@ interface SprintTaskRowProps {
 
 function SprintTaskRow({ task, idx, totalCount, isPlanning, selected, onSelect, onRemove, onMove }: SprintTaskRowProps) {
   const priority = PRIORITY_ICONS[task.priority] ?? { icon: "—", className: "text-slate-400" };
-  const typeIcon = TYPE_ICONS[task.type] ?? "•";
+  const TypeIcon = TYPE_ICON_MAP[task.type];
 
   return (
     <div
@@ -342,18 +430,18 @@ function SprintTaskRow({ task, idx, totalCount, isPlanning, selected, onSelect, 
           <button
             onClick={() => onMove("up")}
             disabled={idx === 0}
-            className="text-[10px] leading-none text-muted-foreground hover:text-foreground disabled:opacity-20"
+            className="text-muted-foreground hover:text-foreground disabled:opacity-20"
             aria-label="Sposta su"
           >
-            ▲
+            <ChevronUp className="h-3 w-3" />
           </button>
           <button
             onClick={() => onMove("down")}
             disabled={idx === totalCount - 1}
-            className="text-[10px] leading-none text-muted-foreground hover:text-foreground disabled:opacity-20"
+            className="text-muted-foreground hover:text-foreground disabled:opacity-20"
             aria-label="Sposta giù"
           >
-            ▼
+            <ChevronDown className="h-3 w-3" />
           </button>
         </div>
       )}
@@ -365,7 +453,7 @@ function SprintTaskRow({ task, idx, totalCount, isPlanning, selected, onSelect, 
       />
 
       {/* Type icon */}
-      <span className="shrink-0 text-xs">{typeIcon}</span>
+      {TypeIcon && <TypeIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
 
       {/* Title */}
       <Link
@@ -406,10 +494,10 @@ function SprintTaskRow({ task, idx, totalCount, isPlanning, selected, onSelect, 
       {isPlanning && (
         <button
           onClick={onRemove}
-          className="shrink-0 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+          className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
           aria-label="Rimuovi dallo sprint"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
