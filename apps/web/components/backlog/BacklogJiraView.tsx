@@ -4,7 +4,6 @@ import {
   useState,
   useTransition,
   useMemo,
-  useRef,
   useCallback,
   useEffect,
 } from "react";
@@ -12,14 +11,10 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
 import { BulkActionBar } from "./BulkActionBar";
-import { ImportPreviewModal } from "./ImportPreviewModal";
 import { CreateTaskDrawer } from "./CreateTaskDrawer";
-import { parseRobinMd } from "@/lib/robin-md-parser";
+import { BrainstormModal } from "./BrainstormModal";
 import { useKeyboardShortcut } from "@/lib/hooks/useKeyboardShortcut";
 import type { Task, Repository, Sprint, SprintWithTasks } from "@robin/shared-types";
-import type { ParsedTask, ParseError } from "@/types/robin-md";
-
-const MAX_FILE_SIZE_BYTES = 500 * 1024;
 
 const TASK_TYPES = [
   { value: "", label: "Tipo ▾" },
@@ -135,6 +130,7 @@ export function BacklogJiraView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [creatingSprint, setCreatingSprint] = useState(false);
+  const [isBrainstormOpen, setIsBrainstormOpen] = useState(false);
 
   // DnD state
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -143,17 +139,6 @@ export function BacklogJiraView({
   // Sprint action state (per sprint)
   const [sprintLoading, setSprintLoading] = useState<Record<string, boolean>>({});
   const [sprintError, setSprintError] = useState<Record<string, string | null>>({});
-
-  // Import state
-  type ImportModal = {
-    tasks: ParsedTask[];
-    errors: ParseError[];
-    truncated: boolean;
-    originalCount: number;
-  };
-  const [importModal, setImportModal] = useState<ImportModal | null>(null);
-  const [importFileError, setImportFileError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -313,34 +298,6 @@ export function BacklogJiraView({
   const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
   useKeyboardShortcut("n", openDrawer);
 
-  function handleImportClick() {
-    setImportFileError(null);
-    fileInputRef.current?.click();
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setImportFileError("Il file supera il limite di 500 KB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const content = ev.target?.result;
-      if (typeof content !== "string") return;
-      const result = parseRobinMd(content);
-      setImportModal({
-        tasks: result.tasks,
-        errors: result.errors,
-        truncated: result.truncated === true,
-        originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
-      });
-    };
-    reader.readAsText(file);
-  }
-
   // ── Filtered data ──────────────────────────────────────────────────────────
 
   const filteredBacklog = useMemo(() => {
@@ -378,24 +335,11 @@ export function BacklogJiraView({
 
   return (
     <div className="space-y-0">
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".md"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
-      {importModal !== null && (
-        <ImportPreviewModal
-          tasks={importModal.tasks}
-          errors={importModal.errors}
-          truncated={importModal.truncated}
-          originalCount={importModal.originalCount}
+      {isBrainstormOpen && (
+        <BrainstormModal
           repositories={repositories}
-          onClose={() => setImportModal(null)}
-          onImported={() => { setImportModal(null); refresh(); }}
+          onClose={() => setIsBrainstormOpen(false)}
+          onImported={() => { setIsBrainstormOpen(false); refresh(); }}
         />
       )}
 
@@ -445,15 +389,11 @@ export function BacklogJiraView({
         <div className="flex-1" />
 
         <button
-          onClick={handleImportClick}
+          onClick={() => setIsBrainstormOpen(true)}
           className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
-          title="Importa task da file .robin.md"
         >
-          ↑ Importa .robin.md
+          ✦ Genera task con AI
         </button>
-        {importFileError !== null && (
-          <span className="text-xs text-red-600 dark:text-red-400">{importFileError}</span>
-        )}
       </div>
 
       {/* ── Sprint sections ────────────────────────────────────────────────── */}

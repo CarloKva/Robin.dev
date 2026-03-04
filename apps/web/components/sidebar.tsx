@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/backlog", label: "Backlog" },
+  { href: "/context", label: "Contesto" },
   { href: "/agents", label: "Agents" },
   { href: "/reports", label: "Report" },
   { href: "/settings", label: "Settings" },
