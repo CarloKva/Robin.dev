@@ -385,7 +385,7 @@ export function BacklogJiraView({
       </div>
 
       {/* ── Sprint sections ────────────────────────────────────────────────── */}
-      <div className="space-y-2">
+      <div className="mt-4 space-y-2">
         {filteredSprints.length === 0 ? (
           /* No sprint: show placeholder drop zone */
           <div className="rounded-lg border border-dashed border-border bg-card">
