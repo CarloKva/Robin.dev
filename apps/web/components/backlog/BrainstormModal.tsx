@@ -143,7 +143,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     <>
       {/* Chat panel */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 flex w-[400px] max-h-[560px] flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden">
+        <div className="fixed bottom-20 right-4 z-50 flex w-[400px] max-h-[560px] flex-col rounded-2xl border border-border bg-white shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
