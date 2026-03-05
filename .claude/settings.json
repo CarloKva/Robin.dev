@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Edit",
+      "Write",
+      "Bash(git:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh issue:*)",
+      "Bash(node:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm view:*)",
+      "Bash(npx:*)",
+      "Bash(supabase:*)",
+      "Bash(npx supabase:*)",
+      "Bash(claude:*)",
+      "Bash(ssh:*)",
+      "Bash(curl:*)",
+      "Bash(chmod +x:*)",
+      "Bash(grep:*)",
+      "Bash(lsof:*)",
+      "Bash(python3:*)",
+      "Bash(rm:*)",
+      "mcp__ide__getDiagnostics"
+    ],
+    "deny": [
+      "Bash(git push origin main:*)",
+      "Bash(git push --force:*)",
+      "Bash(psql:*)"
+    ]
+  }
+}
