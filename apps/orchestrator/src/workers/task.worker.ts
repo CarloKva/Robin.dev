@@ -38,9 +38,14 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
     return { status: "completed", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), durationSeconds: 0, stdoutTail: "" };
   }
 
-  // 1. Mark task in_progress + agent busy
+  // 1. Mark task in_progress + agent busy + create iteration record
   await taskRepository.updateStatus(taskId, "in_progress", { actorId: AGENT_ID });
   await agentRepository.setStatus(AGENT_ID, "busy", taskId);
+  const iterationNumber = await taskRepository.createIteration({
+    taskId,
+    workspaceId,
+    trigger: "original",
+  });
   await eventService.phaseStarted(taskId, workspaceId, AGENT_ID, "analysis");
 
   // 2. Run Claude Code
@@ -71,7 +76,11 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
       result.prNumber,
       result.commitSha
     );
-    await taskRepository.updateStatus(taskId, "review_pending", { actorId: AGENT_ID });
+    await taskRepository.updateStatus(taskId, "in_review", { actorId: AGENT_ID });
+    await taskRepository.updateIteration(taskId, iterationNumber, {
+      status: "completed",
+      prUrl: result.prUrl,
+    });
 
     await notificationService.notifyTaskReady({
       id: taskId,
@@ -88,6 +97,7 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
       });
     }
     await taskRepository.updateStatus(taskId, "completed", { actorId: AGENT_ID });
+    await taskRepository.updateIteration(taskId, iterationNumber, { status: "completed" });
     await eventService.taskCompleted(taskId, workspaceId, AGENT_ID, result.durationSeconds);
   }
 
@@ -141,6 +151,8 @@ export function createWorker(): Worker<JobPayload, JobResult> {
             err.message
           );
         }
+        // Mark the running iteration as failed
+        await taskRepository.markRunningIterationFailed(taskId);
       } catch (persistErr) {
         log.error(
           { taskId, error: String(persistErr) },
