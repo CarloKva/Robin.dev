@@ -7,23 +7,16 @@
  * unlinked installation to the current user's workspace.
  */
 
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { getGitHubConnection, upsertGitHubConnection } from "@/lib/db/github";
 import { listAppInstallations } from "@/lib/github/app";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function POST() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 });
-  }
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const existing = await getGitHubConnection(workspace.id);
   if (existing) {

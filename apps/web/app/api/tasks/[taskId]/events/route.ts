@@ -1,8 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 
 /**
  * Fetch task events for a task (used by the inline terminal panel).
@@ -12,13 +11,12 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const { taskId } = await params;
   const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
   const { data, error } = await supabase
     .from("task_events")
@@ -59,10 +57,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
   const { taskId } = await params;
 
@@ -78,10 +75,6 @@ export async function POST(
   const { event_type, payload } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
 
   // Verify task belongs to workspace
   const { data: task } = await supabase

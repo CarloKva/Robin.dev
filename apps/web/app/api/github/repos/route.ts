@@ -5,18 +5,15 @@
  * merged with the workspace's enabled/disabled status from the DB.
  */
 
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { getGitHubConnection, getRepositoriesForWorkspace } from "@/lib/db/github";
 import { listInstallationRepos } from "@/lib/github/app";
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const connection = await getGitHubConnection(workspace.id);
   if (!connection) {

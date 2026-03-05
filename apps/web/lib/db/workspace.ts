@@ -29,6 +29,22 @@ export async function getWorkspaceForUser(userId: string): Promise<Workspace | n
 }
 
 /**
+ * Returns the role of a user in their workspace, or null if not a member.
+ */
+export async function getWorkspaceMemberRole(userId: string): Promise<string | null> {
+  try {
+    const member = await prisma.workspace_members.findFirst({
+      where: { user_id: userId },
+      select: { role: true },
+    });
+    return member?.role ?? null;
+  } catch (error) {
+    console.error("[getWorkspaceMemberRole]", error);
+    return null;
+  }
+}
+
+/**
  * Fetch a workspace by its ID.
  * Used in the dashboard layout and settings page.
  */

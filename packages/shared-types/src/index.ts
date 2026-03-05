@@ -214,15 +214,6 @@ export type TimelineEntry = {
 
 export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
 
-/** Internal agent state — more granular than AgentStatusEnum for orchestrator use */
-export type AgentState =
-  | "idle"
-  | "claiming"
-  | "executing"
-  | "reporting"
-  | "blocked"
-  | "error";
-
 /**
  * Payload passed from the BullMQ queue to ClaudeRunner.
  * Contains everything the agent needs — no further DB lookups during execution.

@@ -10,8 +10,7 @@ import { CreateButton } from "@/components/CreateButton";
 import { GlobalCreateModal } from "@/components/GlobalCreateModal";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getRepositoriesForWorkspace, getGitHubConnection } from "@/lib/db/github";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentStatusEnum } from "@robin/shared-types";
+import { getActiveAgentStatus } from "@/lib/db/agents";
 
 export default async function DashboardLayout({
   children,
@@ -31,32 +30,8 @@ export default async function DashboardLayout({
   }
 
   // Fetch agent status for the header badge (best-effort — never blocks the layout)
-  let agentStatus: AgentStatusEnum | null = null;
-  let agentCurrentTaskTitle: string | null = null;
-
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { data: agentStatusRow } = await supabase
-      .from("agent_status")
-      .select("status, current_task_id")
-      .limit(1)
-      .single();
-
-    if (agentStatusRow) {
-      agentStatus = agentStatusRow.status as AgentStatusEnum;
-
-      if (agentStatusRow.current_task_id) {
-        const { data: currentTask } = await supabase
-          .from("tasks")
-          .select("title")
-          .eq("id", agentStatusRow.current_task_id)
-          .single();
-        agentCurrentTaskTitle = currentTask?.title ?? null;
-      }
-    }
-  } catch {
-    // Silently ignore — widget simply won't render if agent data unavailable
-  }
+  const { status: agentStatus, currentTaskTitle: agentCurrentTaskTitle } =
+    await getActiveAgentStatus();
 
   // Fetch repositories + GitHub connection for QuickTaskForm and GlobalCreateModal (best-effort)
   let repositories: Awaited<ReturnType<typeof getRepositoriesForWorkspace>> = [];

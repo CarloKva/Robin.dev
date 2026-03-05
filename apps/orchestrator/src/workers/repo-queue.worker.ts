@@ -3,6 +3,7 @@ import type { Job } from "bullmq";
 import type { RepoQueueJobPayload, JobPayload } from "@robin/shared-types";
 import { getRedisConnection } from "../db/redis.client";
 import { getSupabaseClient } from "../db/supabase.client";
+import { defaultTimeoutByType } from "../config/bullmq.config";
 import { taskQueue } from "../queues/task.queue";
 import { notificationService } from "../services/notification.service";
 import { log } from "../utils/logger";
@@ -122,7 +123,7 @@ async function processRepoJob(job: Job<RepoQueueJobPayload>): Promise<void> {
     taskDescription: task.description ?? "",
     taskType: (task.type as JobPayload["taskType"]) ?? "feature",
     priority: (task.priority as JobPayload["priority"]) ?? "medium",
-    timeoutMinutes: getTimeoutForType(task.type),
+    timeoutMinutes: defaultTimeoutByType[task.type ?? "feature"] ?? 30,
     claudeMdPath: "CLAUDE.md",
   };
 
@@ -226,19 +227,6 @@ async function handleNoAgentAvailable(
 
   // Delay job and retry in 5 minutes
   await job.moveToDelayed(Date.now() + POLL_INTERVAL_MS);
-}
-
-function getTimeoutForType(type: string | null): number {
-  const map: Record<string, number> = {
-    chore: 15,
-    docs: 20,
-    bug: 30,
-    accessibility: 30,
-    security: 45,
-    refactor: 45,
-    feature: 60,
-  };
-  return map[type ?? "feature"] ?? 30;
 }
 
 /**

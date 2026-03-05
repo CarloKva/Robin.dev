@@ -16,6 +16,7 @@ import { getRedisConnection } from "../db/redis.client";
 import { getSupabaseClient } from "../db/supabase.client";
 import { eventService } from "../events/event.service";
 import { notificationService } from "../services/notification.service";
+import { taskRepository } from "../repositories/task.repository";
 import { log } from "../utils/logger";
 
 export const GITHUB_EVENTS_QUEUE_NAME = "github-events";
@@ -163,16 +164,13 @@ export async function handlePullRequestClosed(
 
   // ── 5a. PR merged → mark task done ────────────────────────────────────────
   if (merged) {
-    const { error: updateError } = await db
-      .from("tasks")
-      .update({
-        status: "done",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", taskId);
-
-    if (updateError) {
-      log.error({ taskId, error: updateError.message }, "handlePullRequestClosed: failed to update task status to done");
+    try {
+      await taskRepository.updateStatus(taskId, "done", { actorId: SYSTEM_ACTOR });
+    } catch (err) {
+      log.warn(
+        { taskId, error: String(err) },
+        "handlePullRequestClosed: invalid transition to done — skipping"
+      );
       return;
     }
 
@@ -191,16 +189,13 @@ export async function handlePullRequestClosed(
   }
 
   // ── 5b. PR closed without merge → task back to in_review ─────────────────
-  const { error: updateError } = await db
-    .from("tasks")
-    .update({
-      status: "in_review",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", taskId);
-
-  if (updateError) {
-    log.error({ taskId, error: updateError.message }, "handlePullRequestClosed: failed to update task status to in_review");
+  try {
+    await taskRepository.updateStatus(taskId, "in_review", { actorId: SYSTEM_ACTOR });
+  } catch (err) {
+    log.warn(
+      { taskId, error: String(err) },
+      "handlePullRequestClosed: invalid transition to in_review — skipping"
+    );
     return;
   }
 

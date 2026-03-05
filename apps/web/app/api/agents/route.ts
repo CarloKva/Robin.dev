@@ -3,11 +3,10 @@
  * Creates a new agent and enqueues the VPS provisioning job.
  */
 
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { getGitHubConnection } from "@/lib/db/github";
 import { getProvisioningQueue } from "@/lib/queue/provisioning.queue";
 import type { AgentProvisioningJobPayload } from "@robin/shared-types";
@@ -21,8 +20,9 @@ const createAgentSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const body = await request.json().catch(() => null);
   const parsed = createAgentSchema.safeParse(body);
@@ -34,9 +34,6 @@ export async function POST(request: Request) {
   }
 
   const { name, repository_ids, avatar_url } = parsed.data;
-
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 });
 
   // GitHub connection must be active before creating an agent
   const connection = await getGitHubConnection(workspace.id);

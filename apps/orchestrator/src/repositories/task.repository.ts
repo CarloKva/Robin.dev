@@ -107,28 +107,6 @@ export class TaskRepository {
     return wasUpdated;
   }
 
-  /** Append a task_event (used for agent phase events, PR opened, blocked, etc.) */
-  async appendEvent(
-    taskId: string,
-    workspaceId: string,
-    eventType: string,
-    actorId: string,
-    payload: Record<string, unknown>
-  ): Promise<void> {
-    const { error } = await this.db.from("task_events").insert({
-      task_id: taskId,
-      workspace_id: workspaceId,
-      event_type: eventType,
-      actor_type: "agent",
-      actor_id: actorId,
-      payload,
-    });
-
-    if (error) {
-      throw new Error(`TaskRepository.appendEvent failed: ${error.message}`);
-    }
-  }
-
   /** Add an artifact (PR, commit, deploy preview) to a task. */
   async addArtifact(
     taskId: string,

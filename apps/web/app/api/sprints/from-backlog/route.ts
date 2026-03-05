@@ -1,7 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { getOnlineAgentForWorkspace } from "@/lib/db/agents";
 import { getSprintWithTasks } from "@/lib/db/sprints";
 
@@ -22,11 +21,9 @@ function generateSprintName(): string {
  * Creates a sprint, moves all backlog tasks into it as sprint_ready, then starts it.
  */
 export async function POST() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
   const supabase = await createSupabaseServerClient();
 

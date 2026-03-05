@@ -1,7 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { getGitHubConnection } from "@/lib/db/github";
 import { getInstallationToken } from "@/lib/github/app";
 
@@ -19,12 +18,11 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ repoId: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const { repoId } = await params;
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
   const supabase = await createSupabaseServerClient();
 

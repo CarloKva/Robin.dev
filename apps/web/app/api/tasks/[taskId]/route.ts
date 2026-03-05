@@ -1,8 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { trackUserAction } from "@/lib/events/trackUserAction";
 
 const patchSchema = z.object({
@@ -27,13 +26,12 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const { taskId } = await params;
   const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
   const { data: task, error } = await supabase
     .from("tasks")
@@ -50,10 +48,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
   const { taskId } = await params;
 
@@ -72,11 +69,6 @@ export async function PATCH(
   }
 
   const supabase = await createSupabaseServerClient();
-
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
 
   // Fetch current task state for diff and state-change event
   const { data: currentTask } = await supabase
@@ -135,17 +127,12 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ taskId: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
   const { taskId } = await params;
   const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
 
   // Fetch task before deletion for the audit event
   const { data: task } = await supabase
