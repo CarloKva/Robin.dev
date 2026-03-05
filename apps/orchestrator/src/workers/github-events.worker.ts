@@ -188,17 +188,8 @@ export async function handlePullRequestClosed(
     return;
   }
 
-  // ── 5b. PR closed without merge → task back to in_review ─────────────────
-  try {
-    await taskRepository.updateStatus(taskId, "in_review", { actorId: SYSTEM_ACTOR });
-  } catch (err) {
-    log.warn(
-      { taskId, error: String(err) },
-      "handlePullRequestClosed: invalid transition to in_review — skipping"
-    );
-    return;
-  }
-
+  // ── 5b. PR closed without merge → task stays in_review ───────────────────
+  // No status transition needed: task is already in_review (set by task.worker.ts).
   await eventService.taskPrClosedWithoutMerge(
     taskId,
     workspaceId,

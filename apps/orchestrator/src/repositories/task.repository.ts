@@ -1,4 +1,4 @@
-import type { TaskStatus, ArtifactType } from "@robin/shared-types";
+import type { TaskStatus, ArtifactType, IterationTrigger, IterationStatus } from "@robin/shared-types";
 import { getSupabaseClient } from "../db/supabase.client";
 import { log } from "../utils/logger";
 
@@ -123,6 +123,80 @@ export class TaskRepository {
 
     if (error) {
       throw new Error(`TaskRepository.addArtifact failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create a new iteration row for a task.
+   * Automatically increments iteration_number based on existing rows.
+   * Returns the iteration_number assigned.
+   */
+  async createIteration(params: {
+    taskId: string;
+    workspaceId: string;
+    trigger: IterationTrigger;
+  }): Promise<number> {
+    const { count } = await this.db
+      .from("task_iterations")
+      .select("id", { count: "exact", head: true })
+      .eq("task_id", params.taskId);
+
+    const iterationNumber = (count ?? 0) + 1;
+
+    const { error } = await this.db.from("task_iterations").insert({
+      task_id: params.taskId,
+      workspace_id: params.workspaceId,
+      iteration_number: iterationNumber,
+      trigger: params.trigger,
+      status: "running" as IterationStatus,
+      started_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      throw new Error(`TaskRepository.createIteration failed: ${error.message}`);
+    }
+
+    log.info({ taskId: params.taskId, iterationNumber }, "TaskRepository.createIteration: iteration created");
+    return iterationNumber;
+  }
+
+  /** Update an existing iteration row (status, completed_at, pr_url). */
+  async updateIteration(
+    taskId: string,
+    iterationNumber: number,
+    updates: { status: IterationStatus; prUrl?: string | null }
+  ): Promise<void> {
+    const { error } = await this.db
+      .from("task_iterations")
+      .update({
+        status: updates.status,
+        completed_at: new Date().toISOString(),
+        ...(updates.prUrl !== undefined && { pr_url: updates.prUrl }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("task_id", taskId)
+      .eq("iteration_number", iterationNumber);
+
+    if (error) {
+      throw new Error(`TaskRepository.updateIteration failed: ${error.message}`);
+    }
+  }
+
+  /** Mark any "running" iteration for a task as failed (used on job failure). */
+  async markRunningIterationFailed(taskId: string): Promise<void> {
+    const { error } = await this.db
+      .from("task_iterations")
+      .update({
+        status: "failed" as IterationStatus,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("task_id", taskId)
+      .eq("status", "running");
+
+    if (error) {
+      // Log but don't throw — this is best-effort, failure handling already done
+      log.warn({ taskId, error: error.message }, "TaskRepository.markRunningIterationFailed: update failed");
     }
   }
 

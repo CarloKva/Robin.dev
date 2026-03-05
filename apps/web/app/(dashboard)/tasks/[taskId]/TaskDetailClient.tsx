@@ -26,18 +26,26 @@ interface TaskDetailClientProps {
 // ── Status label map ──────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
+  backlog: "Backlog", sprint_ready: "Sprint ready",
   pending: "Pending", queued: "In coda", in_progress: "In corso",
-  review_pending: "In review", approved: "Approvata", rejected: "Rifiutata",
-  completed: "Completata", failed: "Fallita", cancelled: "Annullata",
+  in_review: "In review", review_pending: "In review (legacy)",
+  rework: "Rework",
+  approved: "Approvata", rejected: "Rifiutata",
+  done: "Done", completed: "Completata", failed: "Fallita", cancelled: "Annullata",
 };
 
 const STATUS_BADGE: Record<string, string> = {
+  backlog: "bg-neutral-100 text-neutral-500",
+  sprint_ready: "bg-sky-100 text-sky-600",
   pending: "bg-neutral-100 text-neutral-600",
   queued: "bg-sky-100 text-sky-700",
   in_progress: "bg-brand-100 text-brand-700",
+  in_review: "bg-amber-100 text-amber-700",
   review_pending: "bg-amber-100 text-amber-700",
+  rework: "bg-orange-100 text-orange-700",
   approved: "bg-emerald-100 text-emerald-700",
   rejected: "bg-red-100 text-red-700",
+  done: "bg-emerald-100 text-emerald-800",
   completed: "bg-emerald-100 text-emerald-800",
   failed: "bg-red-100 text-red-800",
   cancelled: "bg-neutral-100 text-neutral-500",
