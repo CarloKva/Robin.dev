@@ -9,19 +9,20 @@
  * The endpoint returns immediately; progress is logged on the control-plane.
  */
 
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { getWorkspaceMemberRole } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { createRedisConnection } from "@/lib/queue/redis.connection";
 
 const BAKE_CHANNEL = "robin:bake-snapshot";
 
 export async function POST() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 });
+  const role = await getWorkspaceMemberRole(userId);
+  if (role !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const redis = createRedisConnection();
 

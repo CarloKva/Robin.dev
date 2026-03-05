@@ -150,36 +150,6 @@ export async function waitForServerRunning(
   throw new Error(`Server ${serverId} did not reach 'running' in ${timeoutMs / 1000}s`);
 }
 
-// ─── Poll until orchestrator health endpoint responds ─────────────────────────
-
-/**
- * Polls the orchestrator's /health endpoint until it responds with 200.
- * This is the final gate: VPS is fully set up and orchestrator is running.
- */
-export async function waitForOrchestratorHealth(
-  vpsIp: string,
-  port = 3001,
-  timeoutMs = 5 * 60 * 1000   // 5 minutes
-): Promise<void> {
-  const start = Date.now();
-  const url = `http://${vpsIp}:${port}/health`;
-
-  while (Date.now() - start < timeoutMs) {
-    await sleep(10_000);
-
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-      if (res.ok) return;
-    } catch {
-      // Not ready yet — continue polling
-    }
-  }
-
-  throw new Error(
-    `Orchestrator at ${url} did not respond in ${timeoutMs / 1000}s — check cloud-init log via SSH`
-  );
-}
-
 // ─── Snapshots ───────────────────────────────────────────────────────────────
 
 export async function createSnapshot(serverId: number, description?: string): Promise<{ id: number }> {

@@ -4,10 +4,9 @@
  * Enables a repository for use with Robin.dev agents.
  */
 
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { getGitHubConnection, enableRepository } from "@/lib/db/github";
 
 const schema = z.object({
@@ -18,8 +17,9 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
@@ -29,9 +29,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 });
 
   const connection = await getGitHubConnection(workspace.id);
   if (!connection) {

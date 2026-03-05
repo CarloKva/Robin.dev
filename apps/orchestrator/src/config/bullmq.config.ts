@@ -42,6 +42,8 @@ export const defaultTimeoutByType: Record<string, number> = {
   chore: 15,
   docs: 20,
   bug: 30,
+  accessibility: 30,
+  security: 45,
   refactor: 45,
   feature: 60,
 };

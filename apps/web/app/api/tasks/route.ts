@@ -1,8 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { getTasksForWorkspace } from "@/lib/db/tasks";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { trackUserAction } from "@/lib/events/trackUserAction";
 
 const createTaskSchema = z.object({
@@ -21,45 +21,34 @@ const createTaskSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { workspace } = result;
 
   const url = new URL(request.url);
-  const status = url.searchParams.get("status");
-  const type = url.searchParams.get("type");
-  const priority = url.searchParams.get("priority");
-  const search = url.searchParams.get("search");
+  const status = url.searchParams.get("status") ?? undefined;
+  const type = url.searchParams.get("type") ?? undefined;
+  const priority = url.searchParams.get("priority") ?? undefined;
+  const q = url.searchParams.get("search") ?? undefined;
   const page = parseInt(url.searchParams.get("page") ?? "1", 10);
   const pageSize = Math.min(parseInt(url.searchParams.get("pageSize") ?? "30", 10), 100);
-  const offset = (page - 1) * pageSize;
 
-  let query = supabase
-    .from("tasks")
-    .select("*", { count: "exact" })
-    .eq("workspace_id", workspace.id)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + pageSize - 1);
+  const { tasks, totalCount } = await getTasksForWorkspace(workspace.id, {
+    ...(status && { status }),
+    ...(type && { type }),
+    ...(priority && { priority }),
+    ...(q && { q }),
+    page,
+    pageSize,
+  });
 
-  if (status) query = query.eq("status", status);
-  if (type) query = query.eq("type", type);
-  if (priority) query = query.eq("priority", priority);
-  if (search) query = query.ilike("title", `%${search}%`);
-
-  const { data, error, count } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ tasks: data, total: count, page, pageSize });
+  return NextResponse.json({ tasks, total: totalCount, page, pageSize });
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
   const body = await request.json().catch(() => null);
   const parsed = createTaskSchema.safeParse(body);
@@ -73,10 +62,6 @@ export async function POST(request: Request) {
   const { title, description, type, priority, sprint_id, repository_id, preferred_agent_id, context, estimated_effort, add_to_sprint } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
 
   // Determine initial status:
   // - If sprint_id or add_to_sprint → sprint_ready (task assigned to sprint, pending sprint start)

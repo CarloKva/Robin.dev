@@ -1,5 +1,4 @@
 import { spawn } from "child_process";
-import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { JobPayload, JobResult, ADWPPhase } from "@robin/shared-types";
@@ -10,6 +9,7 @@ import {
   ClaudeNotFoundError,
   ClaudeExitError,
 } from "../errors/job.errors";
+import { getInstallationToken } from "../services/github.service";
 import { log } from "../utils/logger";
 
 const STDOUT_TAIL_CHARS = 10_000;
@@ -270,7 +270,7 @@ export class ClaudeRunner {
     }
 
     try {
-      const token = await this.generateInstallationToken(
+      const token = await getInstallationToken(
         appId,
         privateKeyB64,
         parseInt(installationIdStr, 10)
@@ -282,45 +282,6 @@ export class ClaudeRunner {
       log.warn({ err: String(err) }, "Failed to generate GitHub token — cloning with original URL");
       return repositoryUrl;
     }
-  }
-
-  /** Generates a short-lived GitHub App installation access token. */
-  private async generateInstallationToken(
-    appId: string,
-    privateKeyB64: string,
-    installationId: number
-  ): Promise<string> {
-    const privateKey = Buffer.from(privateKeyB64, "base64").toString("utf-8");
-    const now = Math.floor(Date.now() / 1000);
-    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
-    const payload = Buffer.from(
-      JSON.stringify({ iat: now - 60, exp: now + 600, iss: appId })
-    ).toString("base64url");
-
-    const sign = crypto.createSign("RSA-SHA256");
-    sign.update(`${header}.${payload}`);
-    const signature = sign.sign(privateKey, "base64url");
-    const jwt = `${header}.${payload}.${signature}`;
-
-    const res = await fetch(
-      `https://api.github.com/app/installations/${installationId}/access_tokens`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${jwt}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      }
-    );
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`GitHub token exchange failed: ${res.status} ${body}`);
-    }
-
-    const data = (await res.json()) as { token: string };
-    return data.token;
   }
 
   /** Clone a git repository to targetPath, creating parent directories as needed. */

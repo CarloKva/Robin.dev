@@ -1,5 +1,42 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { AgentWithStatus } from "@robin/shared-types";
+import type { AgentWithStatus, AgentStatusEnum } from "@robin/shared-types";
+
+/**
+ * Fetches the active agent status and the title of the current task (if any).
+ * Used by the dashboard layout header badge. Best-effort: returns nulls on error.
+ */
+export async function getActiveAgentStatus(): Promise<{
+  status: AgentStatusEnum | null;
+  currentTaskTitle: string | null;
+}> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: agentStatusRow } = await supabase
+      .from("agent_status")
+      .select("status, current_task_id")
+      .limit(1)
+      .single();
+
+    if (!agentStatusRow) return { status: null, currentTaskTitle: null };
+
+    let currentTaskTitle: string | null = null;
+    if (agentStatusRow.current_task_id) {
+      const { data: currentTask } = await supabase
+        .from("tasks")
+        .select("title")
+        .eq("id", agentStatusRow.current_task_id)
+        .single();
+      currentTaskTitle = currentTask?.title ?? null;
+    }
+
+    return {
+      status: agentStatusRow.status as AgentStatusEnum,
+      currentTaskTitle,
+    };
+  } catch {
+    return { status: null, currentTaskTitle: null };
+  }
+}
 
 /**
  * Returns all agents for a workspace, enriched with live status from

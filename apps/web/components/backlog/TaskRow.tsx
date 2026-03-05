@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { InlineSelect } from "./InlineSelect";
 import type { Task, Repository } from "@robin/shared-types";
+import { PRIORITY_ICONS } from "@/lib/task-constants";
 
 const PRIORITY_OPTIONS = [
   { value: "critical", label: "Critical", className: "text-red-600 bg-red-50 dark:bg-red-950/30" },
@@ -29,13 +30,6 @@ const EFFORT_OPTIONS = [
   { value: "m", label: "M", className: "text-slate-500" },
   { value: "l", label: "L", className: "text-slate-500" },
 ];
-
-const PRIORITY_ICONS: Record<string, { icon: string; className: string }> = {
-  critical: { icon: "↑↑", className: "text-red-600 font-bold" },
-  high: { icon: "↑", className: "text-orange-500 font-semibold" },
-  medium: { icon: "=", className: "text-yellow-600" },
-  low: { icon: "—", className: "text-slate-400" },
-};
 
 interface TaskRowProps {
   task: Task;

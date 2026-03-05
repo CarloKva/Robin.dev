@@ -1,8 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { requireWorkspace } from "@/lib/api/requireWorkspace";
 
 // DB only supports: bug, feature, docs, refactor, chore (check constraint from migration 0005)
 // "spike" maps to "chore" since the DB enum doesn't include it yet.
@@ -28,10 +27,9 @@ const importBodySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const result = await requireWorkspace();
+  if (result instanceof NextResponse) return result;
+  const { userId, workspace } = result;
 
   const body = await request.json().catch(() => null);
   const parsed = importBodySchema.safeParse(body);
@@ -45,10 +43,6 @@ export async function POST(request: Request) {
   const { tasks } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const workspace = await getWorkspaceForUser(userId);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
 
   // Resolve agent names → agent IDs (best-effort; unresolved agents are silently skipped)
   const agentNames = [...new Set(tasks.flatMap((t) => (t.agent !== undefined ? [t.agent] : [])))]

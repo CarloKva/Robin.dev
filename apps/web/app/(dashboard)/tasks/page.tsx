@@ -2,34 +2,12 @@ import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Task, TaskStatus } from "@robin/shared-types";
+import { getTasksForWorkspace } from "@/lib/db/tasks";
+import type { TaskStatus } from "@robin/shared-types";
 import { TasksPageClient } from "./TasksPageClient";
 
 const PAGE_SIZE = 20;
 const ACTIVE_STATUSES: TaskStatus[] = ["queued", "in_progress"];
-
-// ── Period helpers ────────────────────────────────────────────────────────────
-
-function periodStart(period: string): string | null {
-  const now = new Date();
-  switch (period) {
-    case "today": {
-      now.setHours(0, 0, 0, 0);
-      return now.toISOString();
-    }
-    case "week": {
-      now.setDate(now.getDate() - 7);
-      return now.toISOString();
-    }
-    case "month": {
-      now.setDate(now.getDate() - 30);
-      return now.toISOString();
-    }
-    default:
-      return null;
-  }
-}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -58,43 +36,16 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
   const period = params.period ?? "";
   const q = params.q ?? "";
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
-  const offset = (page - 1) * PAGE_SIZE;
 
-  const supabase = await createSupabaseServerClient();
-
-  // Build query with active filters
-  let query = supabase
-    .from("tasks")
-    .select("*", { count: "exact" })
-    .eq("workspace_id", workspace.id);
-
-  if (status) query = query.eq("status", status);
-  if (type) query = query.eq("type", type);
-  if (priority) query = query.eq("priority", priority);
-
-  const since = period ? periodStart(period) : null;
-  if (since) query = query.gte("created_at", since);
-
-  if (q) {
-    query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
-  }
-
-  // Active tasks first, then by created_at DESC
-  // Supabase doesn't support "order by CASE" directly — sort by created_at,
-  // client will visually mark active tasks
-  query = query
-    .order("created_at", { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
-
-  const { data: tasks, error, count } = await query;
-
-  if (error) {
-    console.error("[TasksPage] Failed to fetch tasks:", error.message);
-  }
-
-  const taskList = (tasks ?? []) as Task[];
-  const totalCount = count ?? 0;
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const { tasks: taskList, totalCount, totalPages } = await getTasksForWorkspace(workspace.id, {
+    ...(status && { status }),
+    ...(type && { type }),
+    ...(priority && { priority }),
+    ...(period && { period }),
+    ...(q && { q }),
+    page,
+    pageSize: PAGE_SIZE,
+  });
 
   const initialActiveTask = taskList.find((t) =>
     ACTIVE_STATUSES.includes(t.status)

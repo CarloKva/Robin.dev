@@ -31,27 +31,6 @@ export class AgentRepository {
     }
   }
 
-  async heartbeat(agentId: string): Promise<void> {
-    const { error } = await this.db
-      .from("agent_status")
-      .update({ last_heartbeat: new Date().toISOString() })
-      .eq("agent_id", agentId);
-
-    if (error) {
-      log.warn({ agentId, error: error.message }, "AgentRepository.heartbeat failed");
-    }
-  }
-
-  async getByWorkspace(workspaceId: string) {
-    const { data, error } = await this.db
-      .from("agents")
-      .select("*, agent_status(*)")
-      .eq("workspace_id", workspaceId);
-
-    if (error) throw new Error(`AgentRepository.getByWorkspace failed: ${error.message}`);
-    return data ?? [];
-  }
-
   /**
    * Find the first agent for a workspace that has a fresh heartbeat (< 2 min).
    * Used by the task poller to verify the agent is online before processing.
