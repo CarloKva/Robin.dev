@@ -88,6 +88,8 @@ function DisconnectedState({
         </div>
         <a
           href="/api/auth/github"
+          target="_blank"
+          rel="noopener noreferrer"
           className={cn(
             "inline-flex shrink-0 items-center gap-2 rounded-md bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white transition-colors",
             "hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
