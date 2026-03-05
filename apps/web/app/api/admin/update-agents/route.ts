@@ -16,7 +16,7 @@ const UPDATE_CHANNEL = "robin:update";
 export async function POST() {
   const result = await requireWorkspace();
   if (result instanceof NextResponse) return result;
-  const { userId, workspace } = result;
+  const { userId } = result;
 
   const role = await getWorkspaceMemberRole(userId);
   if (role !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
