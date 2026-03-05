@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ListTodo, Zap, Settings, Loader2 } from "lucide-react";
+import { ListTodo, FileText, Bot, BarChart2, Settings, Loader2 } from "lucide-react";
 
 const navItems = [
   { href: "/backlog", label: "Planning", icon: ListTodo },
-  { href: "/sprints", label: "Sprint", icon: Zap },
+  { href: "/context", label: "Contesto", icon: FileText },
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/reports", label: "Report", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
