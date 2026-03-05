@@ -45,6 +45,28 @@ export async function getWorkspaceMemberRole(userId: string): Promise<string | n
 }
 
 /**
+ * Update the name of a workspace.
+ */
+export async function updateWorkspaceName(workspaceId: string, name: string): Promise<Workspace | null> {
+  try {
+    const ws = await prisma.workspaces.update({
+      where: { id: workspaceId },
+      data: { name, updated_at: new Date() },
+    });
+    return {
+      id: ws.id,
+      name: ws.name,
+      slug: ws.slug,
+      created_at: ws.created_at.toISOString(),
+      updated_at: ws.updated_at.toISOString(),
+    };
+  } catch (error) {
+    console.error("[updateWorkspaceName]", error);
+    return null;
+  }
+}
+
+/**
  * Fetch a workspace by its ID.
  * Used in the dashboard layout and settings page.
  */

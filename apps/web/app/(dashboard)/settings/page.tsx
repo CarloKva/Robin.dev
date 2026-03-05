@@ -6,6 +6,7 @@ import { listInstallationRepos } from "@/lib/github/app";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { GitHubConnectionCard } from "@/components/settings/GitHubConnectionCard";
 import { RepositorySelector } from "@/components/settings/RepositorySelector";
+import { WorkspaceNameForm } from "@/components/settings/WorkspaceNameForm";
 
 export const metadata = { title: "Settings — Robin.dev" };
 
@@ -80,9 +81,11 @@ export default async function SettingsPage({
       <section className="space-y-4 rounded-lg border border-border p-6">
         <h2 className="text-base font-semibold">Workspace</h2>
         <dl className="space-y-3 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Nome</dt>
-            <dd className="font-medium">{workspace.name}</dd>
+          <div className="flex flex-col gap-1.5">
+            <dt className="text-muted-foreground text-sm">Nome</dt>
+            <dd>
+              <WorkspaceNameForm initialName={workspace.name} />
+            </dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Slug</dt>
