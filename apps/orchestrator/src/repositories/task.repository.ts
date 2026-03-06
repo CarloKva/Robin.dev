@@ -201,16 +201,39 @@ export class TaskRepository {
   }
 
   /** Fetch tasks eligible for queueing: pending or queued (not yet picked up by worker). */
-  async getPendingUnqueued() {
-    const { data, error } = await this.db
+  async getPendingUnqueued(workspaceId?: string) {
+    let query = this.db
       .from("tasks")
       .select("*, repositories(id, full_name, default_branch)")
       .in("status", ["pending", "queued"])
       .is("queued_at", null)
       .order("created_at", { ascending: true });
 
+    if (workspaceId) {
+      query = query.eq("workspace_id", workspaceId);
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(`TaskRepository.getPendingUnqueued failed: ${error.message}`);
     return data ?? [];
+  }
+
+  /**
+   * Reset a task back to unqueued state — used as a recovery path when a job
+   * is picked up by the wrong agent worker (routing mismatch).
+   * Bypasses the state machine intentionally: queued → pending is not a normal
+   * transition but is safe here since no work has been done on the task.
+   */
+  async resetToUnqueued(taskId: string): Promise<void> {
+    const { error } = await this.db
+      .from("tasks")
+      .update({ queued_at: null, status: "pending", updated_at: new Date().toISOString() })
+      .eq("id", taskId)
+      .in("status", ["queued"]);
+
+    if (error) {
+      log.warn({ taskId, error: error.message }, "TaskRepository.resetToUnqueued failed");
+    }
   }
 }
 

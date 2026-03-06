@@ -1,6 +1,7 @@
 import type { JobPayload, TaskType, TaskPriority } from "@robin/shared-types";
 import { pollingConfig, defaultTimeoutByType } from "../config/bullmq.config";
 import { taskRepository } from "../repositories/task.repository";
+import { agentRepository } from "../repositories/agent.repository";
 import { taskQueue } from "../queues/task.queue";
 import { log } from "../utils/logger";
 
@@ -12,6 +13,8 @@ export class TaskPoller {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private currentInterval = pollingConfig.minIntervalMs;
   private running = false;
+  // undefined = not yet resolved; null = resolved but unknown
+  private workspaceId: string | null | undefined = undefined;
 
   start(): void {
     if (this.running) return;
@@ -37,11 +40,24 @@ export class TaskPoller {
     }, this.currentInterval);
   }
 
+  private async resolveWorkspaceId(): Promise<void> {
+    if (this.workspaceId !== undefined) return;
+    const agentId = process.env["AGENT_ID"] ?? "";
+    this.workspaceId = await agentRepository.getWorkspaceId(agentId);
+    if (!this.workspaceId) {
+      log.warn({ agentId }, "TaskPoller: could not resolve workspace — will poll ALL workspaces");
+    } else {
+      log.info({ workspaceId: this.workspaceId }, "TaskPoller: workspace resolved");
+    }
+  }
+
   private async poll(): Promise<void> {
     if (!this.running) return;
 
+    await this.resolveWorkspaceId();
+
     try {
-      const tasks = await taskRepository.getPendingUnqueued();
+      const tasks = await taskRepository.getPendingUnqueued(this.workspaceId ?? undefined);
 
       if (tasks.length > 0) {
         log.info({ count: tasks.length }, "Poller found pending tasks");
