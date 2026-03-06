@@ -31,10 +31,12 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
   if (jobAgentId && jobAgentId !== AGENT_ID) {
     log.warn(
       { jobId: job.id, taskId, jobAgentId, AGENT_ID },
-      "Job agent mismatch — skipping (job is for a different agent)"
+      "Job agent mismatch — resetting task to pending for correct agent to pick up"
     );
-    // Re-delay instead of failing: the correct agent will pick it up
-    await job.moveToDelayed(Date.now() + 5000);
+    // Reset task so the TaskPoller re-enqueues it for the correct agent.
+    // Do NOT call moveToDelayed — it conflicts with the BullMQ active→completed
+    // transition and causes "not in active state" errors that land the job in failed.
+    await taskRepository.resetToUnqueued(taskId);
     return { status: "completed", startedAt: new Date().toISOString(), completedAt: new Date().toISOString(), durationSeconds: 0, stdoutTail: "" };
   }
 

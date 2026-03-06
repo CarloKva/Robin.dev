@@ -31,6 +31,21 @@ export class AgentRepository {
     }
   }
 
+  /** Return the workspace_id for a given agent. */
+  async getWorkspaceId(agentId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from("agents")
+      .select("workspace_id")
+      .eq("id", agentId)
+      .single();
+
+    if (error) {
+      log.warn({ agentId, error: error.message }, "AgentRepository.getWorkspaceId failed");
+      return null;
+    }
+    return data?.workspace_id ?? null;
+  }
+
   /**
    * Find the first agent for a workspace that has a fresh heartbeat (< 2 min).
    * Used by the task poller to verify the agent is online before processing.
