@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -11,7 +11,8 @@ import {
   qualitySuggestions,
   type QualityScore,
 } from "@/lib/tasks/descriptionQuality";
-import type { TaskType, Repository } from "@robin/shared-types";
+import { CustomSelect } from "@/components/ui/CustomSelect";
+import type { TaskType, Repository, ContextDocument } from "@robin/shared-types";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ const schema = z.object({
   type: z.enum(["bug", "feature", "docs", "refactor", "chore", "accessibility", "security"]),
   priority: z.enum(["low", "medium", "high", "urgent", "critical"]),
   repository_id: z.string().uuid("Seleziona una repository"),
+  agent_id: z.string().optional(),
   estimated_effort: z.union([z.literal(""), z.enum(["xs", "s", "m", "l"])]).optional(),
   context: z.string().max(5000, "Contesto troppo lungo").optional(),
 });
@@ -50,9 +52,6 @@ function FieldError({ message }: { message: string | undefined }) {
 
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50";
-
-const selectClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50";
 
 function DescriptionQualityBar({
   score,
@@ -89,13 +88,127 @@ function DescriptionQualityBar({
   );
 }
 
+// ─── Context docs multiselect ─────────────────────────────────────────────
+
+interface ContextDocMultiSelectProps {
+  docs: ContextDocument[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  disabled?: boolean;
+}
+
+function ContextDocMultiSelect({ docs, selectedIds, onChange, disabled }: ContextDocMultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  function toggle(id: string) {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((x) => x !== id));
+    } else {
+      onChange([...selectedIds, id]);
+    }
+  }
+
+  const selectedDocs = docs.filter((d) => selectedIds.includes(d.id));
+
+  if (docs.length === 0) return null;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((p) => !p)}
+        disabled={disabled}
+        className="w-full flex items-center justify-between gap-2 rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+      >
+        <span className="text-muted-foreground truncate">
+          {selectedDocs.length === 0
+            ? "Seleziona documenti..."
+            : selectedDocs.map((d) => d.title).join(", ")}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-border bg-white shadow-lg max-h-52 py-1">
+          {docs.map((doc) => {
+            const checked = selectedIds.includes(doc.id);
+            return (
+              <li
+                key={doc.id}
+                onClick={() => toggle(doc.id)}
+                className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-accent/60 select-none"
+              >
+                <span
+                  className={`h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
+                    checked ? "bg-primary border-primary" : "border-input bg-background"
+                  }`}
+                >
+                  {checked && (
+                    <svg viewBox="0 0 12 12" className="h-3 w-3 text-primary-foreground fill-current">
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+                <span className="truncate">{doc.title}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Selected chips */}
+      {selectedDocs.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selectedDocs.map((doc) => (
+            <span
+              key={doc.id}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+            >
+              {doc.title}
+              <button
+                type="button"
+                onClick={() => toggle(doc.id)}
+                className="ml-0.5 hover:text-primary/70 transition-colors"
+                aria-label={`Rimuovi ${doc.title}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
+
+interface Agent {
+  id: string;
+  name: string;
+}
 
 interface CreateTaskDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: () => void;
   repositories: Repository[];
+  agents?: Agent[];
+  contextDocs?: ContextDocument[];
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -105,9 +218,12 @@ export function CreateTaskDrawer({
   onClose,
   onCreated,
   repositories,
+  agents = [],
+  contextDocs = [],
 }: CreateTaskDrawerProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const titleRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -115,6 +231,7 @@ export function CreateTaskDrawer({
     handleSubmit,
     watch,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -122,6 +239,7 @@ export function CreateTaskDrawer({
       type: "feature",
       priority: "medium",
       repository_id: repositories[0]?.id ?? "",
+      agent_id: "",
       estimated_effort: "",
       context: "",
     },
@@ -134,14 +252,12 @@ export function CreateTaskDrawer({
       ? descriptionQualityScore(watchedDescription, watchedType)
       : null;
 
-  // Focus title when drawer opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => titleRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
-  // Escape to close
   useEffect(() => {
     if (!isOpen) return;
     function handler(e: KeyboardEvent) {
@@ -154,16 +270,17 @@ export function CreateTaskDrawer({
     return () => window.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
 
-  // Reset form when closed
   useEffect(() => {
     if (!isOpen) {
       reset({
         type: "feature",
         priority: "medium",
         repository_id: repositories[0]?.id ?? "",
+        agent_id: "",
         estimated_effort: "",
         context: "",
       });
+      setSelectedDocIds([]);
       setServerError(null);
     }
   }, [isOpen, reset, repositories]);
@@ -177,11 +294,31 @@ export function CreateTaskDrawer({
   const onSubmit = async (data: FormValues) => {
     setServerError(null);
     try {
+      // Build context: merge user text + referenced doc IDs
+      let finalContext = data.context ?? "";
+      if (selectedDocIds.length > 0) {
+        const docsSection = selectedDocIds
+          .map((id) => {
+            const doc = contextDocs.find((d) => d.id === id);
+            return doc ? `- ${doc.title} (id: ${id})` : `- ${id}`;
+          })
+          .join("\n");
+        finalContext = finalContext
+          ? `${finalContext}\n\n--- Documenti di contesto allegati ---\n${docsSection}`
+          : `--- Documenti di contesto allegati ---\n${docsSection}`;
+      }
+
       const body = {
-        ...data,
+        title: data.title,
+        description: data.description,
+        type: data.type,
+        priority: data.priority,
+        repository_id: data.repository_id,
         estimated_effort: data.estimated_effort || undefined,
-        context: data.context || undefined,
+        context: finalContext || undefined,
+        ...(data.agent_id ? { preferred_agent_id: data.agent_id } : {}),
       };
+
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,6 +340,41 @@ export function CreateTaskDrawer({
       setServerError("Errore di rete. Riprova tra un momento.");
     }
   };
+
+  // ── Options for CustomSelect ───────────────────────────────────────────────
+
+  const repoOptions = repositories.map((r) => ({ value: r.id, label: r.full_name }));
+
+  const typeOptions = [
+    { value: "bug", label: "Bug" },
+    { value: "feature", label: "Feature" },
+    { value: "docs", label: "Docs" },
+    { value: "refactor", label: "Refactor" },
+    { value: "chore", label: "Chore" },
+    { value: "accessibility", label: "Accessibility" },
+    { value: "security", label: "Security" },
+  ];
+
+  const priorityOptions = [
+    { value: "low", label: "Bassa" },
+    { value: "medium", label: "Media" },
+    { value: "high", label: "Alta" },
+    { value: "urgent", label: "Urgente" },
+    { value: "critical", label: "Critica" },
+  ];
+
+  const effortOptions = [
+    { value: "", label: "— Non specificato —" },
+    { value: "xs", label: "XS — Meno di 1 ora" },
+    { value: "s", label: "S — Poche ore" },
+    { value: "m", label: "M — Mezzo giorno / 1 giorno" },
+    { value: "l", label: "L — Più giorni" },
+  ];
+
+  const agentOptions = [
+    { value: "", label: "— Auto-assegna —" },
+    ...agents.map((a) => ({ value: a.id, label: a.name })),
+  ];
 
   return (
     <>
@@ -282,18 +454,20 @@ export function CreateTaskDrawer({
                   </a>
                 </p>
               ) : (
-                <select
-                  id="drawer-task-repo"
-                  className={`mt-1 ${selectClass}`}
-                  {...register("repository_id")}
-                  disabled={isSubmitting}
-                >
-                  {repositories.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.full_name}
-                    </option>
-                  ))}
-                </select>
+                <Controller
+                  name="repository_id"
+                  control={control}
+                  render={({ field }) => (
+                    <CustomSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={repoOptions}
+                      placeholder="Seleziona repository"
+                      disabled={isSubmitting}
+                      className="mt-1"
+                    />
+                  )}
+                />
               )}
               <FieldError message={errors.repository_id?.message} />
             </div>
@@ -302,57 +476,79 @@ export function CreateTaskDrawer({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <FieldLabel htmlFor="drawer-task-type">Tipo</FieldLabel>
-                <select
-                  id="drawer-task-type"
-                  className={`mt-1 ${selectClass}`}
-                  {...register("type")}
-                  disabled={isSubmitting}
-                >
-                  <option value="bug">Bug</option>
-                  <option value="feature">Feature</option>
-                  <option value="docs">Docs</option>
-                  <option value="refactor">Refactor</option>
-                  <option value="chore">Chore</option>
-                  <option value="accessibility">Accessibility</option>
-                  <option value="security">Security</option>
-                </select>
+                <Controller
+                  name="type"
+                  control={control}
+                  render={({ field }) => (
+                    <CustomSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={typeOptions}
+                      disabled={isSubmitting}
+                      className="mt-1"
+                    />
+                  )}
+                />
                 <FieldError message={errors.type?.message} />
               </div>
 
               <div>
                 <FieldLabel htmlFor="drawer-task-priority">Priorità</FieldLabel>
-                <select
-                  id="drawer-task-priority"
-                  className={`mt-1 ${selectClass}`}
-                  {...register("priority")}
-                  disabled={isSubmitting}
-                >
-                  <option value="low">Bassa</option>
-                  <option value="medium">Media</option>
-                  <option value="high">Alta</option>
-                  <option value="urgent">Urgente</option>
-                  <option value="critical">Critica</option>
-                </select>
+                <Controller
+                  name="priority"
+                  control={control}
+                  render={({ field }) => (
+                    <CustomSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={priorityOptions}
+                      disabled={isSubmitting}
+                      className="mt-1"
+                    />
+                  )}
+                />
                 <FieldError message={errors.priority?.message} />
               </div>
             </div>
 
-            {/* Effort */}
-            <div>
-              <FieldLabel htmlFor="drawer-task-effort">Effort stimato</FieldLabel>
-              <select
-                id="drawer-task-effort"
-                className={`mt-1 ${selectClass}`}
-                {...register("estimated_effort")}
-                disabled={isSubmitting}
-              >
-                <option value="">— Non specificato —</option>
-                <option value="xs">XS — Meno di 1 ora</option>
-                <option value="s">S — Poche ore</option>
-                <option value="m">M — Mezzo giorno / 1 giorno</option>
-                <option value="l">L — Più giorni</option>
-              </select>
-              <FieldError message={errors.estimated_effort?.message} />
+            {/* Effort + Agent row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FieldLabel htmlFor="drawer-task-effort">Effort stimato</FieldLabel>
+                <Controller
+                  name="estimated_effort"
+                  control={control}
+                  render={({ field }) => (
+                    <CustomSelect
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      options={effortOptions}
+                      disabled={isSubmitting}
+                      className="mt-1"
+                    />
+                  )}
+                />
+                <FieldError message={errors.estimated_effort?.message} />
+              </div>
+
+              {agents.length > 0 && (
+                <div>
+                  <FieldLabel htmlFor="drawer-task-agent">Agente</FieldLabel>
+                  <Controller
+                    name="agent_id"
+                    control={control}
+                    render={({ field }) => (
+                      <CustomSelect
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        options={agentOptions}
+                        disabled={isSubmitting}
+                        className="mt-1"
+                      />
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Description */}
@@ -378,13 +574,29 @@ export function CreateTaskDrawer({
               <FieldLabel htmlFor="drawer-task-context">Contesto aggiuntivo</FieldLabel>
               <textarea
                 id="drawer-task-context"
-                rows={4}
+                rows={3}
                 placeholder="Link di riferimento, dettagli tecnici, dipendenze, note per l'agente…"
                 className={`mt-1 resize-y ${inputClass}`}
                 {...register("context")}
                 disabled={isSubmitting}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
+
+              {/* Context docs multiselect */}
+              {contextDocs.length > 0 && (
+                <div className="mt-2">
+                  <p className="mb-1.5 text-xs text-muted-foreground font-medium">
+                    Documenti di contesto da allegare
+                  </p>
+                  <ContextDocMultiSelect
+                    docs={contextDocs}
+                    selectedIds={selectedDocIds}
+                    onChange={setSelectedDocIds}
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
+
+              <p className="mt-2 text-xs text-muted-foreground">
                 Opzionale — usato dall&apos;agente come contesto aggiuntivo.
               </p>
               <FieldError message={errors.context?.message} />
