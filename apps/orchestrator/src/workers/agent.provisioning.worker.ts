@@ -162,6 +162,9 @@ async function processProvisioningJob(
   const redisUrl = resolveRedisUrlForAgents();
   const redisCaCert = process.env["REDIS_CA_CERT"];
   const snapshotId = process.env["HETZNER_SNAPSHOT_ID"];
+  const githubAppName = process.env["GITHUB_APP_NAME"] ?? "robin-dev";
+  const gitAuthorName = `${githubAppName}[bot]`;
+  const gitAuthorEmail = `${githubAppId}+${githubAppName}[bot]@users.noreply.github.com`;
 
   if (!supabaseUrl || !supabaseServiceRoleKey || !anthropicApiKey || !githubAppId || !githubAppPrivateKeyB64) {
     throw new Error("Missing required environment variables for cloud-init script generation");
@@ -195,12 +198,16 @@ async function processProvisioningJob(
           ...commonParams,
           ...(redisUrl !== undefined && { redisUrl }),
           ...(redisCaCert !== undefined && { redisCaCert }),
+          gitAuthorName,
+          gitAuthorEmail,
         })
       : buildCloudInitScript({
           ...commonParams,
           ...(redisUrl !== undefined && { redisUrl }),
           ...(redisCaCert !== undefined && { redisCaCert }),
           ...(orchestratorRepoUrl !== undefined && { orchestratorRepoUrl }),
+          gitAuthorName,
+          gitAuthorEmail,
         });
 
     // ── 4. Create Hetzner VPS ───────────────────────────────────────────────
