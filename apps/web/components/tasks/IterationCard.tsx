@@ -9,9 +9,9 @@ import { cn } from "@/lib/utils";
 // ── Label maps ────────────────────────────────────────────────────────────────
 
 const TRIGGER_LABEL: Record<TaskIteration["trigger"], string> = {
-  original: "Esecuzione originale",
-  github_rework: "Rework da commenti GitHub",
-  dashboard_rework: "Rework dalla dashboard",
+  initial: "Esecuzione originale",
+  github_comment: "Rework da commenti GitHub",
+  dashboard: "Rework dalla dashboard",
 };
 
 const STATUS_BADGE: Record<TaskIteration["status"], string> = {
