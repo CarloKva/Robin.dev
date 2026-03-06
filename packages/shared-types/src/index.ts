@@ -510,7 +510,7 @@ export type ContextDocument = {
 // Task iterations — history of execution attempts
 // ---------------------------------------------------------------
 
-export type IterationTrigger = "original" | "github_rework" | "dashboard_rework";
+export type IterationTrigger = "initial" | "github_comment" | "dashboard";
 
 export type IterationStatus = "pending" | "running" | "completed" | "failed";
 

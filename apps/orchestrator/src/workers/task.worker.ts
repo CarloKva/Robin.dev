@@ -46,7 +46,7 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
   const iterationNumber = await taskRepository.createIteration({
     taskId,
     workspaceId,
-    trigger: "original",
+    trigger: "initial",
   });
   await eventService.phaseStarted(taskId, workspaceId, AGENT_ID, "analysis");
 
