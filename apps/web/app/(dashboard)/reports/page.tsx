@@ -21,7 +21,7 @@ export default async function ReportsPage() {
           Statistiche sprint e attività degli agenti.
         </p>
       </div>
-      <ReportsClient sprints={data.sprints} tasks={data.tasks} repositories={data.repositories} />
+      <ReportsClient sprints={data.sprints} tasks={data.tasks} repositories={data.repositories} agents={data.agents} />
     </div>
   );
 }

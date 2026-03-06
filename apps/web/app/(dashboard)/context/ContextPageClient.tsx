@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ContextDocCard } from "@/components/context/ContextDocCard";
 import { ContextDocEditor } from "@/components/context/ContextDocEditor";
 import { SyncFromGitHubModal } from "@/components/context/SyncFromGitHubModal";
 import type { ContextDocument, Repository } from "@robin/shared-types";
@@ -53,7 +52,6 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
   function handleSyncDone() {
     setIsSyncModalOpen(false);
     refresh();
-    // Re-fetch docs optimistically from server
     fetch("/api/context")
       .then((r) => r.json())
       .then((data: { docs: ContextDocument[] }) => setDocs(data.docs))
@@ -80,7 +78,7 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
         )}
       </div>
 
-      {/* Document grid */}
+      {/* Document table */}
       {docs.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
           <p className="text-sm text-muted-foreground">Nessun documento di contesto.</p>
@@ -89,20 +87,70 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {docs.map((doc) => (
-            <ContextDocCard
-              key={doc.id}
-              doc={doc}
-              deleting={deletingId === doc.id}
-              onEdit={() => setEditingDoc(doc)}
-              onDelete={() => void handleDelete(doc.id)}
-            />
-          ))}
+        <div className="rounded-lg border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Titolo</th>
+                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground hidden sm:table-cell">Sorgente</th>
+                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground hidden md:table-cell">Aggiornato</th>
+                <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Azioni</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {docs.map((doc) => {
+                const sourceLabel = doc.source_path
+                  ? `${doc.source_repo_full_name ?? ""}/${doc.source_path}`
+                  : "Manuale";
+                const updatedAt = new Date(doc.updated_at).toLocaleDateString("it-IT", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                });
+
+                return (
+                  <tr
+                    key={doc.id}
+                    className="hover:bg-accent/40 cursor-pointer transition-colors"
+                    onClick={() => setEditingDoc(doc)}
+                  >
+                    <td className="px-4 py-3 font-medium text-foreground">{doc.title}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs">
+                        {sourceLabel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell tabular-nums">
+                      {updatedAt}
+                    </td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setEditingDoc(doc)}
+                        className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      >
+                        Apri
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm("Eliminare questo documento?")) {
+                            void handleDelete(doc.id);
+                          }
+                        }}
+                        disabled={deletingId === doc.id}
+                        className="ml-1 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === doc.id ? "…" : "Elimina"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Editor drawer */}
+      {/* Editor / viewer drawer */}
       {editingDoc !== null && (
         <ContextDocEditor
           doc={editingDoc === "new" ? null : editingDoc}
