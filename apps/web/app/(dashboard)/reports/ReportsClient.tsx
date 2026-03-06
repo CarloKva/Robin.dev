@@ -16,6 +16,7 @@ import {
   Cell,
   ResponsiveContainer,
 } from "recharts";
+import Link from "next/link";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import type { SprintSummary, ReportTask, ReportRepository, ReportAgent } from "@/lib/db/reports";
 
@@ -388,7 +389,9 @@ export function ReportsClient({ sprints, tasks, repositories, agents }: ReportsC
                   return (
                     <tr key={task.id} className="hover:bg-accent/30 transition-colors">
                       <td className="px-4 py-2.5 font-medium text-foreground max-w-xs truncate">
-                        {task.title}
+                        <Link href={`/tasks/${task.id}`} className="hover:underline">
+                          {task.title}
+                        </Link>
                       </td>
                       <td className="px-4 py-2.5 hidden sm:table-cell">
                         {task.type ? (

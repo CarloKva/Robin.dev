@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Search, X, ChevronRight, ArrowUpDown, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
 import { BulkActionBar } from "./BulkActionBar";
@@ -629,9 +630,12 @@ export function BacklogJiraView({
                                   className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", STATUS_COLORS[task.status])}
                                   title={STATUS_LABELS[task.status]}
                                 />
-                                <span className="min-w-0 flex-1 font-medium truncate">
+                                <Link
+                                  href={`/tasks/${task.id}`}
+                                  className="min-w-0 flex-1 font-medium truncate hover:underline"
+                                >
                                   {task.title}
-                                </span>
+                                </Link>
                                 <span
                                   className={cn(
                                     "shrink-0 rounded px-1.5 py-0.5 text-xs font-medium",
