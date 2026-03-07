@@ -81,3 +81,28 @@
     animation: task-landing 200ms ease-out;
   }
 }
+
+/* ProvisioningTimeline animations */
+@keyframes step-complete {
+  0%   { transform: scale(1);   background-color: #007AFF; }
+  50%  { transform: scale(1.2); background-color: #1a8f3c; }
+  100% { transform: scale(1);   background-color: #34C759; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes connector-fill {
+  from { background-color: #D1D1D6; }
+  to   { background-color: #34C759; }
+}
+
+.animate-step-complete {
+  animation: step-complete 0.4s ease-in-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-in-out;
+}
