@@ -18,7 +18,7 @@ export function getTaskQueue(): Queue<JobPayload> {
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: "exponential", delay: 5_000 },
-      removeOnComplete: { count: 0 },
+      removeOnComplete: true,
       removeOnFail: { count: 100 },
     },
   });
