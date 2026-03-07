@@ -279,7 +279,7 @@ export async function reconstructRepoQueues(): Promise<void> {
             sprintOrder: task.sprint_order as number ?? 0,
           },
           {
-            jobId: `sprint:${task.sprint_id}:task:${task.id}`,
+            jobId: `sprint_${task.sprint_id}_task_${task.id}`,
             priority: task.sprint_order as number ?? 999,
           }
         );
