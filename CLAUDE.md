@@ -112,24 +112,52 @@ Questi bug sono stati identificati e non ancora fixati. Non introdurre codice ch
 ### Causa comune di task stuck in `queued`
 BullMQ v5: `queue.add()` con un `jobId` già esistente ritorna l'hash vecchio (dedup) senza rientrare in coda. Risultato: task bloccata in loop infinito. Cause:
 1. `removeOnComplete: true` → normalizzato a `{count:200}`, hash non eliminato → dedup blocca i re-enqueue. Fix: `removeOnComplete: { count: 0 }` in `defaultJobOptions` e `workerOptions`.
-2. `assigned_agent_id = null` + due agenti → entrambi i poller aggiungono lo stesso job con `agentId` diversi → cross-agent mismatch loop.
+2. `assigned_agent_id = null` + due agenti → entrambi i poller aggiungono lo stesso job con `agentId` diversi → **cross-agent mismatch loop** (vedi sotto).
 3. Build disallineata su un agente → vecchio `task.worker.js` chiama `moveToDelayed` invece di `resetToUnqueued` → task non viene mai liberata.
 
-### Procedura di sblocco
+### Cross-agent mismatch loop — diagnosi e fix
+**Sintoma:** `queued_at` settato nel DB, BullMQ vuoto, watchdog mostra `a=2 w=0` per minuti interi.
+**Causa:** l'agente idle consuma i job prima dell'agente corretto → routing mismatch → `resetToUnqueued` → poller ri-accoda → loop a ~5s per ciclo. Le task sembrano stuck ma vengono processate e rilasciate centinaia di volte al minuto.
+**Diagnosi rapida:**
+```bash
+redis-cli --tls --insecure -a <pwd> -h 77.42.71.71 LLEN bull:tasks:active   # dovrebbe essere >0 se c'è lavoro reale
+ssh root@46.225.212.237 "tail -5 /opt/robin/watchdog.log"                   # a=2 w=0 per minuti = mismatch loop
+```
+**Fix:**
+```bash
+# 1. Ferma l'agente idle per rompere il loop
+ssh -i ~/.ssh/robindev_provisioning root@46.225.212.237 "systemctl stop robin-orchestrator"
+
+# 2. Resetta le task e assegna esplicitamente all'agente corretto
+# In Supabase SQL editor:
+UPDATE tasks SET queued_at=NULL, assigned_agent_id='<uuid-agente>', updated_at=NOW()
+WHERE status='queued' AND sprint_id='<sprint_id>';
+
+# 3. Attendi ~35s che il poller del'agente attivo prenda i job, poi riavvia l'agente fermato
+ssh -i ~/.ssh/robindev_provisioning root@46.225.212.237 "systemctl start robin-orchestrator"
+```
+Con `assigned_agent_id` settato entrambi i poller costruiscono il payload con lo stesso `agentId` → il loop si esaurisce naturalmente.
+
+### Procedura di sblocco generica
 ```bash
 # SSH ai VPS agenti (chiave: ~/.ssh/robindev_provisioning)
 ssh -i ~/.ssh/robindev_provisioning root@<IP>
-# Se host key cambiata: ssh-keygen -R <IP>
-
-# 1. Deploy queue-watchdog.js (vedi /tmp/queue-watchdog.js) — pulisce completed/failed e rilascia stuck ogni 30s
-# 2. Deploy purge script one-shot — cancella hash Redis e resetta queued_at=null in DB
-# 3. Se agente ha build vecchia (log: "skipping" invece di "resetting task to pending"):
-#    patchare dist/workers/task.worker.js — sostituire moveToDelayed con resetToUnqueued
-# 4. Assegnare assigned_agent_id espliciti per evitare race cross-agent
 
 # Variabili env agente (da .env): REDIS_URL, AGENT_ID, WORKSPACE_ID
 # BullMQ queue name: "tasks" — job priority va in bull:tasks:prioritized (ZSET), non bull:tasks:wait (LIST)
 # getJobCounts('waiting') = 0 anche con job in coda prioritaria — usare zrange bull:tasks:prioritized
+```
+
+### Manutenzione ad ogni nuovo sprint
+1. **Watchdog SPRINT_ID** — hardcoded in `/opt/robin/queue-watchdog.js` su agent `7ab81aa7` (`46.225.212.237`). Va aggiornato, altrimenti il watchdog non vede le task stuck del nuovo sprint:
+```bash
+ssh -i ~/.ssh/robindev_provisioning root@46.225.212.237 \
+  "sed -i \"s/<old_sprint_id>/<new_sprint_id>/\" /opt/robin/queue-watchdog.js"
+```
+2. **SSH key sul control plane** — richiesta da `ops-ssh.service` per i diagnostics. Deve esistere a `~/.ssh/robindev_provisioning` su `77.42.71.71`. Se mancante:
+```bash
+scp -i ~/.ssh/robindev_provisioning ~/.ssh/robindev_provisioning root@77.42.71.71:~/.ssh/robindev_provisioning
+ssh root@77.42.71.71 "chmod 600 ~/.ssh/robindev_provisioning"
 ```
 
 ## Dove trovare le cose
