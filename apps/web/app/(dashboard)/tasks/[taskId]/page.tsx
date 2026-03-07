@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTaskTimeline, projectTaskState } from "@/lib/db/events";
 import { getTaskIterations } from "@/lib/db/iterations";
-import type { Task } from "@robin/shared-types";
+import type { Agent, Task } from "@robin/shared-types";
 import { TaskDetailClient } from "./TaskDetailClient";
 
 interface TaskDetailPageProps {
@@ -30,11 +30,20 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   const typedTask = task as Task;
 
-  // Load event history and iteration history server-side for SSR
-  const [initialEvents, initialIterations] = await Promise.all([
+  // Load event history, iteration history, and agent data server-side for SSR
+  const [initialEvents, initialIterations, agentResult] = await Promise.all([
     getTaskTimeline(taskId),
     getTaskIterations(taskId),
+    typedTask.assigned_agent_id
+      ? supabase
+          .from("agents")
+          .select("*")
+          .eq("id", typedTask.assigned_agent_id)
+          .single()
+      : Promise.resolve({ data: null }),
   ]);
+
+  const agent = (agentResult.data as Agent | null) ?? null;
 
   const projectedState = projectTaskState(
     initialEvents.map((e) => ({
@@ -55,6 +64,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
       initialEvents={initialEvents}
       initialProjectedState={projectedState}
       initialIterations={initialIterations}
+      agent={agent}
     />
   );
 }
