@@ -304,10 +304,17 @@ export type JobErrorCode =
 // DB entity shape types (mirrors DB rows — non-exhaustive)
 // ---------------------------------------------------------------
 
+export type MCPServerConfig =
+  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | { type: 'stdio'; command: string; args?: string[] };
+
 export type Workspace = {
   id: string;
   name: string;
   slug: string;
+  mcp_config?: {
+    mcpServers: Record<string, MCPServerConfig>;
+  } | null;
   created_at: string;
   updated_at: string;
 };
