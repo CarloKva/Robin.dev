@@ -11,6 +11,7 @@ import {
   type BatchManifest,
 } from "@/lib/ai/brainstorm";
 import { ImportPreviewCard } from "./ImportPreviewCard";
+import { validateImageFiles, MAX_IMAGE_FILES, ALLOWED_IMAGE_TYPES } from "@/lib/utils/image-validation";
 import type { Repository, ContextDocument } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
@@ -24,6 +25,12 @@ interface Message {
   content: string;
   timestamp: Date;
   usage?: TokenUsage;
+  imageUrls?: string[];
+}
+
+interface SelectedImage {
+  dataUrl: string;
+  name: string;
 }
 
 interface BrainstormDrawerProps {
@@ -173,12 +180,26 @@ function AssistantMessage({ content, timestamp, isStreaming, usage }: AssistantM
 interface UserMessageProps {
   content: string;
   timestamp: Date;
+  imageUrls: string[] | undefined;
 }
 
-function UserMessage({ content, timestamp }: UserMessageProps) {
+function UserMessage({ content, timestamp, imageUrls }: UserMessageProps) {
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground leading-relaxed">
+        {imageUrls && imageUrls.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {imageUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={url}
+                alt={`Allegato ${i + 1}`}
+                className="h-20 w-20 rounded-lg object-cover border border-primary-foreground/20"
+              />
+            ))}
+          </div>
+        )}
         {content}
       </div>
       <span className="text-[10px] text-muted-foreground pr-1">
@@ -358,6 +379,15 @@ function BatchProgressBar({
 /** Matches `/context` optionally followed by a space and a filter word, at the end of the string. */
 const SLASH_CONTEXT_RE = /\/context(\s+(\S*))?$/;
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 const AI_MODEL_NAME = "claude-sonnet-4-6";
 
 export function BrainstormModal({
@@ -381,6 +411,8 @@ export function BrainstormModal({
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownFilter, setDropdownFilter] = useState("");
   const [highlightedIdx, setHighlightedIdx] = useState(0);
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [imageErrors, setImageErrors] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -500,6 +532,8 @@ export function BrainstormModal({
     setPaused(false);
     isBatchGeneratingRef.current = false;
     setConfirmNewChat(false);
+    setSelectedImages([]);
+    setImageErrors([]);
     setAttachedImages([]);
     pendingImagesRef.current = [];
   }
@@ -531,8 +565,9 @@ export function BrainstormModal({
     }
   }
 
-  async function sendMessage(text: string, isProgrammatic = false) {
-    if (!text || streaming) return;
+  async function sendMessage(text: string, isProgrammatic = false, images?: SelectedImage[]) {
+    if (!text && !images?.length) return;
+    if (streaming) return;
 
     // Capture images for this turn (only for user-initiated messages)
     if (isProgrammatic) {
@@ -543,10 +578,20 @@ export function BrainstormModal({
     }
 
     const now = new Date();
-    const userMessage: Message = { role: "user", content: text, timestamp: now };
+    const imageUrls = images?.length ? images.map((img) => img.dataUrl) : undefined;
+    const userMessage: Message = {
+      role: "user",
+      content: text,
+      timestamp: now,
+      ...(imageUrls !== undefined && { imageUrls }),
+    };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
-    if (!isProgrammatic) setInput("");
+    if (!isProgrammatic) {
+      setInput("");
+      setSelectedImages([]);
+      setImageErrors([]);
+    }
     setStreaming(true);
     setImportData(null);
     setImported(false);
@@ -566,7 +611,11 @@ export function BrainstormModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: newMessages.map(({ role, content }) => ({ role, content })),
+          messages: newMessages.map(({ role, content, imageUrls: imgs }) => ({
+            role,
+            content,
+            ...(imgs !== undefined && { images: imgs }),
+          })),
           contextDocIds: selectedDocs.map((d) => d.id),
         }),
       });
@@ -704,7 +753,39 @@ export function BrainstormModal({
   }
 
   async function handleSend() {
-    await sendMessage(input.trim());
+    const images = selectedImages.length > 0 ? selectedImages : undefined;
+    await sendMessage(input.trim(), false, images);
+  }
+
+  function handleAttachClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const { valid, errors } = validateImageFiles(files, selectedImages.length);
+
+    if (errors.length > 0) {
+      setImageErrors(errors);
+      setTimeout(() => setImageErrors([]), 5000);
+    }
+
+    if (valid.length === 0) return;
+
+    const newImages = await Promise.all(
+      valid.map(async (file) => ({
+        dataUrl: await fileToDataUrl(file),
+        name: file.name,
+      }))
+    );
+    setSelectedImages((prev) => [...prev, ...newImages]);
+  }
+
+  function handleRemoveImage(index: number) {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   function triggerBatch(index: number) {
@@ -906,7 +987,14 @@ export function BrainstormModal({
         {messages.map((msg, i) => {
           const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
           if (msg.role === "user") {
-            return <UserMessage key={i} content={msg.content} timestamp={msg.timestamp} />;
+            return (
+              <UserMessage
+                key={i}
+                content={msg.content}
+                timestamp={msg.timestamp}
+                imageUrls={msg.imageUrls}
+              />
+            );
           }
           return (
             <AssistantMessage
@@ -1100,6 +1188,48 @@ export function BrainstormModal({
           </div>
         )}
 
+        {/* Image validation errors */}
+        {imageErrors.length > 0 && (
+          <div className="mb-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+            {imageErrors.map((err, i) => (
+              <p key={i} className="text-xs text-destructive">{err}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Image thumbnail previews */}
+        {selectedImages.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {selectedImages.map((img, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.dataUrl}
+                  alt={img.name}
+                  className="h-16 w-16 rounded-lg object-cover border border-border"
+                />
+                <button
+                  onClick={() => handleRemoveImage(i)}
+                  className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-foreground text-background flex items-center justify-center hover:bg-foreground/80 transition-colors"
+                  aria-label={`Rimuovi ${img.name}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ALLOWED_IMAGE_TYPES.join(",")}
+          multiple
+          className="hidden"
+          onChange={(e) => void handleFileChange(e)}
+        />
+
         <div className="rounded-2xl border border-border bg-background focus-within:ring-1 focus-within:ring-ring transition-shadow">
           <textarea
             ref={textareaRef}
@@ -1113,6 +1243,16 @@ export function BrainstormModal({
             className="w-full px-4 pt-3.5 pb-2 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
           />
           <div className="flex items-center gap-2 px-3 pb-3">
+            {/* Attach image button */}
+            <button
+              onClick={handleAttachClick}
+              disabled={streaming || selectedImages.length >= MAX_IMAGE_FILES}
+              aria-label="Allega immagine"
+              title="Allega immagine (PNG, JPEG, WEBP · max 5 MB · max 3)"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </button>
             {contextDocs.length > 0 && (
               <button
                 onMouseDown={(e) => {
@@ -1143,7 +1283,7 @@ export function BrainstormModal({
             </span>
             <button
               onClick={() => void handleSend()}
-              disabled={streaming || !input.trim()}
+              disabled={streaming || (!input.trim() && selectedImages.length === 0)}
               aria-label="Invia messaggio"
               className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
