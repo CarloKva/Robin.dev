@@ -264,6 +264,9 @@ export type JobPayload = {
   // Environment (optional — populated by task.worker.ts at execution time)
   environmentId?: string;
   targetBranch?: string;
+
+  // MCP (optional — passed as --mcp-config to Claude Code when present)
+  mcpConfig?: Record<string, unknown> | null;
 };
 
 /**
