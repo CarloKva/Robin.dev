@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, X, Bot, ArrowUp, Loader2 } from "lucide-react";
+import { Sparkles, X, Bot, ArrowUp, Loader2, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { parseRobinMd } from "@/lib/robin-md-parser";
 import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
 import { ImportPreviewCard } from "./ImportPreviewCard";
-import type { Repository } from "@robin/shared-types";
+import type { Repository, ContextDocument } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
 interface TokenUsage {
@@ -23,6 +23,7 @@ interface Message {
 
 interface BrainstormWidgetProps {
   repositories: Repository[];
+  contextDocs?: ContextDocument[];
   onImported: () => void;
 }
 
@@ -186,7 +187,15 @@ function modelBadgeClass(model: string): string {
   return "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300";
 }
 
-export function BrainstormModal({ repositories, onImported }: BrainstormWidgetProps) {
+
+/** Matches `/context` optionally followed by a space and a filter word, at the end of the string. */
+const SLASH_CONTEXT_RE = /\/context(\s+(\S*))?$/;
+
+export function BrainstormModal({
+  repositories,
+  contextDocs = [],
+  onImported,
+}: BrainstormWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -198,6 +207,10 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     inputTokens: 0,
     outputTokens: 0,
   });
+  const [selectedDocs, setSelectedDocs] = useState<ContextDocument[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [dropdownFilter, setDropdownFilter] = useState("");
+  const [highlightedIdx, setHighlightedIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -207,19 +220,66 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     }
   }, [messages, isOpen]);
 
-  // Auto-resize textarea: reset to auto then stretch to scrollHeight, capped at ~6 rows
+  // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const lineHeight = 20; // px — matches text-sm leading
-    const maxHeight = lineHeight * 6 + 16; // 6 lines + padding
+    const lineHeight = 20;
+    const maxHeight = lineHeight * 6 + 16;
     el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
   }, []);
 
   useEffect(() => {
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
+
+  // Reset highlighted index when filter or dropdown visibility changes
+  useEffect(() => {
+    setHighlightedIdx(0);
+  }, [dropdownFilter, showDropdown]);
+
+  const filteredDocs = contextDocs.filter((doc) => {
+    if (selectedDocs.some((d) => d.id === doc.id)) return false;
+    if (!dropdownFilter) return true;
+    return doc.title.toLowerCase().includes(dropdownFilter.toLowerCase());
+  });
+
+  function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    setInput(val);
+    adjustTextareaHeight();
+
+    const match = SLASH_CONTEXT_RE.exec(val);
+    if (match) {
+      setShowDropdown(true);
+      setDropdownFilter(match[2] ?? "");
+    } else {
+      setShowDropdown(false);
+      setDropdownFilter("");
+    }
+  }
+
+  function selectDoc(doc: ContextDocument) {
+    setInput((prev) => prev.replace(SLASH_CONTEXT_RE, "").trimEnd());
+    setSelectedDocs((prev) => [...prev, doc]);
+    setShowDropdown(false);
+    setDropdownFilter("");
+    textareaRef.current?.focus();
+  }
+
+  function removeDoc(docId: string) {
+    setSelectedDocs((prev) => prev.filter((d) => d.id !== docId));
+  }
+
+  function handleNewChat() {
+    setMessages([]);
+    setInput("");
+    setImportData(null);
+    setImported(false);
+    setSelectedDocs([]);
+    setShowDropdown(false);
+  }
 
   async function handleSend() {
     const text = input.trim();
@@ -250,7 +310,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: newMessages.map(({ role, content }) => ({ role, content })),
-          contextDocIds: [],
+          contextDocIds: selectedDocs.map((d) => d.id),
         }),
       });
 
@@ -365,6 +425,32 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (showDropdown) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIdx((prev) => Math.min(prev + 1, filteredDocs.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIdx((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const doc = filteredDocs[highlightedIdx];
+        if (doc) selectDoc(doc);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowDropdown(false);
+        setDropdownFilter("");
+        setInput((prev) => prev.replace(SLASH_CONTEXT_RE, "").trimEnd());
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -398,13 +484,23 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              aria-label="Chiudi"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <button
+                  onClick={handleNewChat}
+                  className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                >
+                  Nuova chat
+                </button>
+              )}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                aria-label="Chiudi"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Messages */}
@@ -418,6 +514,13 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                 <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
                   Es. &quot;Aggiungi autenticazione con Google&quot;
                 </p>
+                {contextDocs.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Digita{" "}
+                    <code className="bg-accent rounded px-1">/context</code>
+                    {" "}per allegare documenti
+                  </p>
+                )}
               </div>
             )}
 
@@ -474,13 +577,64 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
             </div>
           )}
 
-          {/* Input */}
+          {/* Input area */}
           <div className="shrink-0 border-t border-border bg-background px-3 py-3">
+            {/* Selected context doc chips */}
+            {selectedDocs.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {selectedDocs.map((doc) => (
+                  <span
+                    key={doc.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
+                  >
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <span className="max-w-[140px] truncate">{doc.title}</span>
+                    <button
+                      onClick={() => removeDoc(doc.id)}
+                      className="ml-0.5 rounded-full hover:text-foreground text-muted-foreground transition-colors"
+                      aria-label={`Rimuovi ${doc.title}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Context document dropdown */}
+            {showDropdown && (
+              <div className="mb-2 rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
+                {filteredDocs.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    Nessun documento trovato
+                  </div>
+                ) : (
+                  filteredDocs.map((doc, idx) => (
+                    <button
+                      key={doc.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        selectDoc(doc);
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                        idx === highlightedIdx
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-accent/50"
+                      }`}
+                    >
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{doc.title}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
             <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring transition-shadow">
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={streaming}
                 placeholder="Descrivi cosa vuoi implementare…"

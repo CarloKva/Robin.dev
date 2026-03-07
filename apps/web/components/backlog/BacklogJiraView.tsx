@@ -381,6 +381,7 @@ export function BacklogJiraView({
     <div className="space-y-0">
       <BrainstormModal
         repositories={repositories}
+        contextDocs={contextDocs}
         onImported={refresh}
       />
 
