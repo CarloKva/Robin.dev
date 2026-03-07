@@ -407,7 +407,7 @@ export function BacklogJiraView({
       />
 
       {/* ── Filter bar ─────────────────────────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -439,7 +439,7 @@ export function BacklogJiraView({
       </div>
 
       {/* ── Sprint sections ────────────────────────────────────────────────── */}
-      <div className="mt-4 space-y-2">
+      <div className="!mt-2 space-y-2">
         {filteredSprints.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card">
             <div className="flex items-center justify-between px-4 py-3">
