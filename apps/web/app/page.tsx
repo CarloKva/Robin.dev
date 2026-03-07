@@ -1,4 +1,5 @@
 import Link from "next/link";
+import FeaturesGrid from "@/components/marketing/FeaturesGrid";
 
 export default function HomePage() {
   return (
@@ -128,6 +129,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Features Grid */}
+      <FeaturesGrid />
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
