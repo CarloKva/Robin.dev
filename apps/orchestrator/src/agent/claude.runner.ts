@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { tmpdir } from "os";
 import type { JobPayload, JobResult, ADWPPhase } from "@robin/shared-types";
 import {
   AgentTimeoutError,
@@ -67,11 +68,24 @@ export class ClaudeRunner {
     let stdoutBuffer = "";
     let stderrBuffer = "";
 
+    // Write MCP config file if provided
+    let mcpConfigPath: string | undefined;
+    if (payload.mcpConfig) {
+      mcpConfigPath = path.join(tmpdir(), `mcp-config-${payload.taskId}.json`);
+      try {
+        await fs.promises.writeFile(mcpConfigPath, JSON.stringify(payload.mcpConfig, null, 2), "utf-8");
+        log.info({ taskId: payload.taskId, mcpConfigPath }, "MCP config written");
+      } catch (err) {
+        log.error({ taskId: payload.taskId, error: String(err) }, "Failed to write MCP config — proceeding without --mcp-config");
+        mcpConfigPath = undefined;
+      }
+    }
+
     // Emit phase started — write phase
     await hooks.onPhaseStarted?.("write");
 
     try {
-      const result = await this.spawnClaude(payload, hooks.envVars ?? {}, (chunk) => {
+      const result = await this.spawnClaude(payload, hooks.envVars ?? {}, mcpConfigPath, (chunk) => {
         stdoutBuffer += chunk;
         log.info(
           { taskId: payload.taskId, chunk: chunk.slice(0, 200) },
@@ -152,12 +166,17 @@ export class ClaudeRunner {
       if (fs.existsSync(taskMdPath)) {
         fs.unlinkSync(taskMdPath);
       }
+      // Clean up MCP config if it was written
+      if (mcpConfigPath) {
+        await fs.promises.rm(mcpConfigPath, { force: true });
+      }
     }
   }
 
   private spawnClaude(
     payload: JobPayload,
     envVars: Record<string, string>,
+    mcpConfigPath: string | undefined,
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void
   ): Promise<{ exitCode: number }> {
@@ -165,15 +184,18 @@ export class ClaudeRunner {
       const claudePath = process.env["CLAUDE_BIN"] ?? "claude";
       const timeoutMs = payload.timeoutMinutes * 60 * 1000;
 
+      const claudeArgs = [
+        "--print",
+        "--dangerously-skip-permissions",
+        ...(mcpConfigPath ? ["--mcp-config", mcpConfigPath] : []),
+        "Read the instructions in TASK.md and implement them.",
+      ];
+
       let process_: ReturnType<typeof spawn>;
       try {
         process_ = spawn(
           claudePath,
-          [
-            "--print",
-            "--dangerously-skip-permissions",
-            "Read the instructions in TASK.md and implement them.",
-          ],
+          claudeArgs,
           {
             cwd: payload.repositoryPath,
             env: {
