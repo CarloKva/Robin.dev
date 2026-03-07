@@ -12,6 +12,8 @@ import {
   type QualityScore,
 } from "@/lib/tasks/descriptionQuality";
 import { CustomSelect } from "@/components/ui/CustomSelect";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { TaskType, Repository, ContextDocument } from "@robin/shared-types";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
@@ -50,8 +52,6 @@ function FieldError({ message }: { message: string | undefined }) {
   return <p className="mt-1 text-xs text-red-600 dark:text-red-400">{message}</p>;
 }
 
-const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50";
 
 function DescriptionQualityBar({
   score,
@@ -428,11 +428,12 @@ export function CreateTaskDrawer({
             {/* Title */}
             <div>
               <FieldLabel htmlFor="drawer-task-title">Titolo *</FieldLabel>
-              <input
+              <Input
                 id="drawer-task-title"
                 type="text"
                 placeholder="es. Fix: login button non risponde su mobile"
-                className={`mt-1 ${inputClass}`}
+                className="mt-1"
+                error={!!errors.title}
                 {...titleRegisterRest}
                 ref={(el) => {
                   titleRegisterRef(el);
@@ -557,11 +558,12 @@ export function CreateTaskDrawer({
                 <FieldLabel htmlFor="drawer-task-description">Descrizione *</FieldLabel>
                 <span className="text-xs text-muted-foreground">min. 20 caratteri</span>
               </div>
-              <textarea
+              <Textarea
                 id="drawer-task-description"
                 rows={7}
                 placeholder="Descrivi il problema o la feature in modo dettagliato…"
-                className={`mt-1 resize-y ${inputClass}`}
+                className="mt-1"
+                error={!!errors.description}
                 {...register("description")}
                 disabled={isSubmitting}
               />
@@ -572,11 +574,11 @@ export function CreateTaskDrawer({
             {/* Context */}
             <div>
               <FieldLabel htmlFor="drawer-task-context">Contesto aggiuntivo</FieldLabel>
-              <textarea
+              <Textarea
                 id="drawer-task-context"
                 rows={3}
                 placeholder="Link di riferimento, dettagli tecnici, dipendenze, note per l'agente…"
-                className={`mt-1 resize-y ${inputClass}`}
+                className="mt-1"
                 {...register("context")}
                 disabled={isSubmitting}
               />
