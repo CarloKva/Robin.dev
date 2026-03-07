@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Repository, WorkspaceEnvironment } from "@robin/shared-types";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface CreateEnvironmentModalProps {
   repositories: Pick<Repository, "id" | "full_name" | "default_branch">[];
@@ -97,13 +98,12 @@ export function CreateEnvironmentModal({
           {/* Name */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Nome</label>
-            <input
+            <Input
               type="text"
               placeholder="Staging"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -132,13 +132,13 @@ export function CreateEnvironmentModal({
           {/* Target branch */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Branch target</label>
-            <input
+            <Input
               type="text"
               placeholder="staging"
               value={targetBranch}
               onChange={(e) => setTargetBranch(e.target.value)}
               required
-              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="font-mono"
             />
             <p className="text-xs text-muted-foreground">
               Branch Git di destinazione per le PR di questo ambiente.
