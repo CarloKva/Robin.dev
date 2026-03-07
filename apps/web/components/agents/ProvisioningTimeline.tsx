@@ -1,48 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Loader2, X, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AgentProvisioningStatus } from "@robin/shared-types";
 
-// ─── Step definition ──────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type StepStatus = "pending" | "in_progress" | "done" | "error";
 
 interface Step {
   id: string;
   label: string;
-  description: string;
 }
 
 const STEPS: Step[] = [
-  {
-    id: "vps_created",
-    label: "VPS in creazione",
-    description: "Richiesta al provider cloud in corso",
-  },
-  {
-    id: "vps_online",
-    label: "VPS online",
-    description: "Server raggiunto e pronto — avvio setup",
-  },
-  {
-    id: "setup_running",
-    label: "Setup in corso",
-    description: "Installazione Node.js, Redis e orchestratore",
-  },
-  {
-    id: "health_check",
-    label: "Health check",
-    description: "Attesa primo heartbeat dall'orchestratore",
-  },
-  {
-    id: "ready",
-    label: "Pronto",
-    description: "L'agente è online e pronto per i task",
-  },
+  { id: "vps_created", label: "Creazione VPS" },
+  { id: "vps_online", label: "Configurazione sistema" },
+  { id: "setup_running", label: "Installazione dipendenze" },
+  { id: "health_check", label: "Test connessione" },
+  { id: "ready", label: "Agente pronto" },
 ];
+
+// Estimated seconds remaining when this step is in_progress
+const STEP_ETA: Record<string, number> = {
+  vps_created: 150,
+  vps_online: 120,
+  setup_running: 60,
+  health_check: 30,
+  ready: 0,
+};
+
+// ─── Status mapping ───────────────────────────────────────────────────────────
 
 function provisioningStatusToStepStatuses(
   status: AgentProvisioningStatus,
@@ -51,29 +42,24 @@ function provisioningStatusToStepStatuses(
   provisionedAt: string | null,
   provisioningError: string | null
 ): Record<string, StepStatus> {
-  const PENDING = {
-    vps_created: "pending" as StepStatus,
-    vps_online: "pending" as StepStatus,
-    setup_running: "pending" as StepStatus,
-    health_check: "pending" as StepStatus,
-    ready: "pending" as StepStatus,
+  const PENDING: Record<string, StepStatus> = {
+    vps_created: "pending",
+    vps_online: "pending",
+    setup_running: "pending",
+    health_check: "pending",
+    ready: "pending",
   };
 
   if (status === "pending") return PENDING;
 
   if (status === "error") {
-    // Determine how far provisioning got before the failure
     if (provisionedAt) {
       return { vps_created: "done", vps_online: "done", setup_running: "done", health_check: "error", ready: "pending" };
     }
-    // VPS reached running state → failure was in the health-check phase
     if (vpsOnlineAt) {
       return { vps_created: "done", vps_online: "done", setup_running: "pending", health_check: "error", ready: "pending" };
     }
     if (vpsCreatedAt) {
-      // Older orchestrator versions didn't persist vps_online_at. Infer progress from
-      // the error message: if it clearly originated from the health/heartbeat wait,
-      // treat the VPS-online step as completed.
       const isHealthCheckFailure = /heartbeat|health|did not respond|orchestrator/i.test(provisioningError ?? "");
       if (isHealthCheckFailure) {
         return { vps_created: "done", vps_online: "done", setup_running: "pending", health_check: "error", ready: "pending" };
@@ -88,81 +74,166 @@ function provisioningStatusToStepStatuses(
   }
 
   if (status === "provisioning") {
-    // vps_online_at set: VPS is running, cloud-init + health-check in progress
     if (vpsOnlineAt) {
       return { vps_created: "done", vps_online: "done", setup_running: "in_progress", health_check: "pending", ready: "pending" };
     }
-    // vps_created_at set: VPS requested, waiting for it to boot
     if (vpsCreatedAt) {
       return { vps_created: "done", vps_online: "in_progress", setup_running: "pending", health_check: "pending", ready: "pending" };
     }
-    // nothing set yet: job just started
     return { ...PENDING, vps_created: "in_progress" };
   }
 
   return PENDING;
 }
 
-// ─── Step item ────────────────────────────────────────────────────────────────
+// ─── Timestamp helpers ────────────────────────────────────────────────────────
+
+function getStepCompletedAt(stepId: string, data: AgentProvisioningData): string | null {
+  switch (stepId) {
+    case "vps_created": return data.vps_created_at;
+    case "vps_online": return data.vps_online_at;
+    case "setup_running": return null;
+    case "health_check": return null;
+    case "ready": return data.provisioned_at;
+    default: return null;
+  }
+}
+
+function getStepStartedAt(stepId: string, data: AgentProvisioningData): string | null {
+  switch (stepId) {
+    case "vps_created": return null;
+    case "vps_online": return data.vps_created_at;
+    case "setup_running": return data.vps_online_at;
+    case "health_check": return data.vps_online_at;
+    case "ready": return null;
+    default: return null;
+  }
+}
+
+function formatCompletedAt(isoString: string): string {
+  const date = new Date(isoString);
+  const h = date.getHours().toString().padStart(2, "0");
+  const m = date.getMinutes().toString().padStart(2, "0");
+  return `completato alle ${h}:${m}`;
+}
+
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `in corso da ${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `in corso da ${m}m ${s.toString().padStart(2, "0")}s`;
+}
+
+function formatEta(seconds: number): string {
+  if (seconds >= 60) {
+    const min = Math.ceil(seconds / 60);
+    return `~${min} minut${min === 1 ? "o" : "i"} rimanent${min === 1 ? "e" : "i"}`;
+  }
+  if (seconds > 0) return `~${seconds}s rimanenti`;
+  return "";
+}
+
+// ─── StepItem ─────────────────────────────────────────────────────────────────
+
+interface StepItemProps {
+  step: Step;
+  stepIndex: number;
+  status: StepStatus;
+  isLast: boolean;
+  completedAt: string | null;
+  startedAt: string | null;
+  isJustCompleted: boolean;
+  errorMessage: string | null;
+}
 
 function StepItem({
   step,
+  stepIndex,
   status,
   isLast,
-}: {
-  step: Step;
-  status: StepStatus;
-  isLast: boolean;
-}) {
+  completedAt,
+  startedAt,
+  isJustCompleted,
+  errorMessage,
+}: StepItemProps) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (status !== "in_progress") return;
+    const start = startedAt ? new Date(startedAt).getTime() : Date.now();
+    const update = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [status, startedAt]);
+
+  const isReadyStep = step.id === "ready";
+
   return (
-    <div className="flex gap-4">
+    <div className="flex gap-3">
       {/* Indicator column */}
       <div className="flex flex-col items-center">
         <div
           className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors",
-            status === "done" && "border-emerald-500 bg-emerald-500 text-white",
-            status === "in_progress" && "border-primary bg-primary text-primary-foreground",
-            status === "error" && "border-red-500 bg-red-500 text-white",
-            status === "pending" && "border-border bg-muted text-muted-foreground"
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
+            status === "done" && !isJustCompleted && "bg-[#34C759] text-white",
+            status === "done" && isJustCompleted && "animate-step-complete text-white",
+            status === "in_progress" && "animate-fade-in bg-[#007AFF] text-white",
+            status === "error" && "bg-[#FF3B30] text-white",
+            status === "pending" && "border-2 border-[#D1D1D6] bg-transparent dark:border-[#3A3A3C]"
           )}
         >
-          {status === "done" && (
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7l3.5 3.5L12 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          {status === "done" && !isReadyStep && (
+            <Check className="h-4 w-4" strokeWidth={2.5} />
+          )}
+          {status === "done" && isReadyStep && (
+            <Zap className="h-4 w-4 fill-current" />
           )}
           {status === "in_progress" && (
-            <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           )}
-          {status === "error" && <X className="h-3.5 w-3.5" />}
-          {status === "pending" && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+          {status === "error" && (
+            <X className="h-4 w-4" strokeWidth={2.5} />
+          )}
+          {status === "pending" && (
+            <span className="text-xs font-medium text-[#8E8E93]">{stepIndex + 1}</span>
+          )}
         </div>
+
         {!isLast && (
           <div
             className={cn(
-              "mt-1 w-0.5 flex-1 rounded-full",
-              status === "done" ? "bg-emerald-300 dark:bg-emerald-700" : "bg-border"
+              "mt-1 w-0.5 flex-1 rounded-full transition-colors duration-300",
+              status === "done" ? "bg-[#34C759]" : "bg-[#D1D1D6] dark:bg-[#3A3A3C]"
             )}
-            style={{ minHeight: "20px" }}
+            style={{ minHeight: "28px" }}
           />
         )}
       </div>
 
       {/* Content */}
-      <div className="pb-5">
+      <div className="min-w-0 flex-1 pb-5">
         <p
           className={cn(
             "text-sm font-medium",
-            status === "done" && "text-emerald-700 dark:text-emerald-400",
+            status === "done" && "text-[#34C759]",
             status === "in_progress" && "text-foreground",
-            status === "error" && "text-red-600 dark:text-red-400",
-            status === "pending" && "text-muted-foreground"
+            status === "error" && "text-[#FF3B30]",
+            status === "pending" && "text-[#8E8E93]"
           )}
         >
           {step.label}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{step.description}</p>
+
+        {status === "done" && completedAt && (
+          <p className="mt-0.5 text-xs text-[#8E8E93]">{formatCompletedAt(completedAt)}</p>
+        )}
+        {status === "in_progress" && (
+          <p className="mt-0.5 text-xs text-[#8E8E93]">{formatElapsed(elapsed)}</p>
+        )}
+        {status === "error" && errorMessage && (
+          <p className="mt-0.5 text-xs text-[#FF3B30]">{errorMessage}</p>
+        )}
       </div>
     </div>
   );
@@ -190,6 +261,9 @@ export function ProvisioningTimeline({
   initial,
 }: ProvisioningTimelineProps) {
   const [data, setData] = useState<AgentProvisioningData>(initial);
+  const [justCompleted, setJustCompleted] = useState<Set<string>>(new Set());
+  const prevStatusesRef = useRef<Record<string, StepStatus>>({});
+  const router = useRouter();
 
   // Subscribe to real-time changes on agents table
   useEffect(() => {
@@ -231,29 +305,92 @@ export function ProvisioningTimeline({
     data.provisioning_error
   );
 
+  // Detect steps transitioning in_progress → done for scale animation
+  useEffect(() => {
+    const newlyDone: string[] = [];
+    for (const [stepId, status] of Object.entries(stepStatuses)) {
+      if (status === "done" && prevStatusesRef.current[stepId] === "in_progress") {
+        newlyDone.push(stepId);
+      }
+    }
+    prevStatusesRef.current = stepStatuses;
+
+    if (newlyDone.length === 0) return;
+
+    setJustCompleted(prev => new Set([...prev, ...newlyDone]));
+    const timer = setTimeout(() => {
+      setJustCompleted(prev => {
+        const next = new Set(prev);
+        newlyDone.forEach(id => next.delete(id));
+        return next;
+      });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [stepStatuses]);
+
+  // Derive UI state
+  const isAllDone = data.provisioning_status === "online";
+  const isError = data.provisioning_status === "error";
+
+  // Find the current in_progress step for ETA
+  const currentStepId = STEPS.find(s => stepStatuses[s.id] === "in_progress")?.id ?? null;
+  const etaSeconds = currentStepId ? STEP_ETA[currentStepId] : null;
+  const etaLabel = etaSeconds != null ? formatEta(etaSeconds) : null;
+
   return (
-    <div className="space-y-1">
-      {data.provisioning_status === "online" && (
-        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
-          L&apos;agente è online e pronto per ricevere task.
-        </div>
+    <div className="mx-auto max-w-md rounded-[22px] bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.10),0_1px_4px_rgba(0,0,0,0.06)] dark:bg-[#1C1C1E] dark:shadow-[0_4px_20px_rgba(0,0,0,0.40),0_1px_4px_rgba(0,0,0,0.20)]">
+      {/* Header */}
+      <div className="mb-5">
+        {isAllDone ? (
+          <p className="text-base font-semibold text-[#34C759]">Agente pronto!</p>
+        ) : (
+          <p className="text-base font-semibold text-foreground">
+            Configurazione agente in corso...
+          </p>
+        )}
+        {!isAllDone && !isError && etaLabel && (
+          <p className="mt-1 text-sm text-[#8E8E93]">{etaLabel}</p>
+        )}
+      </div>
+
+      {/* Step list */}
+      <div>
+        {STEPS.map((step, i) => (
+          <StepItem
+            key={step.id}
+            step={step}
+            stepIndex={i}
+            status={stepStatuses[step.id] ?? "pending"}
+            isLast={i === STEPS.length - 1}
+            completedAt={getStepCompletedAt(step.id, data)}
+            startedAt={getStepStartedAt(step.id, data)}
+            isJustCompleted={justCompleted.has(step.id)}
+            errorMessage={
+              stepStatuses[step.id] === "error" ? (data.provisioning_error ?? null) : null
+            }
+          />
+        ))}
+      </div>
+
+      {/* Final CTA */}
+      {isAllDone && (
+        <button
+          onClick={() => router.refresh()}
+          className="animate-fade-in mt-2 w-full rounded-xl bg-[#007AFF] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 active:opacity-80"
+        >
+          Vai all&apos;agente
+        </button>
       )}
 
-      {data.provisioning_status === "error" && data.provisioning_error && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm dark:border-red-800 dark:bg-red-950">
-          <p className="font-medium text-red-700 dark:text-red-400">Provisioning fallito</p>
-          <p className="mt-1 text-xs text-red-600 dark:text-red-300">{data.provisioning_error}</p>
-        </div>
+      {/* Error CTA */}
+      {isError && (
+        <button
+          onClick={() => router.refresh()}
+          className="animate-fade-in mt-2 w-full rounded-xl border border-[#FF3B30] py-2.5 text-sm font-semibold text-[#FF3B30] transition-opacity hover:opacity-80 active:opacity-70"
+        >
+          Riprova
+        </button>
       )}
-
-      {STEPS.map((step, i) => (
-        <StepItem
-          key={step.id}
-          step={step}
-          status={stepStatuses[step.id] ?? "pending"}
-          isLast={i === STEPS.length - 1}
-        />
-      ))}
     </div>
   );
 }

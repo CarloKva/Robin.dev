@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { FormField } from "@/components/ui/form-field";
 
 const SlugSchema = z
   .string()
@@ -88,46 +90,40 @@ export default function WorkspaceOnboardingPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1">
-            <label htmlFor="name" className="block text-sm font-medium">
-              Workspace name
-            </label>
-            <input
+          <FormField label="Workspace name" htmlFor="name">
+            <Input
               id="name"
               type="text"
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Acme Inc."
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               disabled={isSubmitting}
               required
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1">
-            <label htmlFor="slug" className="block text-sm font-medium">
-              URL slug
-            </label>
-            <div className="flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring">
-              <span className="select-none text-muted-foreground">robin.dev/</span>
+          <FormField
+            label="URL slug"
+            htmlFor="slug"
+            helper="Lowercase letters, numbers, and hyphens only."
+          >
+            <div className="flex h-11 items-center rounded-xl border border-[#D1D1D6] bg-white px-3.5 text-sm transition-colors focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20 dark:bg-[#1C1C1E]">
+              <span className="select-none text-[#8E8E93]">robin.dev/</span>
               <input
                 id="slug"
                 type="text"
                 value={slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
                 placeholder="acme-inc"
-                className="flex-1 bg-transparent focus:outline-none"
+                className="flex-1 bg-transparent text-[#1C1C1E] outline-none placeholder:text-[#8E8E93] dark:text-white"
                 disabled={isSubmitting}
                 required
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Lowercase letters, numbers, and hyphens only.
-            </p>
-          </div>
+          </FormField>
 
           {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p className="rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 px-3.5 py-2.5 text-sm text-[#FF3B30]">
               {error}
             </p>
           )}
@@ -135,7 +131,7 @@ export default function WorkspaceOnboardingPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {isSubmitting ? "Creating..." : "Create workspace"}
           </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Input } from "@/components/ui/input";
 
 interface NotificationsFormProps {
   initialEmail: string | null;
@@ -68,7 +69,7 @@ export function NotificationsForm({
             </span>
           )}
         </div>
-        <input
+        <Input
           id="notify_email"
           type="email"
           value={email}
@@ -77,7 +78,6 @@ export function NotificationsForm({
             setStatus("idle");
           }}
           placeholder="team@esempio.com"
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <p className="text-xs text-muted-foreground">
           Ricevi notifiche email quando un task viene completato o richiede review.
@@ -102,7 +102,7 @@ export function NotificationsForm({
             </span>
           )}
         </div>
-        <input
+        <Input
           id="notify_slack"
           type="url"
           value={slack}
@@ -111,7 +111,6 @@ export function NotificationsForm({
             setStatus("idle");
           }}
           placeholder="https://hooks.slack.com/services/..."
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <p className="text-xs text-muted-foreground">
           URL webhook Incoming di Slack per ricevere notifiche nel tuo canale.

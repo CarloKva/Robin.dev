@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Repository } from "@robin/shared-types";
+import { Input } from "@/components/ui/input";
 
 interface QuickTaskFormProps {
   repositories: Repository[];
@@ -108,7 +109,7 @@ export function QuickTaskForm({ repositories }: QuickTaskFormProps) {
         <div className="p-5">
           <h2 className="mb-4 text-base font-semibold">Nuova task</h2>
 
-          <input
+          <Input
             ref={inputRef}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -116,7 +117,6 @@ export function QuickTaskForm({ repositories }: QuickTaskFormProps) {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleCreate(); }
             }}
             placeholder="Titolo della task..."
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
 
           {enabledRepos.length > 0 && (
