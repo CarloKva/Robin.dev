@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Workspace } from "@robin/shared-types";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * Fetch the first workspace a user belongs to.
@@ -62,6 +63,28 @@ export async function updateWorkspaceName(workspaceId: string, name: string): Pr
     };
   } catch (error) {
     console.error("[updateWorkspaceName]", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch the mcp_config for a workspace by its ID.
+ * Returns null if the column is not set.
+ */
+export async function getWorkspaceMcpConfig(
+  workspaceId: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("workspaces")
+      .select("mcp_config")
+      .eq("id", workspaceId)
+      .single();
+    if (error) throw error;
+    return (data?.mcp_config as Record<string, unknown> | null) ?? null;
+  } catch (error) {
+    console.error("[getWorkspaceMcpConfig]", error);
     return null;
   }
 }
