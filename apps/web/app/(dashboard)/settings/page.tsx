@@ -10,6 +10,9 @@ import { RepositorySelector } from "@/components/settings/RepositorySelector";
 import { WorkspaceNameForm } from "@/components/settings/WorkspaceNameForm";
 import { NotificationsForm } from "@/components/settings/NotificationsForm";
 import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
+import { EnvironmentsSection } from "@/components/settings/EnvironmentsSection";
+import { getEnvironmentsForRepository } from "@/lib/db/environments";
+import type { WorkspaceEnvironment } from "@robin/shared-types";
 
 export const metadata = { title: "Settings — Robin.dev" };
 
@@ -41,6 +44,18 @@ export default async function SettingsPage({
       getRepositoriesForWorkspace(workspace.id),
     ]);
   }
+
+  // Load environments for all enabled repositories
+  const enabledRepos = dbRepos.filter((r) => r.is_enabled);
+  const environmentsByRepo: Record<string, WorkspaceEnvironment[]> = {};
+  await Promise.all(
+    enabledRepos.map(async (repo) => {
+      const envs = await getEnvironmentsForRepository(repo.id);
+      if (envs.length > 0) {
+        environmentsByRepo[repo.id] = envs;
+      }
+    })
+  );
 
   const dbRepoMap = new Map(dbRepos.map((r) => [r.github_repo_id, r]));
 
@@ -194,6 +209,24 @@ export default async function SettingsPage({
           {connection && repoRows.length > 0 && (
             <RepositorySelector initialRepos={repoRows} compact />
           )}
+        </section>
+
+        {/* ── Ambienti ───────────────────────────────────────────── */}
+        <section id="environments" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground">Ambienti</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Configura ambienti di staging e production per i tuoi repository. Definisci il branch target e abilita l&apos;auto-merge.
+            </p>
+          </div>
+          <EnvironmentsSection
+            repositories={enabledRepos.map((r) => ({
+              id: r.id,
+              full_name: r.full_name,
+              default_branch: r.default_branch,
+            }))}
+            initialEnvironmentsByRepo={environmentsByRepo}
+          />
         </section>
 
         {/* ── Notifiche ──────────────────────────────────────────── */}
