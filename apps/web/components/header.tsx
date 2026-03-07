@@ -56,7 +56,7 @@ export function Header({ workspaceName, activeAgentsCount, children }: HeaderPro
         "sticky top-0 z-40 h-14 flex items-center justify-between px-4 md:px-6 backdrop-blur-xl border-b transition-all duration-200",
         "border-[#D1D1D6]/60 dark:border-[#38383A]/60",
         scrolled
-          ? "bg-white/95 dark:bg-black/95 shadow-sm"
+          ? "bg-white/95 dark:bg-black/95 shadow-ios-sm"
           : "bg-white/80 dark:bg-black/80"
       )}
     >
