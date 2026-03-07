@@ -291,6 +291,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                 next[next.length - 1] = {
                   role: cur.role,
                   content: cur.content,
+                  timestamp: cur.timestamp,
                   usage: { inputTokens: inp, outputTokens: out },
                 };
                 return next;
@@ -416,7 +417,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                   content={msg.content}
                   timestamp={msg.timestamp}
                   isStreaming={isLastAssistant && streaming}
-                  usage={msg.usage}
+                  {...(msg.usage !== undefined && { usage: msg.usage })}
                 />
               );
             })}
