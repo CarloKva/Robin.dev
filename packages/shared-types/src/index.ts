@@ -238,6 +238,9 @@ export type JobPayload = {
   // Execution config
   timeoutMinutes: number;
   claudeMdPath: string;
+
+  // Attachments (file URLs or base64 strings uploaded by the founder)
+  attachments: string[];
 };
 
 /**
