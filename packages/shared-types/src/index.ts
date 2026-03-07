@@ -322,6 +322,8 @@ export type TaskAttachment = {
   name: string;
   storage_path: string;
   mime_type: string;
+  size_bytes?: number;
+  uploaded_at?: string;
 };
 
 export type Task = {
