@@ -12,6 +12,7 @@ const navItems: NavItem[] = [
   { id: "workspace", label: "Workspace" },
   { id: "connections", label: "Connessioni" },
   { id: "repositories", label: "Repository" },
+  { id: "environments", label: "Ambienti" },
   { id: "notifications", label: "Notifiche" },
 ];
 

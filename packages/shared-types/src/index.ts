@@ -214,6 +214,25 @@ export type TimelineEntry = {
 
 export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
 
+// ---------------------------------------------------------------
+// Environments (staging/production per repo)
+// ---------------------------------------------------------------
+
+export type EnvironmentType = "staging" | "production";
+
+export type WorkspaceEnvironment = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  name: string;
+  environment_type: EnvironmentType;
+  target_branch: string;
+  auto_merge: boolean;
+  env_vars_encrypted: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /**
  * Payload passed from the BullMQ queue to ClaudeRunner.
  * Contains everything the agent needs — no further DB lookups during execution.
@@ -238,6 +257,13 @@ export type JobPayload = {
   // Execution config
   timeoutMinutes: number;
   claudeMdPath: string;
+
+  // Attachments (file URLs or base64 strings uploaded by the founder)
+  attachments: string[];
+
+  // Environment (optional — populated by task.worker.ts at execution time)
+  environmentId?: string;
+  targetBranch?: string;
 };
 
 /**
@@ -292,6 +318,12 @@ export type WorkspaceMember = {
   updated_at: string;
 };
 
+export type TaskAttachment = {
+  name: string;
+  storage_path: string;
+  mime_type: string;
+};
+
 export type Task = {
   id: string;
   workspace_id: string;
@@ -307,6 +339,7 @@ export type Task = {
   sprint_order: number | null;
   context: string | null;
   estimated_effort: "xs" | "s" | "m" | "l" | null;
+  attachments: TaskAttachment[] | null;
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
@@ -527,6 +560,115 @@ export type TaskIteration = {
   summary: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// ── Ops Diagnostics ──────────────────────────────────────────────────────────
+
+export type OpsRunStatus = 'running' | 'completed' | 'failed';
+export type OpsRunScope = 'all' | 'workspace';
+export type OpsActionSeverity = 'safe' | 'destructive';
+
+export type OpsLogEntry = {
+  level: 'info' | 'warn' | 'error';
+  source: 'hetzner' | 'supabase' | 'ssh' | 'ai' | 'system';
+  message: string;
+  workspace?: string;
+};
+
+export type VpsDiagnostics = {
+  slug: string;
+  vpsIp: string;
+  sshReachable: boolean;
+  serviceStatus?: string;
+  redisOk?: boolean;
+  memUsedPct?: number;
+  diskUsedPct?: string;
+  inodeUsedPct?: string;
+  bullActiveJobs?: number;
+  bullPriorityJobs?: number;
+  lastLogLines?: string;
+  error?: string;
+};
+
+export type HetznerServerStatus = {
+  id: number;
+  name: string;
+  status: string;
+  publicIp: string;
+  serverType: string;
+  datacenter: string;
+  labels: Record<string, string>;
+};
+
+export type SupabaseDiagnostics = {
+  stuckTasks: Array<{
+    workspaceSlug: string;
+    taskId: string;
+    taskTitle: string;
+    status: string;
+    hoursStuck: number;
+  }>;
+  offlineAgents: Array<{
+    workspaceSlug: string;
+    agentName: string;
+    vpsIp: string;
+    minutesOffline: number;
+  }>;
+};
+
+export type OpsRawDiagnostics = {
+  collectedAt: string;
+  supabase: SupabaseDiagnostics;
+  hetzner: HetznerServerStatus[];
+  vps: VpsDiagnostics[];
+};
+
+export type OpsActionType =
+  | 'restart_orchestrator'
+  | 'restart_redis'
+  | 'reset_stuck_task'
+  | 'clear_bullmq_stalled'
+  | 'pull_and_rebuild'
+  | 'manual_only';
+
+export type OpsRecommendation = {
+  severity: OpsActionSeverity;
+  title: string;
+  description: string;
+  actionType: OpsActionType;
+  params: Record<string, string>;
+  workspace?: string;
+};
+
+export type OpsRun = {
+  id: string;
+  workspaceId: string | null;
+  triggeredByUserId: string;
+  scope: OpsRunScope;
+  status: OpsRunStatus;
+  progress: number;
+  log: OpsLogEntry[];
+  rawDiagnostics: OpsRawDiagnostics | null;
+  aiAnalysis: string | null;
+  aiRecommendations: OpsRecommendation[] | null;
+  actionsTaken: OpsRecommendation[];
+  createdAt: string;
+  completedAt: string | null;
+};
+
+// BullMQ Job Payload
+export type OpsDiagnosticsJobPayload = {
+  opsRunId: string;
+  scope: OpsRunScope;
+  workspaceId?: string;
+  triggeredBy: string;
+};
+
+export type OpsExecuteJobPayload = {
+  opsRunId: string;
+  actionType: OpsActionType;
+  params: Record<string, string>;
+  triggeredBy: string;
 };
 
 /** Default task description templates (seeded per-workspace on creation) */

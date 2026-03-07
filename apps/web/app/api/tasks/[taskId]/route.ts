@@ -4,6 +4,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireWorkspace } from "@/lib/api/requireWorkspace";
 import { trackUserAction } from "@/lib/events/trackUserAction";
 
+const attachmentSchema = z.object({
+  name: z.string(),
+  storage_path: z.string(),
+  mime_type: z.string(),
+});
+
 const patchSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).optional(),
@@ -20,6 +26,7 @@ const patchSchema = z.object({
   repository_id: z.string().uuid().nullable().optional(),
   preferred_agent_id: z.string().uuid().nullable().optional(),
   sprint_order: z.number().int().min(0).nullable().optional(),
+  attachments: z.array(attachmentSchema).nullable().optional(),
 });
 
 export async function GET(
