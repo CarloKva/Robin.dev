@@ -318,6 +318,12 @@ export type WorkspaceMember = {
   updated_at: string;
 };
 
+export type TaskAttachment = {
+  name: string;
+  storage_path: string;
+  mime_type: string;
+};
+
 export type Task = {
   id: string;
   workspace_id: string;
@@ -333,6 +339,7 @@ export type Task = {
   sprint_order: number | null;
   context: string | null;
   estimated_effort: "xs" | "s" | "m" | "l" | null;
+  attachments: TaskAttachment[] | null;
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
