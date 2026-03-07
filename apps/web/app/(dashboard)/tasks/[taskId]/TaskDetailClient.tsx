@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowDown, AlertCircle, CheckCircle2, X } from "lucide-react";
-import type { Task, TimelineEntry, TaskProjectedState, TaskIteration } from "@robin/shared-types";
+import type { Agent, Task, TimelineEntry, TaskProjectedState, TaskIteration } from "@robin/shared-types";
 import { useTaskEventsFeed } from "@/lib/realtime/useTaskEventsFeed";
 import { projectTaskState } from "@/lib/db/projectTaskState";
 import { Timeline } from "@/components/timeline/Timeline";
@@ -14,6 +14,7 @@ import { PRCard } from "@/components/tasks/PRCard";
 import { DeployPreviewCard } from "@/components/tasks/DeployPreviewCard";
 import { CommitList } from "@/components/tasks/CommitList";
 import { IterationsList } from "@/components/tasks/IterationsList";
+import { AgentCard } from "@/components/tasks/AgentCard";
 import { cn } from "@/lib/utils";
 
 interface TaskDetailClientProps {
@@ -21,6 +22,7 @@ interface TaskDetailClientProps {
   initialEvents: TimelineEntry[];
   initialProjectedState: TaskProjectedState;
   initialIterations: TaskIteration[];
+  agent: Agent | null;
 }
 
 // ── Status label map ──────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ export function TaskDetailClient({
   initialEvents,
   initialProjectedState,
   initialIterations,
+  agent,
 }: TaskDetailClientProps) {
   const { events, isConnected } = useTaskEventsFeed({
     taskId: task.id,
@@ -341,6 +344,9 @@ export function TaskDetailClient({
               />
             </div>
           </div>
+
+          {/* Agent info */}
+          <AgentCard agent={agent} queuedAt={task.queued_at} />
 
           {/* Blocked alert */}
           {projectedState.blockedReason && (
