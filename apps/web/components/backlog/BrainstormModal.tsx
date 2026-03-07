@@ -68,9 +68,10 @@ interface AssistantMessageProps {
   content: string;
   timestamp: Date;
   isStreaming: boolean;
+  usage?: TokenUsage;
 }
 
-function AssistantMessage({ content, timestamp, isStreaming }: AssistantMessageProps) {
+function AssistantMessage({ content, timestamp, isStreaming, usage }: AssistantMessageProps) {
   return (
     <div className="flex items-start gap-2.5">
       <RobinAvatar />
@@ -152,6 +153,7 @@ function AssistantMessage({ content, timestamp, isStreaming }: AssistantMessageP
         </div>
         <span className="text-[10px] text-muted-foreground pl-1">
           Robin · {formatTimestamp(timestamp)}
+          {usage && ` · ↑ ${usage.inputTokens} ↓ ${usage.outputTokens} tok`}
         </span>
       </div>
     </div>
@@ -176,6 +178,14 @@ function UserMessage({ content, timestamp }: UserMessageProps) {
   );
 }
 
+function modelBadgeClass(model: string): string {
+  const lc = model.toLowerCase();
+  if (lc.includes("gpt") || lc.includes("openai")) {
+    return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300";
+  }
+  return "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300";
+}
+
 export function BrainstormModal({ repositories, onImported }: BrainstormWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -183,6 +193,11 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
   const [streaming, setStreaming] = useState(false);
   const [importData, setImportData] = useState<ImportData | null>(null);
   const [imported, setImported] = useState(false);
+  const [modelName, setModelName] = useState<string | null>(null);
+  const [sessionTokens, setSessionTokens] = useState<TokenUsage>({
+    inputTokens: 0,
+    outputTokens: 0,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -211,6 +226,8 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
       timestamp: assistantTimestamp,
     };
     setMessages([...newMessages, assistantPlaceholder]);
+
+    let pendingInputTokens = 0;
 
     try {
       const res = await fetch("/api/ai/brainstorm", {
@@ -252,9 +269,37 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
           const data = line.slice(6).trim();
           if (data === "[DONE]") break;
           try {
-            const parsed = JSON.parse(data) as { text?: string; error?: string };
+            const parsed = JSON.parse(data) as {
+              text?: string;
+              error?: string;
+              model?: string;
+              inputTokens?: number;
+              outputTokens?: number;
+            };
             if (parsed.error) {
               accumulated += `\nErrore: ${parsed.error}`;
+            } else if (parsed.model !== undefined) {
+              setModelName(parsed.model);
+              pendingInputTokens = parsed.inputTokens ?? 0;
+            } else if (parsed.outputTokens !== undefined) {
+              const out = parsed.outputTokens;
+              const inp = pendingInputTokens;
+              setMessages((prev) => {
+                const next = [...prev];
+                const cur = next[next.length - 1];
+                if (cur === undefined) return next;
+                next[next.length - 1] = {
+                  role: cur.role,
+                  content: cur.content,
+                  timestamp: cur.timestamp,
+                  usage: { inputTokens: inp, outputTokens: out },
+                };
+                return next;
+              });
+              setSessionTokens((prev) => ({
+                inputTokens: prev.inputTokens + inp,
+                outputTokens: prev.outputTokens + out,
+              }));
             } else if (parsed.text) {
               accumulated += parsed.text;
             }
@@ -265,10 +310,13 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
 
         setMessages((prev) => {
           const next = [...prev];
+          const cur = next[next.length - 1];
+          if (cur === undefined) return next;
           next[next.length - 1] = {
             role: "assistant",
             content: accumulated,
             timestamp: assistantTimestamp,
+            ...(cur.usage !== undefined && { usage: cur.usage }),
           };
           return next;
         });
@@ -320,7 +368,16 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                 <Bot className="h-4 w-4 text-background" />
               </div>
               <div>
-                <p className="text-sm font-semibold leading-tight">Robin AI</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold leading-tight">Robin AI</p>
+                  {modelName && (
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${modelBadgeClass(modelName)}`}
+                    >
+                      {modelName}
+                    </span>
+                  )}
+                </div>
                 <p className="text-[10px] text-muted-foreground leading-tight">
                   {streaming ? "Sta scrivendo…" : "Online"}
                 </p>
@@ -360,6 +417,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                   content={msg.content}
                   timestamp={msg.timestamp}
                   isStreaming={isLastAssistant && streaming}
+                  {...(msg.usage !== undefined && { usage: msg.usage })}
                 />
               );
             })}
@@ -391,6 +449,15 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
 
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Session token counter */}
+          {(sessionTokens.inputTokens > 0 || sessionTokens.outputTokens > 0) && (
+            <div className="shrink-0 border-t border-border px-4 py-1.5">
+              <span className="text-[10px] text-muted-foreground">
+                Sessione: ↑ {sessionTokens.inputTokens} · ↓ {sessionTokens.outputTokens} token
+              </span>
+            </div>
+          )}
 
           {/* Input */}
           <div className="shrink-0 border-t border-border bg-background px-3 py-3">
