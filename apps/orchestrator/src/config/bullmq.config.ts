@@ -12,7 +12,7 @@ export const defaultJobOptions: DefaultJobOptions = {
     type: "exponential",
     delay: 5_000, // 5s → 25s → 125s
   },
-  removeOnComplete: true,
+  removeOnComplete: { count: 0 },
   removeOnFail: { count: 100 },
 };
 
@@ -23,6 +23,8 @@ export const workerOptions: Omit<WorkerOptions, "connection"> = {
   concurrency: workerConcurrency,
   stalledInterval: 30_000,
   maxStalledCount: 1,
+  removeOnComplete: { count: 0 },
+  removeOnFail: { count: 100 },
 };
 
 /** Maps task priority to BullMQ priority number (lower = higher priority). */
