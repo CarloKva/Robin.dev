@@ -102,13 +102,13 @@ export function BacklogJiraView({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBrainstormOpen, setIsBrainstormOpen] = useState(false);
 
-  // ── Sprint creation with name ──────────────────────────────────────────────
+  // Sprint creation with name
   const [showCreateSprintForm, setShowCreateSprintForm] = useState(false);
   const [newSprintName, setNewSprintName] = useState("");
   const [creatingSprint, setCreatingSprint] = useState(false);
   const newSprintInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Sprint name editing ────────────────────────────────────────────────────
+  // Sprint name editing
   const [editingSprintId, setEditingSprintId] = useState<string | null>(null);
   const [editingSprintName, setEditingSprintName] = useState("");
   const sprintNameInputRef = useRef<HTMLInputElement>(null);
@@ -118,7 +118,6 @@ export function BacklogJiraView({
   const [dragOverSprintId, setDragOverSprintId] = useState<string | null>(null);
   const [dragOverBacklog, setDragOverBacklog] = useState(false);
   const [justDroppedTaskId, setJustDroppedTaskId] = useState<string | null>(null);
-  const dragGhostRef = useRef<HTMLElement | null>(null);
 
   // Sprint action state (per sprint)
   const [sprintLoading, setSprintLoading] = useState<Record<string, boolean>>({});
@@ -154,10 +153,7 @@ export function BacklogJiraView({
     });
   }
 
-  // ── Sprint creation ────────────────────────────────────────────────────────
-
   function openCreateSprintForm() {
-    // Pre-fill with generated week name
     const now = new Date();
     const year = now.getFullYear();
     const week = Math.ceil(
@@ -202,8 +198,6 @@ export function BacklogJiraView({
     }
   }
 
-  // ── Sprint name editing ────────────────────────────────────────────────────
-
   function startEditSprintName(sprint: SprintWithTasks) {
     setEditingSprintId(sprint.id);
     setEditingSprintName(sprint.name);
@@ -234,8 +228,6 @@ export function BacklogJiraView({
       setEditingSprintId(null);
     }
   }
-
-  // ── Sprint actions ────────────────────────────────────────────────────────
 
   async function handleStartSprint(sprintId: string) {
     setSprintLoading((p) => ({ ...p, [sprintId]: true }));
@@ -290,44 +282,44 @@ export function BacklogJiraView({
     refresh();
   }
 
-  // ── Drag and drop ─────────────────────────────────────────────────────────
+  // Drag and drop
 
-  function handleDragStart(e: React.DragEvent, taskId: string, sourceSprintId: string | null = null) {
+  function handleDragStart(e: React.DragEvent, taskId: string) {
     e.dataTransfer.setData("text/plain", taskId);
-    e.dataTransfer.setData("application/x-sprint-source", sourceSprintId ?? "backlog");
     e.dataTransfer.effectAllowed = "move";
     setDraggingTaskId(taskId);
 
-    // Create custom drag ghost: opacity 0.5 + rotate(1.5deg) + ios shadow
-    const target = e.currentTarget as HTMLElement;
-    const ghost = target.cloneNode(true) as HTMLElement;
-    ghost.style.cssText = `
-      position: fixed; top: -9999px; left: -9999px;
-      width: ${target.offsetWidth}px;
-      opacity: 0.5;
-      transform: rotate(1.5deg);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06);
-      pointer-events: none; border-radius: 8px;
-    `;
+    // Custom drag ghost: rotated card with shadow
+    const el = e.currentTarget as HTMLElement;
+    const ghost = el.cloneNode(true) as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    ghost.style.width = `${el.offsetWidth}px`;
+    ghost.style.transform = "rotate(1.5deg)";
+    ghost.style.opacity = "0.85";
+    ghost.style.boxShadow = "0 8px 24px rgba(0,0,0,0.18)";
+    ghost.style.borderRadius = "8px";
+    ghost.style.pointerEvents = "none";
+    ghost.style.position = "fixed";
+    ghost.style.top = "-9999px";
+    ghost.style.left = "-9999px";
     document.body.appendChild(ghost);
-    dragGhostRef.current = ghost;
-    e.dataTransfer.setDragImage(ghost, e.nativeEvent.offsetX, e.nativeEvent.offsetY);
+    e.dataTransfer.setDragImage(ghost, offsetX, offsetY);
+    setTimeout(() => { if (ghost.parentNode) document.body.removeChild(ghost); }, 200);
   }
 
   function handleDragEnd() {
     setDraggingTaskId(null);
     setDragOverSprintId(null);
     setDragOverBacklog(false);
-    if (dragGhostRef.current) {
-      document.body.removeChild(dragGhostRef.current);
-      dragGhostRef.current = null;
-    }
   }
 
   function handleDragOver(e: React.DragEvent, sprintId: string) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDragOverSprintId(sprintId);
+    setDragOverBacklog(false);
   }
 
   function handleDragLeave(e: React.DragEvent) {
@@ -340,6 +332,7 @@ export function BacklogJiraView({
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setDragOverBacklog(true);
+    setDragOverSprintId(null);
   }
 
   function handleDragLeaveBacklog(e: React.DragEvent) {
@@ -348,69 +341,93 @@ export function BacklogJiraView({
     }
   }
 
-  async function handleDrop(e: React.DragEvent, sprintId: string) {
+  function landTask(taskId: string) {
+    setJustDroppedTaskId(taskId);
+    setTimeout(() => setJustDroppedTaskId(null), 300);
+  }
+
+  async function handleDrop(e: React.DragEvent, targetSprintId: string) {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
-    const sourcePart = e.dataTransfer.getData("application/x-sprint-source");
-    const sourceSprintId = sourcePart === "backlog" || sourcePart === "" ? null : sourcePart;
     setDraggingTaskId(null);
     setDragOverSprintId(null);
+    landTask(taskId);
 
-    if (sourceSprintId === sprintId) return;
-
-    let task: Task | undefined;
-    if (sourceSprintId === null) {
-      task = localBacklog.find((t) => t.id === taskId);
-      if (!task) return;
+    // Try backlog first
+    const backlogTask = localBacklog.find((t) => t.id === taskId);
+    if (backlogTask) {
       setLocalBacklog((prev) => prev.filter((t) => t.id !== taskId));
-    } else {
-      task = localSprints.find((s) => s.id === sourceSprintId)?.tasks.find((t) => t.id === taskId);
-      if (!task) return;
       setLocalSprints((prev) =>
         prev.map((s) =>
-          s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s
+          s.id === targetSprintId
+            ? { ...s, tasks: [...s.tasks, { ...backlogTask, sprint_id: targetSprintId, status: "sprint_ready" as TaskStatus }] }
+            : s
         )
       );
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprint_id: targetSprintId, status: "sprint_ready" }),
+      });
+      refresh();
+      return;
     }
 
+    // Try sprint-to-sprint
+    const sourceSprintId = localSprints.find((s) => s.tasks.some((t) => t.id === taskId))?.id;
+    if (!sourceSprintId || sourceSprintId === targetSprintId) return;
+
+    const sprintTask = localSprints.find((s) => s.id === sourceSprintId)?.tasks.find((t) => t.id === taskId);
+    if (!sprintTask) return;
+
     setLocalSprints((prev) =>
-      prev.map((s) =>
-        s.id === sprintId
-          ? { ...s, tasks: [...s.tasks, { ...task!, sprint_id: sprintId, status: "sprint_ready" as TaskStatus }] }
-          : s
-      )
+      prev.map((s) => {
+        if (s.id === sourceSprintId) return { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) };
+        if (s.id === targetSprintId) return { ...s, tasks: [...s.tasks, { ...sprintTask, sprint_id: targetSprintId, status: "sprint_ready" as TaskStatus }] };
+        return s;
+      })
     );
-
-    setJustDroppedTaskId(taskId);
-    setTimeout(() => setJustDroppedTaskId(null), 250);
-
     await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sprint_id: sprintId, status: "sprint_ready" }),
+      body: JSON.stringify({ sprint_id: targetSprintId, status: "sprint_ready" }),
     });
     refresh();
   }
 
-  async function handleDropToBacklog(e: React.DragEvent) {
+  async function handleDropOnBacklog(e: React.DragEvent) {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
-    const sourcePart = e.dataTransfer.getData("application/x-sprint-source");
-    const sourceSprintId = sourcePart === "backlog" || sourcePart === "" ? null : sourcePart;
     setDraggingTaskId(null);
     setDragOverBacklog(false);
+    landTask(taskId);
 
-    if (sourceSprintId === null) return; // already in backlog
+    // Only handle sprint tasks being dropped to backlog
+    const sourceSprintId = localSprints.find((s) => s.tasks.some((t) => t.id === taskId))?.id;
+    if (!sourceSprintId) return;
 
-    await handleRemoveFromSprint(taskId, sourceSprintId);
+    const task = localSprints.find((s) => s.id === sourceSprintId)?.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    setLocalSprints((prev) =>
+      prev.map((s) => s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s)
+    );
+    setLocalBacklog((prev) => [{ ...task, sprint_id: null, status: "backlog" as TaskStatus }, ...prev]);
+
+    await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sprint_id: null, status: "backlog", sprint_order: null }),
+    });
+    refresh();
   }
 
-  // ── Drawer ─────────────────────────────────────────────────────────────────
+  // Drawer
 
   const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
   useKeyboardShortcut("n", openDrawer);
 
-  // ── Filtered data ──────────────────────────────────────────────────────────
+  // Filtered data
 
   const filteredBacklog = useMemo(() => {
     return localBacklog.filter((t) => {
@@ -443,7 +460,7 @@ export function BacklogJiraView({
     }));
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div className={cn("space-y-0 transition-all duration-300 ease-in-out", isBrainstormOpen ? "md:mr-[480px]" : "")}>
@@ -473,7 +490,7 @@ export function BacklogJiraView({
         contextDocs={contextDocs}
       />
 
-      {/* ── Filter bar ─────────────────────────────────────────────────────── */}
+      {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -505,7 +522,7 @@ export function BacklogJiraView({
         <div className="flex-1" />
       </div>
 
-      {/* ── Sprint sections ────────────────────────────────────────────────── */}
+      {/* Sprint sections */}
       <div className="!mt-2 space-y-2">
         {filteredSprints.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card">
@@ -571,7 +588,7 @@ export function BacklogJiraView({
                   className={cn(
                     "rounded-lg border bg-card transition-colors duration-150",
                     isDragOver
-                      ? "border-dashed border-[#007AFF]/70 bg-[#007AFF]/5"
+                      ? "border-dashed border-[#007AFF] bg-[#007AFF]/5"
                       : "border-border"
                   )}
                   onDragOver={(e) => handleDragOver(e, sprint.id)}
@@ -593,7 +610,6 @@ export function BacklogJiraView({
                       <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0", isExpanded ? "rotate-90" : "")} />
                     </button>
 
-                    {/* Sprint name — click to edit */}
                     {isEditingName ? (
                       <input
                         ref={sprintNameInputRef}
@@ -648,7 +664,6 @@ export function BacklogJiraView({
                       ))}
                     </div>
 
-                    {/* Sprint action buttons */}
                     {isPlanning && (
                       <button
                         onClick={() => void handleStartSprint(sprint.id)}
@@ -682,8 +697,8 @@ export function BacklogJiraView({
                       {sprint.tasks.length === 0 ? (
                         <div
                           className={cn(
-                            "flex flex-col items-center justify-center gap-1 px-4 py-8 text-center transition-colors",
-                            isDragOver && "bg-primary/5"
+                            "flex flex-col items-center justify-center gap-1 px-4 py-8 text-center transition-colors duration-150",
+                            isDragOver && "bg-[#007AFF]/5"
                           )}
                         >
                           <p className="text-sm text-muted-foreground">
@@ -701,27 +716,25 @@ export function BacklogJiraView({
                         <div className="divide-y divide-border">
                           {sprint.tasks.map((task) => {
                             const priority = PRIORITY_ICONS[task.priority] ?? { icon: "—", className: "text-slate-400" };
-                            const isDraggingThis = draggingTaskId === task.id;
-                            const isLanding = justDroppedTaskId === task.id;
+                            const isDragging = draggingTaskId === task.id;
+                            const justLanded = justDroppedTaskId === task.id;
                             return (
                               <div
                                 key={task.id}
                                 draggable
-                                onDragStart={(e) => handleDragStart(e, task.id, sprint.id)}
+                                onDragStart={(e) => handleDragStart(e, task.id)}
                                 onDragEnd={handleDragEnd}
                                 className={cn(
                                   "cursor-grab active:cursor-grabbing",
-                                  isDraggingThis && "border border-dashed border-border/60 rounded mx-1"
+                                  isDragging && "border border-dashed border-border/60 rounded-sm mx-1 my-0.5",
+                                  justLanded && "animate-task-landing"
                                 )}
                               >
-                                <div
-                                  className={cn(
-                                    "group flex items-center gap-3 px-4 py-2.5 text-sm",
-                                    !isDraggingThis && "hover:bg-accent/40",
-                                    isDraggingThis && "invisible",
-                                    isLanding && "animate-task-landing"
-                                  )}
-                                >
+                                <div className={cn(
+                                  "group flex items-center gap-3 px-4 py-2.5 text-sm",
+                                  !isDragging && "hover:bg-accent/40",
+                                  isDragging && "invisible"
+                                )}>
                                   <span
                                     className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", STATUS_COLORS[task.status])}
                                     title={STATUS_LABELS[task.status]}
@@ -788,7 +801,7 @@ export function BacklogJiraView({
               );
             })}
 
-            {/* Create sprint form — shown below sprint list */}
+            {/* Create sprint form */}
             {showCreateSprintForm ? (
               <div className="rounded-lg border border-dashed border-primary/40 bg-card p-3">
                 <div className="flex items-center gap-2">
@@ -830,7 +843,7 @@ export function BacklogJiraView({
         )}
       </div>
 
-      {/* ── Divider ────────────────────────────────────────────────────────── */}
+      {/* Divider */}
       <div className="my-6 py-2 flex items-center gap-3">
         <div className="flex-1 border-t border-border" />
         <ArrowUpDown className="h-4 w-4 text-muted-foreground select-none" aria-label="Separa sprint da backlog" />
@@ -845,15 +858,17 @@ export function BacklogJiraView({
         <div className="flex-1 border-t border-border" />
       </div>
 
-      {/* ── Backlog section ────────────────────────────────────────────────── */}
+      {/* Backlog section */}
       <div
         className={cn(
           "rounded-lg border bg-card transition-colors duration-150",
-          dragOverBacklog ? "border-dashed border-[#007AFF]/70 bg-[#007AFF]/5" : "border-border"
+          dragOverBacklog
+            ? "border-dashed border-[#007AFF] bg-[#007AFF]/5"
+            : "border-border"
         )}
         onDragOver={handleDragOverBacklog}
         onDragLeave={handleDragLeaveBacklog}
-        onDrop={(e) => void handleDropToBacklog(e)}
+        onDrop={(e) => void handleDropOnBacklog(e)}
       >
         {/* Backlog header */}
         <div
@@ -875,7 +890,7 @@ export function BacklogJiraView({
             aria-label="Seleziona tutto nel backlog"
           />
 
-          {/* Expand/collapse */}
+          {/* Expand/collapse + title + badge */}
           <button
             onClick={() => toggleExpand("backlog")}
             className="flex items-center gap-2 min-w-0 flex-1 text-left"
@@ -885,7 +900,7 @@ export function BacklogJiraView({
             <span className="text-xs text-muted-foreground">
               ({filteredBacklog.length} {filteredBacklog.length === 1 ? "ticket" : "ticket"})
             </span>
-            <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+            <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               Backlog
             </span>
           </button>
@@ -911,12 +926,12 @@ export function BacklogJiraView({
         {expanded.has("backlog") && (
           <div>
             {filteredBacklog.length === 0 ? (
-              <div className={cn("px-4 py-8 text-center transition-colors", dragOverBacklog && "bg-[#007AFF]/5")}>
+              <div className="px-4 py-8 text-center">
                 <p className="text-sm text-muted-foreground">
-                  {dragOverBacklog
-                    ? "Rilascia qui per spostare nel backlog"
-                    : search || typeFilter
+                  {search || typeFilter
                     ? "Nessuna task trovata con questi filtri."
+                    : dragOverBacklog
+                    ? "Rilascia qui per spostare nel backlog."
                     : "Il backlog è vuoto."}
                 </p>
                 {!search && !typeFilter && !dragOverBacklog && (
@@ -939,19 +954,21 @@ export function BacklogJiraView({
             ) : (
               <div className="divide-y divide-border">
                 {filteredBacklog.map((task) => {
-                  const isDraggingThis = draggingTaskId === task.id;
+                  const isDragging = draggingTaskId === task.id;
+                  const justLanded = justDroppedTaskId === task.id;
                   return (
                     <div
                       key={task.id}
                       draggable
-                      onDragStart={(e) => handleDragStart(e, task.id, null)}
+                      onDragStart={(e) => handleDragStart(e, task.id)}
                       onDragEnd={handleDragEnd}
                       className={cn(
                         "cursor-grab active:cursor-grabbing",
-                        isDraggingThis && "border border-dashed border-border/60 rounded mx-1"
+                        isDragging && "border border-dashed border-border/60 rounded-sm mx-1 my-0.5",
+                        justLanded && "animate-task-landing"
                       )}
                     >
-                      <div className={isDraggingThis ? "invisible" : undefined}>
+                      <div className={isDragging ? "invisible" : ""}>
                         <TaskRow
                           task={task}
                           selected={selectedIds.has(task.id)}
