@@ -155,7 +155,7 @@ export async function POST(
             sprintOrder: task.sprint_order ?? 0,
           },
           {
-            jobId: `sprint:${sprintId}:task:${task.id}`,
+            jobId: `sprint_${sprintId}_task_${task.id}`,
             priority: task.sprint_order ?? 999,
           }
         );
