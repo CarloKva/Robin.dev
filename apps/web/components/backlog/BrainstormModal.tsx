@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, X, Bot, ArrowUp, Loader2, FileText } from "lucide-react";
+import { Sparkles, X, Bot, ArrowUp, Loader2, FileText, Zap, Pause, Play, CheckCircle2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { parseRobinMd } from "@/lib/robin-md-parser";
-import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
+import {
+  extractGeneratedTasks,
+  extractBatchManifest,
+  type BatchManifest,
+} from "@/lib/ai/brainstorm";
 import { ImportPreviewCard } from "./ImportPreviewCard";
 import type { Repository, ContextDocument } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
@@ -36,6 +40,8 @@ type ImportData = {
   truncated: boolean;
   originalCount: number;
 };
+
+type BatchPhase = "idle" | "manifest_ready" | "generating" | "batch_ready" | "done";
 
 function formatTimestamp(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -190,6 +196,165 @@ function modelBadgeClass(model: string): string {
   return "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300";
 }
 
+// ─── Batch sub-components ─────────────────────────────────────────────────────
+
+interface BatchManifestPreviewProps {
+  manifest: BatchManifest;
+  autoApprove: boolean;
+  onToggleAutoApprove: () => void;
+  onStart: () => void;
+  onCancel: () => void;
+}
+
+function BatchManifestPreview({
+  manifest,
+  autoApprove,
+  onToggleAutoApprove,
+  onStart,
+  onCancel,
+}: BatchManifestPreviewProps) {
+  return (
+    <div className="w-full rounded-xl border border-border bg-background shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border bg-accent/30">
+        <div className="flex items-center gap-2">
+          <Zap className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+          <span className="text-xs font-semibold">
+            Piano generato — {manifest.total_tasks} task in {manifest.batches.length} batch
+          </span>
+        </div>
+      </div>
+
+      <ul className="divide-y divide-border max-h-52 overflow-y-auto">
+        {manifest.batches.map((batch) => (
+          <li key={batch.batch_id} className="flex items-start gap-2.5 px-3 py-2.5 text-xs">
+            <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-semibold text-[10px] dark:bg-blue-900/30 dark:text-blue-300">
+              {batch.batch_id}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate">{batch.title}</p>
+              <p className="text-muted-foreground truncate">{batch.description}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {batch.task_count} task
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="border-t border-border px-3 py-2.5 space-y-2.5">
+        {/* Auto-approve toggle */}
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoApprove}
+            onClick={onToggleAutoApprove}
+            className={cn(
+              "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
+              autoApprove ? "bg-blue-600" : "bg-muted-foreground/30"
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block h-3 w-3 rounded-full bg-white shadow transition-transform",
+                autoApprove ? "translate-x-3.5" : "translate-x-0.5"
+              )}
+            />
+          </button>
+          <span className="text-xs text-foreground">
+            Importa ogni batch automaticamente
+          </span>
+        </label>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onStart}
+            className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Play className="h-3 w-3" />
+            Avvia il piano
+          </button>
+          <button
+            onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            Annulla
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface BatchProgressBarProps {
+  manifest: BatchManifest;
+  currentBatchIndex: number;
+  totalImported: number;
+  phase: BatchPhase;
+  paused: boolean;
+  onResume: () => void;
+}
+
+function BatchProgressBar({
+  manifest,
+  currentBatchIndex,
+  totalImported,
+  phase,
+  paused,
+  onResume,
+}: BatchProgressBarProps) {
+  const completedBatches = phase === "done" ? manifest.batches.length : currentBatchIndex;
+  const pct = Math.round((completedBatches / manifest.batches.length) * 100);
+  const currentBatch = manifest.batches[currentBatchIndex];
+
+  return (
+    <div className="w-full rounded-xl border border-border bg-background shadow-sm px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-foreground">
+          {phase === "done" ? (
+            <span className="flex items-center gap-1 text-green-700 dark:text-green-400">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Piano completato — {totalImported} task importate
+            </span>
+          ) : paused ? (
+            <span className="text-amber-600 dark:text-amber-400">In pausa</span>
+          ) : (
+            <>
+              Batch {currentBatchIndex + 1}/{manifest.batches.length}
+              {currentBatch && (
+                <span className="ml-1 text-muted-foreground font-normal">
+                  · {currentBatch.title}
+                </span>
+              )}
+            </>
+          )}
+        </span>
+        <span className="text-muted-foreground">{totalImported} importate</span>
+      </div>
+
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn(
+            "h-full rounded-full transition-all duration-500",
+            phase === "done" ? "bg-green-500" : "bg-blue-500"
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {paused && phase !== "done" && (
+        <button
+          onClick={onResume}
+          className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <Play className="h-3 w-3" />
+          Riprendi
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Matches `/context` optionally followed by a space and a filter word, at the end of the string. */
 const SLASH_CONTEXT_RE = /\/context(\s+(\S*))?$/;
 
@@ -218,6 +383,25 @@ export function BrainstormModal({
   const [highlightedIdx, setHighlightedIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // ── Batch state ────────────────────────────────────────────────────────────
+  const [batchManifest, setBatchManifest] = useState<BatchManifest | null>(null);
+  const [batchPhase, setBatchPhase] = useState<BatchPhase>("idle");
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  const [totalImported, setTotalImported] = useState(0);
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [confirmNewChat, setConfirmNewChat] = useState(false);
+  // Ref so async sendMessage can read latest manifest without stale closure
+  const batchManifestRef = useRef<BatchManifest | null>(null);
+  // Signals to the response handler that a batch (not a manifest) is expected
+  const isBatchGeneratingRef = useRef(false);
+
+  // Load auto-approve preference from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("robin-brainstorm-auto-approve");
+    if (stored === "true") setAutoApprove(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -294,24 +478,41 @@ export function BrainstormModal({
     setSelectedDocs((prev) => prev.filter((d) => d.id !== docId));
   }
 
-  function handleNewChat() {
+  function resetChat() {
     setMessages([]);
     setInput("");
     setImportData(null);
     setImported(false);
     setSelectedDocs([]);
     setShowDropdown(false);
+    setBatchManifest(null);
+    batchManifestRef.current = null;
+    setBatchPhase("idle");
+    setCurrentBatchIndex(0);
+    setTotalImported(0);
+    setPaused(false);
+    isBatchGeneratingRef.current = false;
+    setConfirmNewChat(false);
   }
 
-  async function handleSend() {
-    const text = input.trim();
+  function handleNewChat() {
+    const isBatchActive =
+      batchPhase !== "idle" && batchPhase !== "done" && batchManifest !== null;
+    if (isBatchActive) {
+      setConfirmNewChat(true);
+    } else {
+      resetChat();
+    }
+  }
+
+  async function sendMessage(text: string, isProgrammatic = false) {
     if (!text || streaming) return;
 
     const now = new Date();
     const userMessage: Message = { role: "user", content: text, timestamp: now };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
-    setInput("");
+    if (!isProgrammatic) setInput("");
     setStreaming(true);
     setImportData(null);
     setImported(false);
@@ -419,16 +620,29 @@ export function BrainstormModal({
         });
       }
 
-      const tasksContent = extractGeneratedTasks(accumulated);
-      if (tasksContent) {
-        const result = parseRobinMd(tasksContent);
-        if (result.tasks.length > 0 || result.errors.length > 0) {
-          setImportData({
-            tasks: result.tasks,
-            errors: result.errors,
-            truncated: result.truncated === true,
-            originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
-          });
+      // Try manifest first; fall back to tasks extraction
+      const manifest = extractBatchManifest(accumulated);
+      if (manifest) {
+        batchManifestRef.current = manifest;
+        setBatchManifest(manifest);
+        setBatchPhase("manifest_ready");
+        isBatchGeneratingRef.current = false;
+      } else {
+        const tasksContent = extractGeneratedTasks(accumulated);
+        if (tasksContent) {
+          const result = parseRobinMd(tasksContent);
+          if (result.tasks.length > 0 || result.errors.length > 0) {
+            setImportData({
+              tasks: result.tasks,
+              errors: result.errors,
+              truncated: result.truncated === true,
+              originalCount: result.originalCount ?? result.tasks.length + result.errors.length,
+            });
+            if (isBatchGeneratingRef.current) {
+              setBatchPhase("batch_ready");
+              isBatchGeneratingRef.current = false;
+            }
+          }
         }
       }
     } catch {
@@ -444,6 +658,41 @@ export function BrainstormModal({
     } finally {
       setStreaming(false);
     }
+  }
+
+  async function handleSend() {
+    await sendMessage(input.trim());
+  }
+
+  function triggerBatch(index: number) {
+    const manifest = batchManifestRef.current;
+    if (!manifest) return;
+    const batch = manifest.batches[index];
+    if (!batch) return;
+    setCurrentBatchIndex(index);
+    setBatchPhase("generating");
+    isBatchGeneratingRef.current = true;
+    void sendMessage(`Genera batch ${batch.batch_id}: ${batch.title}`, true);
+  }
+
+  function handleBatchImported(importedCount: number) {
+    const manifest = batchManifestRef.current;
+    const nextIndex = currentBatchIndex + 1;
+
+    setTotalImported((prev) => prev + importedCount);
+    setCurrentBatchIndex(nextIndex);
+    setImported(true);
+    setImportData(null);
+    onImported();
+
+    if (!manifest) return;
+
+    if (nextIndex >= manifest.batches.length) {
+      setBatchPhase("done");
+    } else if (!paused) {
+      triggerBatch(nextIndex);
+    }
+    // If paused: batchPhase stays where it is; BatchProgressBar shows "Riprendi"
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -512,13 +761,73 @@ export function BrainstormModal({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {messages.length > 0 && (
+          {/* Auto-approve toggle — visible once batch has started */}
+          {batchManifest !== null && batchPhase !== "done" && (
+            <button
+              onClick={() => {
+                const next = !autoApprove;
+                setAutoApprove(next);
+                localStorage.setItem("robin-brainstorm-auto-approve", String(next));
+                // If we just enabled auto-approve while paused, un-pause and trigger next
+                if (next && paused && batchPhase !== "generating") {
+                  setPaused(false);
+                  triggerBatch(currentBatchIndex);
+                }
+              }}
+              title={autoApprove ? "Auto-approve attivo — clicca per disattivare" : "Attiva auto-approve"}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
+                autoApprove
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <Zap className="h-3 w-3" />
+              {autoApprove ? "Auto" : "Auto"}
+            </button>
+          )}
+          {/* Pausa / Riprendi — visible during active batch execution */}
+          {batchManifest !== null && batchPhase !== "idle" && batchPhase !== "manifest_ready" && batchPhase !== "done" && (
+            <button
+              onClick={() => {
+                if (paused) {
+                  setPaused(false);
+                  triggerBatch(currentBatchIndex);
+                } else {
+                  setPaused(true);
+                }
+              }}
+              title={paused ? "Riprendi esecuzione batch" : "Pausa dopo il batch corrente"}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            >
+              {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {/* Nuova chat / confirm */}
+          {messages.length > 0 && !confirmNewChat && (
             <button
               onClick={handleNewChat}
               className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               Nuova chat
             </button>
+          )}
+          {confirmNewChat && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">Sei sicuro?</span>
+              <button
+                onClick={resetChat}
+                className="rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                Sì
+              </button>
+              <button
+                onClick={() => setConfirmNewChat(false)}
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent transition-colors"
+              >
+                No
+              </button>
+            </div>
           )}
           <button
             onClick={onClose}
@@ -567,6 +876,40 @@ export function BrainstormModal({
           );
         })}
 
+        {/* Batch manifest preview */}
+        {batchPhase === "manifest_ready" && batchManifest !== null && (
+          <BatchManifestPreview
+            manifest={batchManifest}
+            autoApprove={autoApprove}
+            onToggleAutoApprove={() => {
+              const next = !autoApprove;
+              setAutoApprove(next);
+              localStorage.setItem("robin-brainstorm-auto-approve", String(next));
+            }}
+            onStart={() => triggerBatch(0)}
+            onCancel={() => {
+              setBatchPhase("idle");
+              setBatchManifest(null);
+              batchManifestRef.current = null;
+            }}
+          />
+        )}
+
+        {/* Batch progress bar (generating / batch_ready / done) */}
+        {batchManifest !== null && batchPhase !== "idle" && batchPhase !== "manifest_ready" && (
+          <BatchProgressBar
+            manifest={batchManifest}
+            currentBatchIndex={currentBatchIndex}
+            totalImported={totalImported}
+            phase={batchPhase}
+            paused={paused}
+            onResume={() => {
+              setPaused(false);
+              triggerBatch(currentBatchIndex);
+            }}
+          />
+        )}
+
         {/* Inline import card */}
         {!streaming && importData !== null && !imported && (
           <ImportPreviewCard
@@ -575,16 +918,27 @@ export function BrainstormModal({
             truncated={importData.truncated}
             originalCount={importData.originalCount}
             repositories={repositories}
-            onDismiss={() => setImportData(null)}
-            onImported={() => {
-              setImported(true);
+            onDismiss={() => {
               setImportData(null);
-              onImported();
+              if (batchManifest) setBatchPhase("batch_ready");
             }}
+            onImported={() => {
+              if (batchManifest) {
+                handleBatchImported(importData.tasks.length);
+              } else {
+                setImported(true);
+                setImportData(null);
+                onImported();
+              }
+            }}
+            {...(autoApprove && batchManifest !== null && !paused
+              ? { autoApproveCountdownSeconds: 3 }
+              : {})}
           />
         )}
 
-        {imported && (
+        {/* Non-batch import success */}
+        {imported && batchManifest === null && (
           <div className="flex justify-start">
             <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">
               Task importate nel backlog.
