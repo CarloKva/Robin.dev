@@ -42,6 +42,12 @@ export class TaskPoller {
 
   private async resolveWorkspaceId(): Promise<void> {
     if (this.workspaceId !== undefined) return;
+    const envWorkspaceId = process.env["WORKSPACE_ID"];
+    if (envWorkspaceId) {
+      this.workspaceId = envWorkspaceId;
+      log.info({ workspaceId: this.workspaceId }, "TaskPoller: workspace resolved from env");
+      return;
+    }
     const agentId = process.env["AGENT_ID"] ?? "";
     this.workspaceId = await agentRepository.getWorkspaceId(agentId);
     if (!this.workspaceId) {
