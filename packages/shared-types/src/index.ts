@@ -261,6 +261,11 @@ export type JobPayload = {
   // Environment (optional — populated by task.worker.ts at execution time)
   environmentId?: string;
   targetBranch?: string;
+
+  // MCP configuration (optional — populated from workspace.mcp_config)
+  mcpConfig?: {
+    mcpServers: Record<string, MCPServerConfig>;
+  } | null;
 };
 
 /**
@@ -297,6 +302,10 @@ export type JobErrorCode =
 // ---------------------------------------------------------------
 // DB entity shape types (mirrors DB rows — non-exhaustive)
 // ---------------------------------------------------------------
+
+export type MCPServerConfig =
+  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | { type: 'stdio'; command: string; args?: string[] };
 
 export type Workspace = {
   id: string;
