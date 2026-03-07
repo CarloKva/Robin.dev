@@ -94,7 +94,7 @@ export default async function SettingsPage({
 
   return (
     <div className="flex gap-8 max-w-5xl">
-      <SettingsSidebar />
+      <SettingsSidebar isOwner={isOwnerOrAdmin} />
 
       <div className="flex-1 min-w-0 space-y-10">
         {/* Page header */}
