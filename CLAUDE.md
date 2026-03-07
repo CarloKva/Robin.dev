@@ -103,6 +103,35 @@ Questi bug sono stati identificati e non ancora fixati. Non introdurre codice ch
 
 - **BUG-ORC-02:** `pull_request_review_comment` e `issue_comment` ricevuti ma non processati in `github-events.worker.ts` — i rework trigger da GitHub non sono implementati. Necessario per Sprint C.
 
+## Runbook operativo — task bloccate in produzione
+
+### Status UI
+- **"In review" (giallo)** = `status = 'in_review'` — webhook GitHub ha confermato la PR
+- **"Review" (plain)** = `status = 'review_pending'` — agente ha finito ma il webhook non è ancora arrivato
+
+### Causa comune di task stuck in `queued`
+BullMQ v5: `queue.add()` con un `jobId` già esistente ritorna l'hash vecchio (dedup) senza rientrare in coda. Risultato: task bloccata in loop infinito. Cause:
+1. `removeOnComplete: true` → normalizzato a `{count:200}`, hash non eliminato → dedup blocca i re-enqueue. Fix: `removeOnComplete: { count: 0 }` in `defaultJobOptions` e `workerOptions`.
+2. `assigned_agent_id = null` + due agenti → entrambi i poller aggiungono lo stesso job con `agentId` diversi → cross-agent mismatch loop.
+3. Build disallineata su un agente → vecchio `task.worker.js` chiama `moveToDelayed` invece di `resetToUnqueued` → task non viene mai liberata.
+
+### Procedura di sblocco
+```bash
+# SSH ai VPS agenti (chiave: ~/.ssh/robindev_provisioning)
+ssh -i ~/.ssh/robindev_provisioning root@<IP>
+# Se host key cambiata: ssh-keygen -R <IP>
+
+# 1. Deploy queue-watchdog.js (vedi /tmp/queue-watchdog.js) — pulisce completed/failed e rilascia stuck ogni 30s
+# 2. Deploy purge script one-shot — cancella hash Redis e resetta queued_at=null in DB
+# 3. Se agente ha build vecchia (log: "skipping" invece di "resetting task to pending"):
+#    patchare dist/workers/task.worker.js — sostituire moveToDelayed con resetToUnqueued
+# 4. Assegnare assigned_agent_id espliciti per evitare race cross-agent
+
+# Variabili env agente (da .env): REDIS_URL, AGENT_ID, WORKSPACE_ID
+# BullMQ queue name: "tasks" — job priority va in bull:tasks:prioritized (ZSET), non bull:tasks:wait (LIST)
+# getJobCounts('waiting') = 0 anche con job in coda prioritaria — usare zrange bull:tasks:prioritized
+```
+
 ## Dove trovare le cose
 
 | Cosa cerchi | Dove guardare |
