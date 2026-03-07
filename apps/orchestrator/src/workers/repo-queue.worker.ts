@@ -118,7 +118,7 @@ async function processRepoJob(job: Job<RepoQueueJobPayload>): Promise<void> {
       ? `https://github.com/${repo.full_name}.git`
       : process.env["DEFAULT_REPOSITORY_URL"] ?? "",
     branch: repo?.default_branch ?? process.env["DEFAULT_BRANCH"] ?? "main",
-    repositoryPath: `/workspace/${repo?.full_name?.split("/")[1] ?? "repo"}`,
+    repositoryPath: `/home/agent/repos/${repositoryId}`,
     taskTitle: task.title,
     taskDescription: task.description ?? "",
     taskType: (task.type as JobPayload["taskType"]) ?? "feature",
