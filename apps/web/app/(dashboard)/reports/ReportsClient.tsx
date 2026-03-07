@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -17,6 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import type { SprintSummary, ReportTask, ReportRepository, ReportAgent } from "@/lib/db/reports";
 
@@ -61,7 +62,21 @@ function shortSprintName(name: string): string {
 }
 
 export function ReportsClient({ sprints, tasks, repositories, agents }: ReportsClientProps) {
+  const router = useRouter();
   const completedSprints = sprints.filter((s) => s.status === "completed");
+
+  // ── Selection state ────────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSendingToBacklog, setIsSendingToBacklog] = useState(false);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // ── Task table filters ─────────────────────────────────────────────────────
   const [filterType, setFilterType] = useState("");
@@ -88,6 +103,45 @@ export function ReportsClient({ sprints, tasks, repositories, agents }: ReportsC
       return true;
     });
   }, [tasks, filterType, filterSprint, filterAgent]);
+
+  const allFilteredSelected =
+    filteredTasks.length > 0 && filteredTasks.every((t) => selectedIds.has(t.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredTasks.forEach((t) => next.delete(t.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredTasks.forEach((t) => next.add(t.id));
+        return next;
+      });
+    }
+  };
+
+  const moveToBacklog = async () => {
+    if (selectedIds.size === 0) return;
+    setIsSendingToBacklog(true);
+    try {
+      await fetch("/api/tasks/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "move_to_backlog",
+          taskIds: Array.from(selectedIds),
+          payload: {},
+        }),
+      });
+      setSelectedIds(new Set());
+      router.refresh();
+    } finally {
+      setIsSendingToBacklog(false);
+    }
+  };
 
   // ── Chart data ─────────────────────────────────────────────────────────────
 
@@ -375,6 +429,15 @@ export function ReportsClient({ sprints, tasks, repositories, agents }: ReportsC
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
+                  <th className="w-10 px-4 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="cursor-pointer accent-primary"
+                      aria-label="Seleziona tutte"
+                    />
+                  </th>
                   <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Titolo</th>
                   <th className="px-4 py-2.5 text-left font-medium text-muted-foreground hidden sm:table-cell">Tipo</th>
                   <th className="px-4 py-2.5 text-left font-medium text-muted-foreground hidden md:table-cell">Status</th>
@@ -388,6 +451,15 @@ export function ReportsClient({ sprints, tasks, repositories, agents }: ReportsC
                   const agent = agents.find((a) => a.id === task.assigned_agent_id);
                   return (
                     <tr key={task.id} className="hover:bg-accent/30 transition-colors">
+                      <td className="w-10 px-4 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(task.id)}
+                          onChange={() => toggleSelect(task.id)}
+                          className="cursor-pointer accent-primary"
+                          aria-label={`Seleziona ${task.title}`}
+                        />
+                      </td>
                       <td className="px-4 py-2.5 font-medium text-foreground max-w-xs truncate">
                         <Link href={`/tasks/${task.id}`} className="hover:underline">
                           {task.title}
@@ -422,6 +494,36 @@ export function ReportsClient({ sprints, tasks, repositories, agents }: ReportsC
           </div>
         )}
       </section>
+
+      {/* ── Bulk action bar ─────────────────────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-2xl md:bottom-6">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-popover px-4 py-3 shadow-lg">
+            <span className="text-sm font-medium text-foreground inline-flex items-center gap-2">
+              {isSendingToBacklog && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              )}
+              {selectedIds.size} task {selectedIds.size === 1 ? "selezionata" : "selezionate"}
+            </span>
+            <div className="flex flex-1 items-center justify-end gap-2">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                disabled={isSendingToBacklog}
+                className="text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+              >
+                Deseleziona
+              </button>
+              <button
+                onClick={() => void moveToBacklog()}
+                disabled={isSendingToBacklog}
+                className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {isSendingToBacklog ? "Spostando..." : "Riporta in backlog"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
