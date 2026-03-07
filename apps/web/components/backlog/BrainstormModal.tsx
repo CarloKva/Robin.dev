@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Bot } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Sparkles, X, Bot, ArrowUp, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { parseRobinMd } from "@/lib/robin-md-parser";
 import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
@@ -199,12 +199,27 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     outputTokens: 0,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  // Auto-resize textarea: reset to auto then stretch to scrollHeight, capped at ~6 rows
+  const adjustTextareaHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 20; // px — matches text-sm leading
+    const maxHeight = lineHeight * 6 + 16; // 6 lines + padding
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   async function handleSend() {
     const text = input.trim();
@@ -461,24 +476,34 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
 
           {/* Input */}
           <div className="shrink-0 border-t border-border bg-background px-3 py-3">
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring transition-shadow">
               <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={streaming}
-                placeholder="Descrivi cosa vuoi implementare… (Invio per inviare)"
-                rows={2}
-                className="flex-1 resize-none rounded-xl border border-input bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 placeholder:text-muted-foreground"
+                placeholder="Descrivi cosa vuoi implementare…"
+                rows={1}
+                style={{ height: "auto" }}
+                className="flex-1 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
               />
               <button
                 onClick={() => void handleSend()}
                 disabled={streaming || !input.trim()}
-                className="shrink-0 rounded-xl bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+                aria-label="Invia messaggio"
+                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {streaming ? "…" : "Invia"}
+                {streaming ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-3.5 w-3.5" />
+                )}
               </button>
             </div>
+            <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+              Invio per inviare&nbsp;·&nbsp;Shift+Invio per andare a capo
+            </p>
           </div>
         </div>
       )}
