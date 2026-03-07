@@ -209,6 +209,8 @@ interface CloudInitParams {
   redisUrl?: string;
   redisCaCert?: string;
   orchestratorRepoUrl?: string;
+  gitAuthorName?: string;
+  gitAuthorEmail?: string;
 }
 
 /**
@@ -226,6 +228,8 @@ export function buildCloudInitScript(params: CloudInitParams): string {
   const redisCaCertLine = params.redisCaCert
     ? `REDIS_CA_CERT=${params.redisCaCert}`
     : "";
+  const gitAuthorName = params.gitAuthorName ?? "robin-dev[bot]";
+  const gitAuthorEmail = params.gitAuthorEmail ?? `${params.githubAppId}+robin-dev[bot]@users.noreply.github.com`;
 
   return `#!/bin/bash
 set -euo pipefail
@@ -254,6 +258,11 @@ echo "[robin] Claude Code: $(claude --version 2>/dev/null || echo 'not found')"
 
 # ── Create non-root agent user ────────────────────────────────────────────────
 useradd -m -s /bin/bash agent 2>/dev/null || true
+
+# ── Git identity for commits made by the agent ────────────────────────────────
+su - agent -s /bin/bash -c 'git config --global user.name "${gitAuthorName}"'
+su - agent -s /bin/bash -c 'git config --global user.email "${gitAuthorEmail}"'
+echo "[robin] Git identity set: ${gitAuthorName} <${gitAuthorEmail}>"
 
 # ── Clone orchestrator ───────────────────────────────────────────────────────
 mkdir -p /opt/robin
@@ -418,6 +427,8 @@ interface SnapshotCloudInitParams {
   githubCloneToken: string;
   redisUrl?: string;
   redisCaCert?: string;
+  gitAuthorName?: string;
+  gitAuthorEmail?: string;
 }
 
 /**
@@ -432,6 +443,8 @@ export function buildSnapshotCloudInitScript(params: SnapshotCloudInitParams): s
   const redisCaCertLine = params.redisCaCert
     ? `REDIS_CA_CERT=${params.redisCaCert}`
     : "";
+  const gitAuthorName = params.gitAuthorName ?? "robin-dev[bot]";
+  const gitAuthorEmail = params.gitAuthorEmail ?? `${params.githubAppId}+robin-dev[bot]@users.noreply.github.com`;
 
   return `#!/bin/bash
 set -euo pipefail
@@ -455,6 +468,11 @@ AGENT_HOME=/home/agent
 ENVEOF
 
 echo "[robin] .env written"
+
+# ── Git identity for commits made by the agent ────────────────────────────────
+su - agent -s /bin/bash -c 'git config --global user.name "${gitAuthorName}"'
+su - agent -s /bin/bash -c 'git config --global user.email "${gitAuthorEmail}"'
+echo "[robin] Git identity set: ${gitAuthorName} <${gitAuthorEmail}>"
 
 # ── Pull latest code using a fresh GitHub token ────────────────────────────
 TOKEN=$(sudo -u agent node /opt/robin/get-github-token.mjs 2>/dev/null || true)
