@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import { createClient } from "@supabase/supabase-js";
 import { AgentCreationForm } from "@/components/agents/AgentCreationForm";
+import { ImageUploader } from "@/components/ImageUploader";
 import { cn } from "@/lib/utils";
-import type { Repository, Sprint } from "@robin/shared-types";
+import type { Repository, Sprint, TaskAttachment } from "@robin/shared-types";
 
 type Tab = "task" | "agent";
 
@@ -33,10 +36,13 @@ function TaskCreationTab({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const { getToken } = useAuth();
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [sprintsLoading, setSprintsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const enabledRepos = repositories.filter((r) => r.is_enabled);
@@ -101,6 +107,7 @@ function TaskCreationTab({
 
     setSubmitting(true);
     setError(null);
+    setUploadError(null);
 
     const payload: Record<string, unknown> = {
       title: form.title.trim(),
@@ -119,6 +126,7 @@ function TaskCreationTab({
     }
 
     try {
+      // Step 1: Create the task
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,6 +137,54 @@ function TaskCreationTab({
         setError(body.error ?? "Errore nella creazione della task.");
         return;
       }
+
+      const { task } = await res.json() as { task: { id: string; workspace_id: string } };
+
+      // Step 2: Upload files to Supabase Storage (if any)
+      if (files.length > 0) {
+        try {
+          const token = await getToken({ template: "supabase" });
+          const supabase = createClient(
+            process.env["NEXT_PUBLIC_SUPABASE_URL"]!,
+            process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"]!,
+            token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : {}
+          );
+
+          const attachments: TaskAttachment[] = [];
+
+          for (const file of files) {
+            const storagePath = `${task.workspace_id}/${task.id}/${file.name}`;
+            const { error: uploadErr } = await supabase.storage
+              .from("task-attachments")
+              .upload(storagePath, file);
+
+            if (uploadErr) {
+              console.error("[GlobalCreateModal] storage upload error:", uploadErr.message);
+              setUploadError(`Errore caricamento allegati: ${uploadErr.message}`);
+              break;
+            }
+
+            attachments.push({
+              name: file.name,
+              storage_path: storagePath,
+              mime_type: file.type,
+            });
+          }
+
+          // Step 3: Update task with attachment metadata (only if any succeeded)
+          if (attachments.length > 0) {
+            await fetch(`/api/tasks/${task.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ attachments }),
+            });
+          }
+        } catch (uploadEx) {
+          console.error("[GlobalCreateModal] upload exception:", uploadEx);
+          setUploadError("Errore durante il caricamento degli allegati.");
+        }
+      }
+
       onClose();
       router.refresh();
     } catch {
@@ -172,6 +228,17 @@ function TaskCreationTab({
           disabled={submitting}
           className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
         />
+      </div>
+
+      {/* Image attachments */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium">
+          Allegati <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
+        </label>
+        <ImageUploader files={files} onChange={setFiles} disabled={submitting} />
+        {uploadError !== null && (
+          <p className="text-xs text-destructive">{uploadError}</p>
+        )}
       </div>
 
       {/* Type + Priority */}
