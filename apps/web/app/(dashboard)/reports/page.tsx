@@ -14,14 +14,13 @@ export default async function ReportsPage() {
   const data = await getSprintReportData(workspace.id);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Report</h1>
-        <p className="text-sm text-muted-foreground">
-          Statistiche sprint e attività degli agenti.
-        </p>
-      </div>
-      <ReportsClient sprints={data.sprints} tasks={data.tasks} repositories={data.repositories} agents={data.agents} />
-    </div>
+    <ReportsClient
+      sprints={data.sprints}
+      tasks={data.tasks}
+      repositories={data.repositories}
+      agents={data.agents}
+      agentStats={data.agentStats}
+      weeklyThroughput={data.weeklyThroughput}
+    />
   );
 }
