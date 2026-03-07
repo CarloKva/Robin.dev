@@ -59,6 +59,11 @@ const config: Config = {
           info: "#0ea5e9",    // sky-500
         },
       },
+      boxShadow: {
+        // iOS 18-style subtle shadows
+        "ios-sm": "0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04)",
+        "ios-md": "0 4px 12px 0 rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05)",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -66,11 +71,6 @@ const config: Config = {
         // iOS 18-style rounded corners
         "ios-lg": "20px",
         "ios-sm": "12px",
-      },
-      boxShadow: {
-        // iOS 18-style subtle shadows
-        "ios-sm": "0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04)",
-        "ios-md": "0 4px 12px 0 rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05)",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
