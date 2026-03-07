@@ -204,7 +204,7 @@ export class TaskRepository {
   async getPendingUnqueued(workspaceId?: string) {
     let query = this.db
       .from("tasks")
-      .select("*, repositories(id, full_name, default_branch)")
+      .select("*, attachments, repositories(id, full_name, default_branch)")
       .in("status", ["pending", "queued"])
       .is("queued_at", null)
       .order("created_at", { ascending: true });

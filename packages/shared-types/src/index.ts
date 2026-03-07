@@ -258,6 +258,9 @@ export type JobPayload = {
   timeoutMinutes: number;
   claudeMdPath: string;
 
+  // Attachments (file URLs or base64 strings uploaded by the founder)
+  attachments: string[];
+
   // Environment (optional — populated by task.worker.ts at execution time)
   environmentId?: string;
   targetBranch?: string;
