@@ -39,6 +39,25 @@ export async function getActiveAgentStatus(): Promise<{
 }
 
 /**
+ * Returns the count of agents that have been seen within the last 2 minutes.
+ * Used by the header agent status pill. Best-effort: returns 0 on error.
+ */
+export async function getActiveAgentsCount(workspaceId: string): Promise<number> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from("agents")
+      .select("*", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .gt("last_seen_at", twoMinutesAgo);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Returns all agents for a workspace, enriched with live status from
  * the `agents_with_status` view (effective_status, current_task_id, last_heartbeat).
  */
