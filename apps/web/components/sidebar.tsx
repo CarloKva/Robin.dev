@@ -12,6 +12,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Activity,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/context", label: "Contesto", icon: FileText },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/reports", label: "Report", icon: BarChart2 },
+  { href: "/ops", label: "Ops", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -3,6 +3,7 @@ import type { Job } from "bullmq";
 import type { JobPayload, JobResult } from "@robin/shared-types";
 import { QUEUE_NAME, workerOptions } from "../config/bullmq.config";
 import { getRedisConnection } from "../db/redis.client";
+import { getSupabaseClient } from "../db/supabase.client";
 import { taskRepository } from "../repositories/task.repository";
 import { agentRepository } from "../repositories/agent.repository";
 import { ClaudeRunner } from "../agent/claude.runner";
@@ -20,6 +21,65 @@ if (!UUID_RE.test(AGENT_ID)) {
     `AGENT_ID env var must be a valid UUID (got "${AGENT_ID}"). ` +
     "Set it to the agent's UUID from the agents table."
   );
+}
+
+/**
+ * Loads the staging environment for a repository and decrypts its env vars.
+ * Returns { targetBranch, environmentId, envVars } or null if no staging env exists.
+ * Never throws — failures are logged and silently ignored to avoid blocking task execution.
+ */
+async function loadStagingEnvironment(
+  repositoryId: string
+): Promise<{ targetBranch: string; environmentId: string; envVars: Record<string, string> } | null> {
+  try {
+    const db = getSupabaseClient();
+    const { data, error } = await db
+      .from("workspace_environments")
+      .select("id, target_branch, env_vars_encrypted")
+      .eq("repository_id", repositoryId)
+      .eq("environment_type", "staging")
+      .maybeSingle();
+
+    if (error) {
+      log.warn({ repositoryId, error: error.message }, "loadStagingEnvironment: DB lookup failed");
+      return null;
+    }
+
+    if (!data) return null;
+
+    let envVars: Record<string, string> = {};
+    if (data.env_vars_encrypted) {
+      const encryptionKey = process.env["ENV_VARS_ENCRYPTION_KEY"];
+      if (!encryptionKey) {
+        log.warn({ repositoryId }, "loadStagingEnvironment: ENV_VARS_ENCRYPTION_KEY not set — skipping env vars");
+      } else {
+        try {
+          // Inline AES-256-GCM decryption (matches apps/web/lib/crypto/env-vars.ts)
+          const crypto = await import("crypto");
+          const key = Buffer.from(encryptionKey, "hex");
+          const dataBuffer = Buffer.from(data.env_vars_encrypted as string, "base64");
+          const iv = dataBuffer.subarray(0, 12);
+          const authTag = dataBuffer.subarray(12, 28);
+          const encrypted = dataBuffer.subarray(28);
+          const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+          decipher.setAuthTag(authTag);
+          const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+          envVars = JSON.parse(decrypted.toString("utf8")) as Record<string, string>;
+        } catch (err) {
+          log.warn({ repositoryId, error: String(err) }, "loadStagingEnvironment: decryption failed — skipping env vars");
+        }
+      }
+    }
+
+    return {
+      targetBranch: data.target_branch as string,
+      environmentId: data.id as string,
+      envVars,
+    };
+  } catch (err) {
+    log.warn({ repositoryId, error: String(err) }, "loadStagingEnvironment: unexpected error — skipping");
+    return null;
+  }
 }
 
 async function processJob(job: Job<JobPayload>): Promise<JobResult> {
@@ -50,15 +110,33 @@ async function processJob(job: Job<JobPayload>): Promise<JobResult> {
   });
   await eventService.phaseStarted(taskId, workspaceId, AGENT_ID, "analysis");
 
+  // 1b. Load staging environment (if any) to get targetBranch + encrypted env vars
+  const task = await taskRepository.getById(taskId);
+  const repositoryId = task.repository_id as string | null;
+  const stagingEnv = repositoryId ? await loadStagingEnvironment(repositoryId) : null;
+
+  const enrichedPayload: JobPayload = {
+    ...job.data,
+    ...(stagingEnv && { targetBranch: stagingEnv.targetBranch, environmentId: stagingEnv.environmentId }),
+  };
+
+  if (stagingEnv) {
+    log.info(
+      { taskId, environmentId: stagingEnv.environmentId, targetBranch: stagingEnv.targetBranch },
+      "processJob: staging environment resolved"
+    );
+  }
+
   // 2. Run Claude Code
   const runner = new ClaudeRunner();
-  const result = await runner.run(job.data, {
+  const result = await runner.run(enrichedPayload, {
     onCommitPushed: (commitSha, branch) =>
       eventService.commitPushed(taskId, workspaceId, AGENT_ID, commitSha, branch),
     onPhaseStarted: (phase) =>
       eventService.phaseStarted(taskId, workspaceId, AGENT_ID, phase),
     onPhaseCompleted: (phase, durationSeconds) =>
       eventService.phaseCompleted(taskId, workspaceId, AGENT_ID, phase, durationSeconds),
+    ...(stagingEnv && { envVars: stagingEnv.envVars }),
   });
 
   log.info({ jobId: job.id, taskId, status: result.status }, "Claude runner finished");

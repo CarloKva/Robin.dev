@@ -19,7 +19,7 @@ const parsedTaskSchema = z.object({
   agent: z.string().optional(),
   repository: z.string().min(1, "Il campo 'repository' è obbligatorio per ogni task"),
   depends_on: z.string().optional(),
-  description: z.string().min(20).max(5000),
+  description: z.string().min(20).max(20000),
 });
 
 const importBodySchema = z.object({

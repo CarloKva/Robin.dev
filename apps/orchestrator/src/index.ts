@@ -10,6 +10,7 @@ import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worke
 import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue.worker";
 import { createSprintControlWorker } from "./workers/sprint-control.worker";
 import { createGitHubEventsWorker } from "./workers/github-events.worker";
+import { createOpsDiagnosticsWorker, createOpsExecuteWorker } from "./workers/ops-diagnostics.worker";
 import { repoWatchdog } from "./services/repo-watchdog.service";
 import { recoverPendingAgents } from "./services/provisioning-recovery.service";
 import { SelfUpdateService } from "./services/self-update.service";
@@ -69,9 +70,14 @@ async function main() {
     const gitHubEventsWorker = createGitHubEventsWorker();
     workersToClose.push(gitHubEventsWorker);
 
+    // Ops Diagnostics workers (run and execute)
+    const opsDiagnosticsWorker = createOpsDiagnosticsWorker();
+    const opsExecuteWorker = createOpsExecuteWorker();
+    workersToClose.push(opsDiagnosticsWorker, opsExecuteWorker);
+
     log.info(
       {},
-      "Control-plane workers started (provisioning + deprovisioning + repo-queues + sprint-control + watchdog + github-events)"
+      "Control-plane workers started (provisioning + deprovisioning + repo-queues + sprint-control + watchdog + github-events + ops-diagnostics)"
     );
 
     // Recover agents stuck in "pending" with no BullMQ job (fire-and-forget)
