@@ -4,9 +4,12 @@ import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getGitHubConnection } from "@/lib/db/github";
 import { listInstallationRepos } from "@/lib/github/app";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
+import { getWorkspaceSettings } from "@/lib/db/workspace-settings";
 import { GitHubConnectionCard } from "@/components/settings/GitHubConnectionCard";
 import { RepositorySelector } from "@/components/settings/RepositorySelector";
 import { WorkspaceNameForm } from "@/components/settings/WorkspaceNameForm";
+import { NotificationsForm } from "@/components/settings/NotificationsForm";
+import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
 
 export const metadata = { title: "Settings — Robin.dev" };
 
@@ -23,7 +26,10 @@ export default async function SettingsPage({
 
   const { github_connected, github_error } = await searchParams;
 
-  const connection = await getGitHubConnection(workspace.id);
+  const [connection, wsSettings] = await Promise.all([
+    getGitHubConnection(workspace.id),
+    getWorkspaceSettings(workspace.id),
+  ]);
 
   // Build repo list for the selector (only if GitHub is connected)
   let repos: Awaited<ReturnType<typeof listInstallationRepos>> = [];
@@ -67,69 +73,143 @@ export default async function SettingsPage({
         : null;
 
   return (
-    <div className="max-w-xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        {github_connected === "true" && (
-          <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
-            GitHub connesso con successo.
-          </div>
-        )}
-      </div>
+    <div className="flex gap-8 max-w-5xl">
+      <SettingsSidebar />
 
-      {/* Workspace info */}
-      <section className="space-y-4 rounded-lg border border-border p-6">
-        <h2 className="text-base font-semibold">Workspace</h2>
-        <dl className="space-y-3 text-sm">
-          <div className="flex flex-col gap-1.5">
-            <dt className="text-muted-foreground text-sm">Nome</dt>
-            <dd>
-              <WorkspaceNameForm initialName={workspace.name} />
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Slug</dt>
-            <dd className="font-mono">{workspace.slug}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Creato</dt>
-            <dd>{createdAt}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Workspace ID</dt>
-            <dd className="font-mono text-xs">{workspace.id}</dd>
-          </div>
-        </dl>
-      </section>
-
-      {/* GitHub connection */}
-      <GitHubConnectionCard
-        connection={connection}
-        initialError={githubError}
-      />
-
-      {/* Repository selector — shown only when GitHub is connected */}
-      {connection && repoRows.length > 0 && (
-        <RepositorySelector initialRepos={repoRows} />
-      )}
-
-      {connection && repoRows.length === 0 && (
-        <section className="space-y-3 rounded-lg border border-border p-6">
-          <h2 className="text-base font-semibold">Repository</h2>
-          <p className="text-sm text-muted-foreground">
-            Nessun repository accessibile tramite Robin.dev App. Verifica la configurazione su{" "}
-            <a
-              href="https://github.com/settings/installations"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
-            >
-              GitHub
-            </a>
-            .
+      <div className="flex-1 min-w-0 space-y-10">
+        {/* Page header */}
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Impostazioni</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Gestisci le preferenze e le integrazioni del tuo workspace.
           </p>
+          {github_connected === "true" && (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+              </svg>
+              GitHub connesso con successo.
+            </div>
+          )}
+        </div>
+
+        {/* ── Workspace ──────────────────────────────────────────── */}
+        <section id="workspace" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground">Workspace</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Informazioni generali sul tuo workspace Robin.dev.
+            </p>
+          </div>
+
+          {/* Name */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Nome workspace
+            </label>
+            <WorkspaceNameForm initialName={workspace.name} />
+            <p className="text-xs text-muted-foreground">
+              Il nome viene mostrato nella sidebar e nelle notifiche.
+            </p>
+          </div>
+
+          {/* Read-only fields */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Slug</p>
+              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 font-mono text-sm text-foreground">
+                {workspace.slug}
+              </p>
+              <p className="text-xs text-muted-foreground">Identificatore URL del workspace.</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Creato il</p>
+              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground">
+                {createdAt}
+              </p>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Workspace ID</p>
+              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">
+                {workspace.id}
+              </p>
+              <p className="text-xs text-muted-foreground">ID interno — utile per debug e supporto.</p>
+            </div>
+          </div>
         </section>
-      )}
+
+        {/* ── Connessioni ────────────────────────────────────────── */}
+        <section id="connections" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground">Connessioni</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Collega il tuo account GitHub per permettere agli agenti di lavorare sui tuoi repository.
+            </p>
+          </div>
+          <GitHubConnectionCard
+            connection={connection}
+            initialError={githubError}
+          />
+        </section>
+
+        {/* ── Repository ─────────────────────────────────────────── */}
+        <section id="repositories" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground">Repository</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Abilita i repository su cui gli agenti possono operare.
+            </p>
+          </div>
+
+          {!connection && (
+            <div className="flex items-center gap-3 rounded-lg border border-dashed border-border p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                <svg className="h-4 w-4 text-muted-foreground" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Connetti GitHub nella sezione <span className="font-medium text-foreground">Connessioni</span> per abilitare i repository.
+              </p>
+            </div>
+          )}
+
+          {connection && repoRows.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border p-4">
+              <p className="text-sm text-muted-foreground">
+                Nessun repository accessibile tramite Robin.dev App. Verifica la configurazione su{" "}
+                <a
+                  href="https://github.com/settings/installations"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-foreground underline hover:no-underline"
+                >
+                  GitHub
+                </a>
+                .
+              </p>
+            </div>
+          )}
+
+          {connection && repoRows.length > 0 && (
+            <RepositorySelector initialRepos={repoRows} compact />
+          )}
+        </section>
+
+        {/* ── Notifiche ──────────────────────────────────────────── */}
+        <section id="notifications" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-base font-semibold text-foreground">Notifiche</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Configura dove ricevere notifiche sulle attività degli agenti.
+            </p>
+          </div>
+          <NotificationsForm
+            initialEmail={wsSettings?.notify_email ?? null}
+            initialSlackWebhook={wsSettings?.notify_slack_webhook ?? null}
+          />
+        </section>
+      </div>
     </div>
   );
 }
