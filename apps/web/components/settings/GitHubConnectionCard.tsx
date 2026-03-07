@@ -184,9 +184,7 @@ export function GitHubConnectionCard({
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-border p-6">
-      <h2 className="text-base font-semibold">Connessioni</h2>
-
+    <div className="space-y-4">
       {disconnectError && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
           {disconnectError}
@@ -223,6 +221,6 @@ export function GitHubConnectionCard({
           </a>
         </p>
       )}
-    </section>
+    </div>
   );
 }

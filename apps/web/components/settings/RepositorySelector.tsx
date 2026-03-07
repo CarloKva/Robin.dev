@@ -85,9 +85,11 @@ function RepoRow({
 
 interface RepositorySelectorProps {
   initialRepos: RepoRow[];
+  /** When true, renders without a section wrapper (for embedding inside another section) */
+  compact?: boolean;
 }
 
-export function RepositorySelector({ initialRepos }: RepositorySelectorProps) {
+export function RepositorySelector({ initialRepos, compact }: RepositorySelectorProps) {
   const [repos, setRepos] = useState<RepoRow[]>(initialRepos);
   const [search, setSearch] = useState("");
   const [pendingRepos, startTransition] = useTransition();
@@ -158,15 +160,17 @@ export function RepositorySelector({ initialRepos }: RepositorySelectorProps) {
 
   const enabledCount = repos.filter((r) => r.is_enabled).length;
 
-  return (
-    <section className="space-y-4 rounded-lg border border-border p-6">
+  const inner = (
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Repository</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {enabledCount} di {repos.length} abilitate
-          </p>
-        </div>
+        {!compact && (
+          <div>
+            <h2 className="text-base font-semibold">Repository</h2>
+          </div>
+        )}
+        <p className={cn("text-xs text-muted-foreground", !compact && "mt-0.5")}>
+          {enabledCount} di {repos.length} abilitate
+        </p>
       </div>
 
       {/* Search */}
@@ -194,6 +198,14 @@ export function RepositorySelector({ initialRepos }: RepositorySelectorProps) {
           />
         ))}
       </div>
+    </div>
+  );
+
+  if (compact) return inner;
+
+  return (
+    <section className="space-y-4 rounded-lg border border-border p-6">
+      {inner}
     </section>
   );
 }
