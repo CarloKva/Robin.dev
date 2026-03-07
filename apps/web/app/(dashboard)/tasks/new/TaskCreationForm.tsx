@@ -13,6 +13,8 @@ import {
   qualitySuggestions,
   type QualityScore,
 } from "@/lib/tasks/descriptionQuality";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { TaskType, Repository, AgentWithStatus } from "@robin/shared-types";
 
 // ─── Schema ────────────────────────────────────────────────────────────────
@@ -100,7 +102,7 @@ function buildTaskMd(values: Partial<FormValues>): string {
 
 function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
   return (
-    <label htmlFor={htmlFor} className="block text-sm font-medium text-foreground">
+    <label htmlFor={htmlFor} className="block text-sm font-medium text-[#1C1C1E] dark:text-white mb-1.5">
       {children}
     </label>
   );
@@ -108,14 +110,11 @@ function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.Re
 
 function FieldError({ message }: { message: string | undefined }) {
   if (!message) return null;
-  return <p className="mt-1 text-xs text-red-600">{message}</p>;
+  return <p className="mt-1 text-xs text-[#FF3B30]">{message}</p>;
 }
 
 const selectClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50";
-
-const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50";
+  "w-full rounded-xl border border-[#D1D1D6] bg-white px-3.5 py-2.5 text-sm text-[#1C1C1E] outline-none transition-colors focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#1C1C1E] dark:text-white";
 
 // ─── Preflight indicator ────────────────────────────────────────────────────
 
@@ -366,11 +365,12 @@ function FormPanel({
       {/* Title */}
       <div>
         <FieldLabel htmlFor="task-title">Titolo</FieldLabel>
-        <input
+        <Input
           id="task-title"
           type="text"
           placeholder="es. Fix: login button non risponde su mobile"
-          className={`mt-1 ${inputClass}`}
+          className="mt-1"
+          error={!!errors.title}
           {...register("title")}
           disabled={isSubmitting}
         />
@@ -480,11 +480,12 @@ function FormPanel({
           <FieldLabel htmlFor="task-description">Descrizione</FieldLabel>
           <span className="text-xs text-muted-foreground">min. 20 caratteri</span>
         </div>
-        <textarea
+        <Textarea
           id="task-description"
           rows={10}
           placeholder="Descrivi il problema o la feature in modo dettagliato…"
-          className={`mt-1 resize-y ${inputClass}`}
+          className="mt-1"
+          error={!!errors.description}
           {...register("description")}
           disabled={isSubmitting}
         />
