@@ -8,7 +8,7 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { Search, X, ChevronRight, ArrowUpDown, Check } from "lucide-react";
+import { Search, X, ChevronRight, ArrowUpDown, Check, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -100,6 +100,7 @@ export function BacklogJiraView({
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isBrainstormOpen, setIsBrainstormOpen] = useState(false);
 
   // ── Sprint creation with name ──────────────────────────────────────────────
   const [showCreateSprintForm, setShowCreateSprintForm] = useState(false);
@@ -378,12 +379,23 @@ export function BacklogJiraView({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-0">
+    <div className={cn("space-y-0 transition-all duration-300 ease-in-out", isBrainstormOpen ? "md:mr-[480px]" : "")}>
       <BrainstormModal
+        isOpen={isBrainstormOpen}
+        onClose={() => setIsBrainstormOpen(false)}
         repositories={repositories}
         contextDocs={contextDocs}
         onImported={refresh}
       />
+
+      {/* Floating trigger for brainstorm drawer */}
+      <button
+        onClick={() => setIsBrainstormOpen((prev) => !prev)}
+        className="fixed bottom-4 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-colors hover:bg-foreground/90"
+        aria-label={isBrainstormOpen ? "Chiudi Genera Task" : "Apri Genera Task"}
+      >
+        {isBrainstormOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+      </button>
 
       <CreateTaskDrawer
         isOpen={isDrawerOpen}

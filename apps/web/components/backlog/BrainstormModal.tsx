@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Sparkles, X, Bot, ArrowUp, Loader2, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { cn } from "@/lib/utils";
 import { parseRobinMd } from "@/lib/robin-md-parser";
 import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
 import { ImportPreviewCard } from "./ImportPreviewCard";
@@ -21,7 +22,9 @@ interface Message {
   usage?: TokenUsage;
 }
 
-interface BrainstormWidgetProps {
+interface BrainstormDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
   repositories: Repository[];
   contextDocs?: ContextDocument[];
   onImported: () => void;
@@ -187,16 +190,18 @@ function modelBadgeClass(model: string): string {
   return "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300";
 }
 
-
 /** Matches `/context` optionally followed by a space and a filter word, at the end of the string. */
 const SLASH_CONTEXT_RE = /\/context(\s+(\S*))?$/;
 
+const AI_MODEL_NAME = "claude-sonnet-4-6";
+
 export function BrainstormModal({
+  isOpen,
+  onClose,
   repositories,
   contextDocs = [],
   onImported,
-}: BrainstormWidgetProps) {
-  const [isOpen, setIsOpen] = useState(false);
+}: BrainstormDrawerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -219,6 +224,23 @@ export function BrainstormModal({
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  // Focus textarea when drawer opens
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => textareaRef.current?.focus(), 300);
+    }
+  }, [isOpen]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose]);
 
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -457,219 +479,213 @@ export function BrainstormModal({
     }
   }
 
+  const displayModelName = modelName ?? AI_MODEL_NAME;
+
   return (
-    <>
-      {/* Chat panel */}
-      {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 flex w-[420px] max-h-[580px] flex-col rounded-2xl border border-border bg-background shadow-2xl overflow-hidden">
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <div className="h-7 w-7 rounded-full bg-foreground flex items-center justify-center">
-                <Bot className="h-4 w-4 text-background" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-semibold leading-tight">Robin AI</p>
-                  {modelName && (
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${modelBadgeClass(modelName)}`}
-                    >
-                      {modelName}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[10px] text-muted-foreground leading-tight">
-                  {streaming ? "Sta scrivendo…" : "Online"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              {messages.length > 0 && (
-                <button
-                  onClick={handleNewChat}
-                  className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                >
-                  Nuova chat
-                </button>
-              )}
-              <button
-                onClick={() => setIsOpen(false)}
-                className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                aria-label="Chiudi"
+    <div
+      className={cn(
+        "fixed right-0 top-0 z-40 h-screen w-full md:w-[480px]",
+        "flex flex-col border-l border-border bg-background shadow-2xl",
+        "transition-transform duration-300 ease-in-out",
+        isOpen ? "translate-x-0" : "translate-x-full"
+      )}
+      aria-hidden={!isOpen}
+    >
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-full bg-foreground flex items-center justify-center">
+            <Bot className="h-4 w-4 text-background" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-semibold leading-tight">Robin AI</p>
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${modelBadgeClass(displayModelName)}`}
               >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full py-8 text-center">
-                <div className="h-12 w-12 rounded-full bg-foreground/5 flex items-center justify-center mb-3">
-                  <Sparkles className="h-6 w-6 text-foreground/40" />
-                </div>
-                <p className="text-sm font-medium text-foreground">Descrivi la feature o il problema</p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
-                  Es. &quot;Aggiungi autenticazione con Google&quot;
-                </p>
-                {contextDocs.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Digita{" "}
-                    <code className="bg-accent rounded px-1">/context</code>
-                    {" "}per allegare documenti
-                  </p>
-                )}
-              </div>
-            )}
-
-            {messages.map((msg, i) => {
-              const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
-              if (msg.role === "user") {
-                return <UserMessage key={i} content={msg.content} timestamp={msg.timestamp} />;
-              }
-              return (
-                <AssistantMessage
-                  key={i}
-                  content={msg.content}
-                  timestamp={msg.timestamp}
-                  isStreaming={isLastAssistant && streaming}
-                  {...(msg.usage !== undefined && { usage: msg.usage })}
-                />
-              );
-            })}
-
-            {/* Inline import card */}
-            {!streaming && importData !== null && !imported && (
-              <ImportPreviewCard
-                tasks={importData.tasks}
-                errors={importData.errors}
-                truncated={importData.truncated}
-                originalCount={importData.originalCount}
-                repositories={repositories}
-                onDismiss={() => setImportData(null)}
-                onImported={() => {
-                  setImported(true);
-                  setImportData(null);
-                  onImported();
-                }}
-              />
-            )}
-
-            {imported && (
-              <div className="flex justify-start">
-                <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">
-                  Task importate nel backlog.
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Session token counter */}
-          {(sessionTokens.inputTokens > 0 || sessionTokens.outputTokens > 0) && (
-            <div className="shrink-0 border-t border-border px-4 py-1.5">
-              <span className="text-[10px] text-muted-foreground">
-                Sessione: ↑ {sessionTokens.inputTokens} · ↓ {sessionTokens.outputTokens} token
+                {displayModelName}
               </span>
             </div>
-          )}
-
-          {/* Input area */}
-          <div className="shrink-0 border-t border-border bg-background px-3 py-3">
-            {/* Selected context doc chips */}
-            {selectedDocs.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-2">
-                {selectedDocs.map((doc) => (
-                  <span
-                    key={doc.id}
-                    className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
-                  >
-                    <FileText className="h-3 w-3 shrink-0" />
-                    <span className="max-w-[140px] truncate">{doc.title}</span>
-                    <button
-                      onClick={() => removeDoc(doc.id)}
-                      className="ml-0.5 rounded-full hover:text-foreground text-muted-foreground transition-colors"
-                      aria-label={`Rimuovi ${doc.title}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Context document dropdown */}
-            {showDropdown && (
-              <div className="mb-2 rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
-                {filteredDocs.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    Nessun documento trovato
-                  </div>
-                ) : (
-                  filteredDocs.map((doc, idx) => (
-                    <button
-                      key={doc.id}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        selectDoc(doc);
-                      }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                        idx === highlightedIdx
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-accent/50"
-                      }`}
-                    >
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{doc.title}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-
-            <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring transition-shadow">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                disabled={streaming}
-                placeholder="Descrivi cosa vuoi implementare…"
-                rows={1}
-                style={{ height: "auto" }}
-                className="flex-1 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
-              />
-              <button
-                onClick={() => void handleSend()}
-                disabled={streaming || !input.trim()}
-                aria-label="Invia messaggio"
-                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {streaming ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
-            <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
-              Invio per inviare&nbsp;·&nbsp;Shift+Invio per andare a capo
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              {streaming ? "Sta scrivendo…" : "Online"}
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <button
+              onClick={handleNewChat}
+              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              Nuova chat
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            aria-label="Chiudi"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+            <div className="h-12 w-12 rounded-full bg-foreground/5 flex items-center justify-center mb-3">
+              <Sparkles className="h-6 w-6 text-foreground/40" />
+            </div>
+            <p className="text-sm font-medium text-foreground">Descrivi la feature o il problema</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
+              Es. &quot;Aggiungi autenticazione con Google&quot;
+            </p>
+            {contextDocs.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Digita{" "}
+                <code className="bg-accent rounded px-1">/context</code>
+                {" "}per allegare documenti
+              </p>
+            )}
+          </div>
+        )}
+
+        {messages.map((msg, i) => {
+          const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+          if (msg.role === "user") {
+            return <UserMessage key={i} content={msg.content} timestamp={msg.timestamp} />;
+          }
+          return (
+            <AssistantMessage
+              key={i}
+              content={msg.content}
+              timestamp={msg.timestamp}
+              isStreaming={isLastAssistant && streaming}
+              {...(msg.usage !== undefined && { usage: msg.usage })}
+            />
+          );
+        })}
+
+        {/* Inline import card */}
+        {!streaming && importData !== null && !imported && (
+          <ImportPreviewCard
+            tasks={importData.tasks}
+            errors={importData.errors}
+            truncated={importData.truncated}
+            originalCount={importData.originalCount}
+            repositories={repositories}
+            onDismiss={() => setImportData(null)}
+            onImported={() => {
+              setImported(true);
+              setImportData(null);
+              onImported();
+            }}
+          />
+        )}
+
+        {imported && (
+          <div className="flex justify-start">
+            <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">
+              Task importate nel backlog.
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Session token counter */}
+      {(sessionTokens.inputTokens > 0 || sessionTokens.outputTokens > 0) && (
+        <div className="shrink-0 border-t border-border px-4 py-1.5">
+          <span className="text-[10px] text-muted-foreground">
+            Sessione: ↑ {sessionTokens.inputTokens} · ↓ {sessionTokens.outputTokens} token
+          </span>
+        </div>
       )}
 
-      {/* Floating trigger button */}
-      <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-colors hover:bg-foreground/90"
-        aria-label={isOpen ? "Chiudi AI brainstorm" : "Apri AI brainstorm"}
-      >
-        {isOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
-      </button>
-    </>
+      {/* Input area */}
+      <div className="shrink-0 border-t border-border bg-background px-3 py-3">
+        {/* Selected context doc chips */}
+        {selectedDocs.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {selectedDocs.map((doc) => (
+              <span
+                key={doc.id}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
+              >
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="max-w-[140px] truncate">{doc.title}</span>
+                <button
+                  onClick={() => removeDoc(doc.id)}
+                  className="ml-0.5 rounded-full hover:text-foreground text-muted-foreground transition-colors"
+                  aria-label={`Rimuovi ${doc.title}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Context document dropdown */}
+        {showDropdown && (
+          <div className="mb-2 rounded-lg border border-border bg-background shadow-md max-h-48 overflow-y-auto">
+            {filteredDocs.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                Nessun documento trovato
+              </div>
+            ) : (
+              filteredDocs.map((doc, idx) => (
+                <button
+                  key={doc.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectDoc(doc);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                    idx === highlightedIdx
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-accent/50"
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{doc.title}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring transition-shadow">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            disabled={streaming}
+            placeholder="Descrivi cosa vuoi implementare…"
+            rows={1}
+            style={{ height: "auto" }}
+            className="flex-1 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
+          />
+          <button
+            onClick={() => void handleSend()}
+            disabled={streaming || !input.trim()}
+            aria-label="Invia messaggio"
+            className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {streaming ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ArrowUp className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+        <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+          Invio per inviare&nbsp;·&nbsp;Shift+Invio per andare a capo
+        </p>
+      </div>
+    </div>
   );
 }
