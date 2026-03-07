@@ -61,9 +61,9 @@ export function CreateEnvironmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-base font-semibold text-foreground">Nuovo ambiente</h2>
           <button
             onClick={onClose}
@@ -76,7 +76,7 @@ export function CreateEnvironmentModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {/* Repository */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Repository</label>

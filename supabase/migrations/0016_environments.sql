@@ -50,10 +50,4 @@ ALTER TABLE workspace_environments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "workspace_environments: workspace members can manage"
   ON workspace_environments
   FOR ALL
-  USING (
-    workspace_id IN (
-      SELECT workspace_id
-      FROM workspace_members
-      WHERE user_id = auth.uid()
-    )
-  );
+  USING (workspace_id IN (SELECT get_my_workspace_ids()));
