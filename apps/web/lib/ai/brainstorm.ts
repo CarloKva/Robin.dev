@@ -13,6 +13,7 @@ Regole:
 - Non chiedere informazioni già presenti nel testo o nei documenti di contesto
 - Genera task atomiche, implementabili singolarmente da un agente AI
 - Ogni task deve avere titolo chiaro, tipo, priorità, repository e descrizione dettagliata
+- La description di ogni task NON può superare i 4000 caratteri. Se una descrizione richiederebbe più spazio, dividi il lavoro in due o più task separate invece di scrivere una descrizione più lunga
 
 Formato di output obbligatorio quando generi le task:
 [TASKS_GENERATED]
