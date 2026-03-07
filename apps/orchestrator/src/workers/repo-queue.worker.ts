@@ -125,6 +125,7 @@ async function processRepoJob(job: Job<RepoQueueJobPayload>): Promise<void> {
     priority: (task.priority as JobPayload["priority"]) ?? "medium",
     timeoutMinutes: defaultTimeoutByType[task.type ?? "feature"] ?? 30,
     claudeMdPath: "CLAUDE.md",
+    attachments: (task.attachments as string[] | null) ?? [],
   };
 
   await taskQueue.addJob(jobPayload);
