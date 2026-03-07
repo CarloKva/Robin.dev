@@ -1,16 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles, X, Bot } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { parseRobinMd } from "@/lib/robin-md-parser";
 import { extractGeneratedTasks } from "@/lib/ai/brainstorm";
 import { ImportPreviewCard } from "./ImportPreviewCard";
 import type { Repository } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
+interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
+  timestamp: Date;
+  usage?: TokenUsage;
 }
 
 interface BrainstormWidgetProps {
@@ -24,6 +32,149 @@ type ImportData = {
   truncated: boolean;
   originalCount: number;
 };
+
+function formatTimestamp(date: Date): string {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function LoadingDots() {
+  return (
+    <span className="inline-flex gap-1 items-center py-1">
+      <span
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: "0ms" }}
+      />
+      <span
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: "150ms" }}
+      />
+      <span
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: "300ms" }}
+      />
+    </span>
+  );
+}
+
+function RobinAvatar() {
+  return (
+    <div className="shrink-0 h-7 w-7 rounded-full bg-foreground flex items-center justify-center">
+      <Bot className="h-4 w-4 text-background" />
+    </div>
+  );
+}
+
+interface AssistantMessageProps {
+  content: string;
+  timestamp: Date;
+  isStreaming: boolean;
+}
+
+function AssistantMessage({ content, timestamp, isStreaming }: AssistantMessageProps) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <RobinAvatar />
+      <div className="flex flex-col gap-1 max-w-[85%]">
+        <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5 text-sm text-foreground">
+          {content ? (
+            <div className="prose-chat">
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => (
+                    <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                  ),
+                  h1: ({ children }) => (
+                    <h1 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="text-sm font-bold mb-1.5 mt-3 first:mt-0">{children}</h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>
+                  ),
+                  li: ({ children }) => (
+                    <li className="leading-relaxed">{children}</li>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold">{children}</strong>
+                  ),
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  code: ({ children, className }) => {
+                    const isBlock = className?.startsWith("language-");
+                    if (isBlock) {
+                      return (
+                        <code className="block bg-background/60 border border-border rounded-md px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre my-2">
+                          {children}
+                        </code>
+                      );
+                    }
+                    return (
+                      <code className="bg-background/60 border border-border rounded px-1 py-0.5 text-xs font-mono">
+                        {children}
+                      </code>
+                    );
+                  },
+                  pre: ({ children }) => (
+                    <pre className="bg-background/60 border border-border rounded-md p-3 overflow-x-auto my-2 text-xs font-mono">
+                      {children}
+                    </pre>
+                  ),
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-2 border-border pl-3 italic text-muted-foreground my-2">
+                      {children}
+                    </blockquote>
+                  ),
+                  hr: () => <hr className="border-border my-2" />,
+                  a: ({ children, href }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:no-underline"
+                    >
+                      {children}
+                    </a>
+                  ),
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+            </div>
+          ) : isStreaming ? (
+            <LoadingDots />
+          ) : null}
+        </div>
+        <span className="text-[10px] text-muted-foreground pl-1">
+          Robin · {formatTimestamp(timestamp)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+interface UserMessageProps {
+  content: string;
+  timestamp: Date;
+}
+
+function UserMessage({ content, timestamp }: UserMessageProps) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground leading-relaxed">
+        {content}
+      </div>
+      <span className="text-[10px] text-muted-foreground pr-1">
+        {formatTimestamp(timestamp)}
+      </span>
+    </div>
+  );
+}
 
 export function BrainstormModal({ repositories, onImported }: BrainstormWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,7 +195,8 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     const text = input.trim();
     if (!text || streaming) return;
 
-    const userMessage: Message = { role: "user", content: text };
+    const now = new Date();
+    const userMessage: Message = { role: "user", content: text, timestamp: now };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
@@ -52,14 +204,22 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     setImportData(null);
     setImported(false);
 
-    const assistantPlaceholder: Message = { role: "assistant", content: "" };
+    const assistantTimestamp = new Date();
+    const assistantPlaceholder: Message = {
+      role: "assistant",
+      content: "",
+      timestamp: assistantTimestamp,
+    };
     setMessages([...newMessages, assistantPlaceholder]);
 
     try {
       const res = await fetch("/api/ai/brainstorm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages, contextDocIds: [] }),
+        body: JSON.stringify({
+          messages: newMessages.map(({ role, content }) => ({ role, content })),
+          contextDocIds: [],
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -69,6 +229,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
           next[next.length - 1] = {
             role: "assistant",
             content: `Errore: ${errorData.error ?? "Impossibile contattare l'AI."}`,
+            timestamp: assistantTimestamp,
           };
           return next;
         });
@@ -104,7 +265,11 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
 
         setMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: "assistant", content: accumulated };
+          next[next.length - 1] = {
+            role: "assistant",
+            content: accumulated,
+            timestamp: assistantTimestamp,
+          };
           return next;
         });
       }
@@ -124,7 +289,11 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     } catch {
       setMessages((prev) => {
         const next = [...prev];
-        next[next.length - 1] = { role: "assistant", content: "Errore di rete. Riprova." };
+        next[next.length - 1] = {
+          role: "assistant",
+          content: "Errore di rete. Riprova.",
+          timestamp: assistantTimestamp,
+        };
         return next;
       });
     } finally {
@@ -143,12 +312,19 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
     <>
       {/* Chat panel */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 flex w-[400px] max-h-[560px] flex-col rounded-2xl border border-border bg-white shadow-2xl overflow-hidden">
+        <div className="fixed bottom-20 right-4 z-50 flex w-[420px] max-h-[580px] flex-col rounded-2xl border border-border bg-background shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span className="text-sm font-semibold">Genera task con AI</span>
+          <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-7 rounded-full bg-foreground flex items-center justify-center">
+                <Bot className="h-4 w-4 text-background" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold leading-tight">Robin AI</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  {streaming ? "Sta scrivendo…" : "Online"}
+                </p>
+              </div>
             </div>
             <button
               onClick={() => setIsOpen(false)}
@@ -160,39 +336,33 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full py-8 text-center">
-                <Sparkles className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">Descrivi la feature o il problema</p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <div className="h-12 w-12 rounded-full bg-foreground/5 flex items-center justify-center mb-3">
+                  <Sparkles className="h-6 w-6 text-foreground/40" />
+                </div>
+                <p className="text-sm font-medium text-foreground">Descrivi la feature o il problema</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
                   Es. &quot;Aggiungi autenticazione con Google&quot;
                 </p>
               </div>
             )}
 
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-accent text-accent-foreground"
-                  }`}
-                >
-                  {msg.content || (streaming && i === messages.length - 1 ? (
-                    <span className="inline-flex gap-1 items-center text-muted-foreground">
-                      <span className="animate-bounce">·</span>
-                      <span className="animate-bounce delay-75">·</span>
-                      <span className="animate-bounce delay-150">·</span>
-                    </span>
-                  ) : "")}
-                </div>
-              </div>
-            ))}
+            {messages.map((msg, i) => {
+              const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+              if (msg.role === "user") {
+                return <UserMessage key={i} content={msg.content} timestamp={msg.timestamp} />;
+              }
+              return (
+                <AssistantMessage
+                  key={i}
+                  content={msg.content}
+                  timestamp={msg.timestamp}
+                  isStreaming={isLastAssistant && streaming}
+                />
+              );
+            })}
 
             {/* Inline import card */}
             {!streaming && importData !== null && !imported && (
@@ -223,7 +393,7 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
           </div>
 
           {/* Input */}
-          <div className="shrink-0 border-t border-border px-3 py-2.5">
+          <div className="shrink-0 border-t border-border bg-background px-3 py-3">
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
@@ -232,12 +402,12 @@ export function BrainstormModal({ repositories, onImported }: BrainstormWidgetPr
                 disabled={streaming}
                 placeholder="Descrivi cosa vuoi implementare… (Invio per inviare)"
                 rows={2}
-                className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                className="flex-1 resize-none rounded-xl border border-input bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 placeholder:text-muted-foreground"
               />
               <button
                 onClick={() => void handleSend()}
                 disabled={streaming || !input.trim()}
-                className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                className="shrink-0 rounded-xl bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
               >
                 {streaming ? "…" : "Invia"}
               </button>
