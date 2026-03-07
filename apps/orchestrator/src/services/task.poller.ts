@@ -122,7 +122,7 @@ export class TaskPoller {
       priority: (task["priority"] as TaskPriority | undefined) ?? "medium",
       timeoutMinutes: defaultTimeoutByType[taskType] ?? 30,
       claudeMdPath: "CLAUDE.md",
-      attachments: (task["attachments"] as string[] | null) ?? [],
+      attachments: (task["attachments"] as JobPayload["attachments"]) ?? [],
     };
   }
 

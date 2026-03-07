@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import type { Job } from "bullmq";
-import type { RepoQueueJobPayload, JobPayload } from "@robin/shared-types";
+import type { RepoQueueJobPayload, JobPayload, TaskAttachment } from "@robin/shared-types";
 import { getRedisConnection } from "../db/redis.client";
 import { getSupabaseClient } from "../db/supabase.client";
 import { defaultTimeoutByType } from "../config/bullmq.config";
@@ -125,7 +125,7 @@ async function processRepoJob(job: Job<RepoQueueJobPayload>): Promise<void> {
     priority: (task.priority as JobPayload["priority"]) ?? "medium",
     timeoutMinutes: defaultTimeoutByType[task.type ?? "feature"] ?? 30,
     claudeMdPath: "CLAUDE.md",
-    attachments: (task.attachments as string[] | null) ?? [],
+    attachments: (task.attachments as TaskAttachment[] | null) ?? [],
   };
 
   await taskQueue.addJob(jobPayload);
