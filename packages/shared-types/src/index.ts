@@ -214,6 +214,25 @@ export type TimelineEntry = {
 
 export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
 
+// ---------------------------------------------------------------
+// Environments (staging/production per repo)
+// ---------------------------------------------------------------
+
+export type EnvironmentType = "staging" | "production";
+
+export type WorkspaceEnvironment = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  name: string;
+  environment_type: EnvironmentType;
+  target_branch: string;
+  auto_merge: boolean;
+  env_vars_encrypted: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /**
  * Payload passed from the BullMQ queue to ClaudeRunner.
  * Contains everything the agent needs — no further DB lookups during execution.
@@ -238,6 +257,13 @@ export type JobPayload = {
   // Execution config
   timeoutMinutes: number;
   claudeMdPath: string;
+
+  // Optional attachments (screenshots, diagrams, etc.)
+  attachments?: TaskAttachment[];
+
+  // Environment (optional — populated by task.worker.ts at execution time)
+  environmentId?: string;
+  targetBranch?: string;
 };
 
 /**
@@ -292,6 +318,14 @@ export type WorkspaceMember = {
   updated_at: string;
 };
 
+export type TaskAttachment = {
+  name: string;
+  storage_path: string;
+  mime_type: string;
+  size_bytes?: number;
+  uploaded_at?: string;
+};
+
 export type Task = {
   id: string;
   workspace_id: string;
@@ -307,7 +341,7 @@ export type Task = {
   sprint_order: number | null;
   context: string | null;
   estimated_effort: "xs" | "s" | "m" | "l" | null;
-  attachments: TaskAttachment[];
+  attachments: TaskAttachment[] | null;
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
@@ -488,18 +522,6 @@ export type SprintControlJobPayload = {
   repositoryIds: string[];
   sprintId: string;
   workspaceId: string;
-};
-
-// ---------------------------------------------------------------
-// Task attachments (images uploaded via Brainstorm chat)
-// ---------------------------------------------------------------
-
-export type TaskAttachment = {
-  storage_path: string; // "{workspace_id}/{task_id}/{filename}" in Supabase Storage
-  filename: string;     // original file name
-  mime_type: string;    // MIME type, e.g. "image/png"
-  size_bytes: number;   // file size in bytes
-  uploaded_at: string;  // ISO timestamp
 };
 
 // ---------------------------------------------------------------

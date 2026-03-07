@@ -80,8 +80,8 @@ export async function POST(request: Request) {
       }
 
       attachments.push({
+        name: file.name,
         storage_path: storagePath,
-        filename: file.name,
         mime_type: file.type,
         size_bytes: file.size,
         uploaded_at: now,
