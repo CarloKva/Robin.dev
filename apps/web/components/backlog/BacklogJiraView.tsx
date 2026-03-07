@@ -116,6 +116,9 @@ export function BacklogJiraView({
   // DnD state
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverSprintId, setDragOverSprintId] = useState<string | null>(null);
+  const [dragOverBacklog, setDragOverBacklog] = useState(false);
+  const [justDroppedTaskId, setJustDroppedTaskId] = useState<string | null>(null);
+  const dragGhostRef = useRef<HTMLElement | null>(null);
 
   // Sprint action state (per sprint)
   const [sprintLoading, setSprintLoading] = useState<Record<string, boolean>>({});
@@ -289,15 +292,36 @@ export function BacklogJiraView({
 
   // ── Drag and drop ─────────────────────────────────────────────────────────
 
-  function handleDragStart(e: React.DragEvent, taskId: string) {
+  function handleDragStart(e: React.DragEvent, taskId: string, sourceSprintId: string | null = null) {
     e.dataTransfer.setData("text/plain", taskId);
+    e.dataTransfer.setData("application/x-sprint-source", sourceSprintId ?? "backlog");
     e.dataTransfer.effectAllowed = "move";
     setDraggingTaskId(taskId);
+
+    // Create custom drag ghost: opacity 0.5 + rotate(1.5deg) + ios shadow
+    const target = e.currentTarget as HTMLElement;
+    const ghost = target.cloneNode(true) as HTMLElement;
+    ghost.style.cssText = `
+      position: fixed; top: -9999px; left: -9999px;
+      width: ${target.offsetWidth}px;
+      opacity: 0.5;
+      transform: rotate(1.5deg);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06);
+      pointer-events: none; border-radius: 8px;
+    `;
+    document.body.appendChild(ghost);
+    dragGhostRef.current = ghost;
+    e.dataTransfer.setDragImage(ghost, e.nativeEvent.offsetX, e.nativeEvent.offsetY);
   }
 
   function handleDragEnd() {
     setDraggingTaskId(null);
     setDragOverSprintId(null);
+    setDragOverBacklog(false);
+    if (dragGhostRef.current) {
+      document.body.removeChild(dragGhostRef.current);
+      dragGhostRef.current = null;
+    }
   }
 
   function handleDragOver(e: React.DragEvent, sprintId: string) {
@@ -312,23 +336,53 @@ export function BacklogJiraView({
     }
   }
 
+  function handleDragOverBacklog(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverBacklog(true);
+  }
+
+  function handleDragLeaveBacklog(e: React.DragEvent) {
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      setDragOverBacklog(false);
+    }
+  }
+
   async function handleDrop(e: React.DragEvent, sprintId: string) {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain");
+    const sourcePart = e.dataTransfer.getData("application/x-sprint-source");
+    const sourceSprintId = sourcePart === "backlog" || sourcePart === "" ? null : sourcePart;
     setDraggingTaskId(null);
     setDragOverSprintId(null);
 
-    const task = localBacklog.find((t) => t.id === taskId);
-    if (!task) return;
+    if (sourceSprintId === sprintId) return;
 
-    setLocalBacklog((prev) => prev.filter((t) => t.id !== taskId));
+    let task: Task | undefined;
+    if (sourceSprintId === null) {
+      task = localBacklog.find((t) => t.id === taskId);
+      if (!task) return;
+      setLocalBacklog((prev) => prev.filter((t) => t.id !== taskId));
+    } else {
+      task = localSprints.find((s) => s.id === sourceSprintId)?.tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      setLocalSprints((prev) =>
+        prev.map((s) =>
+          s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s
+        )
+      );
+    }
+
     setLocalSprints((prev) =>
       prev.map((s) =>
         s.id === sprintId
-          ? { ...s, tasks: [...s.tasks, { ...task, sprint_id: sprintId, status: "sprint_ready" as TaskStatus }] }
+          ? { ...s, tasks: [...s.tasks, { ...task!, sprint_id: sprintId, status: "sprint_ready" as TaskStatus }] }
           : s
       )
     );
+
+    setJustDroppedTaskId(taskId);
+    setTimeout(() => setJustDroppedTaskId(null), 250);
 
     await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
@@ -336,6 +390,19 @@ export function BacklogJiraView({
       body: JSON.stringify({ sprint_id: sprintId, status: "sprint_ready" }),
     });
     refresh();
+  }
+
+  async function handleDropToBacklog(e: React.DragEvent) {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("text/plain");
+    const sourcePart = e.dataTransfer.getData("application/x-sprint-source");
+    const sourceSprintId = sourcePart === "backlog" || sourcePart === "" ? null : sourcePart;
+    setDraggingTaskId(null);
+    setDragOverBacklog(false);
+
+    if (sourceSprintId === null) return; // already in backlog
+
+    await handleRemoveFromSprint(taskId, sourceSprintId);
   }
 
   // ── Drawer ─────────────────────────────────────────────────────────────────
@@ -502,9 +569,9 @@ export function BacklogJiraView({
                 <div
                   key={sprint.id}
                   className={cn(
-                    "rounded-lg border bg-card transition-all",
+                    "rounded-lg border bg-card transition-colors duration-150",
                     isDragOver
-                      ? "border-primary/60 ring-2 ring-primary/30 bg-primary/5"
+                      ? "border-dashed border-[#007AFF]/70 bg-[#007AFF]/5"
                       : "border-border"
                   )}
                   onDragOver={(e) => handleDragOver(e, sprint.id)}
@@ -634,53 +701,70 @@ export function BacklogJiraView({
                         <div className="divide-y divide-border">
                           {sprint.tasks.map((task) => {
                             const priority = PRIORITY_ICONS[task.priority] ?? { icon: "—", className: "text-slate-400" };
+                            const isDraggingThis = draggingTaskId === task.id;
+                            const isLanding = justDroppedTaskId === task.id;
                             return (
                               <div
                                 key={task.id}
-                                className="group flex items-center gap-3 px-4 py-2.5 hover:bg-accent/40 text-sm"
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, task.id, sprint.id)}
+                                onDragEnd={handleDragEnd}
+                                className={cn(
+                                  "cursor-grab active:cursor-grabbing",
+                                  isDraggingThis && "border border-dashed border-border/60 rounded mx-1"
+                                )}
                               >
-                                <span
-                                  className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", STATUS_COLORS[task.status])}
-                                  title={STATUS_LABELS[task.status]}
-                                />
-                                <Link
-                                  href={`/tasks/${task.id}`}
-                                  className="min-w-0 flex-1 font-medium truncate hover:underline"
-                                >
-                                  {task.title}
-                                </Link>
-                                <span
+                                <div
                                   className={cn(
-                                    "shrink-0 rounded px-1.5 py-0.5 text-xs font-medium",
-                                    task.status === "sprint_ready" && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-                                    task.status === "in_progress" && "bg-blue-600 text-white",
-                                    task.status === "in_review" && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30",
-                                    task.status === "rework" && "bg-orange-100 text-orange-700 dark:bg-orange-900/30",
-                                    task.status === "done" && "bg-green-100 text-green-700 dark:bg-green-900/30",
-                                    task.status === "queued" && "bg-slate-100 text-slate-600 dark:bg-slate-800",
-                                    task.status === "failed" && "bg-red-100 text-red-700 dark:bg-red-900/30",
-                                    task.status === "cancelled" && "bg-slate-100 text-slate-400",
+                                    "group flex items-center gap-3 px-4 py-2.5 text-sm",
+                                    !isDraggingThis && "hover:bg-accent/40",
+                                    isDraggingThis && "invisible",
+                                    isLanding && "animate-task-landing"
                                   )}
                                 >
-                                  {STATUS_LABELS[task.status]}
-                                </span>
-                                <span className={cn("shrink-0 w-5 text-center text-sm", priority.className)}>
-                                  {priority.icon}
-                                </span>
-                                {task.estimated_effort && (
-                                  <span className="shrink-0 text-xs text-muted-foreground uppercase w-4 text-center">
-                                    {task.estimated_effort}
-                                  </span>
-                                )}
-                                {isPlanning && (
-                                  <button
-                                    onClick={() => void handleRemoveFromSprint(task.id, sprint.id)}
-                                    className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                    aria-label="Rimuovi dallo sprint"
+                                  <span
+                                    className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", STATUS_COLORS[task.status])}
+                                    title={STATUS_LABELS[task.status]}
+                                  />
+                                  <Link
+                                    href={`/tasks/${task.id}`}
+                                    className="min-w-0 flex-1 font-medium truncate hover:underline"
                                   >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
+                                    {task.title}
+                                  </Link>
+                                  <span
+                                    className={cn(
+                                      "shrink-0 rounded px-1.5 py-0.5 text-xs font-medium",
+                                      task.status === "sprint_ready" && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                                      task.status === "in_progress" && "bg-blue-600 text-white",
+                                      task.status === "in_review" && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30",
+                                      task.status === "rework" && "bg-orange-100 text-orange-700 dark:bg-orange-900/30",
+                                      task.status === "done" && "bg-green-100 text-green-700 dark:bg-green-900/30",
+                                      task.status === "queued" && "bg-slate-100 text-slate-600 dark:bg-slate-800",
+                                      task.status === "failed" && "bg-red-100 text-red-700 dark:bg-red-900/30",
+                                      task.status === "cancelled" && "bg-slate-100 text-slate-400",
+                                    )}
+                                  >
+                                    {STATUS_LABELS[task.status]}
+                                  </span>
+                                  <span className={cn("shrink-0 w-5 text-center text-sm", priority.className)}>
+                                    {priority.icon}
+                                  </span>
+                                  {task.estimated_effort && (
+                                    <span className="shrink-0 text-xs text-muted-foreground uppercase w-4 text-center">
+                                      {task.estimated_effort}
+                                    </span>
+                                  )}
+                                  {isPlanning && (
+                                    <button
+                                      onClick={() => void handleRemoveFromSprint(task.id, sprint.id)}
+                                      className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                      aria-label="Rimuovi dallo sprint"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -762,7 +846,15 @@ export function BacklogJiraView({
       </div>
 
       {/* ── Backlog section ────────────────────────────────────────────────── */}
-      <div className="rounded-lg border border-border bg-card">
+      <div
+        className={cn(
+          "rounded-lg border bg-card transition-colors duration-150",
+          dragOverBacklog ? "border-dashed border-[#007AFF]/70 bg-[#007AFF]/5" : "border-border"
+        )}
+        onDragOver={handleDragOverBacklog}
+        onDragLeave={handleDragLeaveBacklog}
+        onDrop={(e) => void handleDropToBacklog(e)}
+      >
         {/* Backlog header */}
         <div
           className={cn(
@@ -793,6 +885,9 @@ export function BacklogJiraView({
             <span className="text-xs text-muted-foreground">
               ({filteredBacklog.length} {filteredBacklog.length === 1 ? "ticket" : "ticket"})
             </span>
+            <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+              Backlog
+            </span>
           </button>
 
           {/* Backlog status counts */}
@@ -816,13 +911,15 @@ export function BacklogJiraView({
         {expanded.has("backlog") && (
           <div>
             {filteredBacklog.length === 0 ? (
-              <div className="px-4 py-8 text-center">
+              <div className={cn("px-4 py-8 text-center transition-colors", dragOverBacklog && "bg-[#007AFF]/5")}>
                 <p className="text-sm text-muted-foreground">
-                  {search || typeFilter
+                  {dragOverBacklog
+                    ? "Rilascia qui per spostare nel backlog"
+                    : search || typeFilter
                     ? "Nessuna task trovata con questi filtri."
                     : "Il backlog è vuoto."}
                 </p>
-                {!search && !typeFilter && (
+                {!search && !typeFilter && !dragOverBacklog && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Premi{" "}
                     <kbd
@@ -841,25 +938,30 @@ export function BacklogJiraView({
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {filteredBacklog.map((task) => (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, task.id)}
-                    onDragEnd={handleDragEnd}
-                    className={cn(
-                      "cursor-grab active:cursor-grabbing transition-opacity",
-                      draggingTaskId === task.id && "opacity-40"
-                    )}
-                  >
-                    <TaskRow
-                      task={task}
-                      selected={selectedIds.has(task.id)}
-                      onSelectToggle={toggleSelectTask}
-                      repositories={repositories}
-                    />
-                  </div>
-                ))}
+                {filteredBacklog.map((task) => {
+                  const isDraggingThis = draggingTaskId === task.id;
+                  return (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, task.id, null)}
+                      onDragEnd={handleDragEnd}
+                      className={cn(
+                        "cursor-grab active:cursor-grabbing",
+                        isDraggingThis && "border border-dashed border-border/60 rounded mx-1"
+                      )}
+                    >
+                      <div className={isDraggingThis ? "invisible" : undefined}>
+                        <TaskRow
+                          task={task}
+                          selected={selectedIds.has(task.id)}
+                          onSelectToggle={toggleSelectTask}
+                          repositories={repositories}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

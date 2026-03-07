@@ -71,3 +71,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  @keyframes task-landing {
+    from { transform: scale(1.02); }
+    to { transform: scale(1); }
+  }
+  .animate-task-landing {
+    animation: task-landing 200ms ease-out;
+  }
+}
