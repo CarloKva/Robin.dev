@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 interface EditableFieldProps {
   value: string;
@@ -105,17 +107,12 @@ export function EditableField({
         void save();
       }
     },
-    className: cn(
-      "w-full rounded-md border border-primary/60 bg-background px-2 py-1 text-sm",
-      "focus:outline-none focus:ring-2 focus:ring-ring",
-      "disabled:opacity-50",
-      className
-    ),
+    className: cn("border-[#007AFF]/60", className),
   };
 
   if (multiline) {
     return (
-      <textarea
+      <Textarea
         ref={inputRef as React.Ref<HTMLTextAreaElement>}
         rows={4}
         {...sharedProps}
@@ -124,7 +121,7 @@ export function EditableField({
   }
 
   return (
-    <input
+    <Input
       ref={inputRef as React.Ref<HTMLInputElement>}
       type="text"
       {...sharedProps}

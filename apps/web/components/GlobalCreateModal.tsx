@@ -6,6 +6,8 @@ import { useAuth } from "@clerk/nextjs";
 import { createClient } from "@supabase/supabase-js";
 import { AgentCreationForm } from "@/components/agents/AgentCreationForm";
 import { ImageUploader } from "@/components/ImageUploader";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { Repository, Sprint, TaskAttachment } from "@robin/shared-types";
 
@@ -198,10 +200,10 @@ function TaskCreationTab({
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Title */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium" htmlFor="ct-title">
-          Titolo <span className="text-destructive">*</span>
+        <label className="text-sm font-medium text-[#1C1C1E] dark:text-white" htmlFor="ct-title">
+          Titolo <span className="text-[#FF3B30]">*</span>
         </label>
-        <input
+        <Input
           ref={titleRef}
           id="ct-title"
           value={form.title}
@@ -209,16 +211,15 @@ function TaskCreationTab({
           placeholder="es. Aggiungere autenticazione OAuth"
           maxLength={200}
           disabled={submitting}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
         />
       </div>
 
       {/* Description */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium" htmlFor="ct-desc">
-          Descrizione <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
+        <label className="text-sm font-medium text-[#1C1C1E] dark:text-white" htmlFor="ct-desc">
+          Descrizione <span className="text-xs font-normal text-[#8E8E93]">(opzionale)</span>
         </label>
-        <textarea
+        <Textarea
           id="ct-desc"
           value={form.description}
           onChange={(e) => set("description", e.target.value)}
@@ -226,7 +227,7 @@ function TaskCreationTab({
           rows={3}
           maxLength={5000}
           disabled={submitting}
-          className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+          className="resize-none"
         />
       </div>
 

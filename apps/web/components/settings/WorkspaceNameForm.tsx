@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 
 export function WorkspaceNameForm({ initialName }: { initialName: string }) {
   const [name, setName] = useState(initialName);
@@ -37,7 +38,7 @@ export function WorkspaceNameForm({ initialName }: { initialName: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-2">
-      <input
+      <Input
         type="text"
         value={name}
         onChange={(e) => {
@@ -46,13 +47,14 @@ export function WorkspaceNameForm({ initialName }: { initialName: string }) {
           setError(null);
         }}
         maxLength={100}
-        className="h-8 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        error={error !== null}
+        className="h-9 flex-1"
         aria-label="Nome workspace"
       />
       <button
         type="submit"
         disabled={isPending || isUnchanged}
-        className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+        className="h-9 rounded-xl bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
       >
         {isPending ? "..." : "Salva"}
       </button>
@@ -60,7 +62,7 @@ export function WorkspaceNameForm({ initialName }: { initialName: string }) {
         <span className="text-xs text-emerald-600 dark:text-emerald-400">Salvato</span>
       )}
       {error && (
-        <span className="text-xs text-destructive">{error}</span>
+        <span className="text-xs text-[#FF3B30]">{error}</span>
       )}
     </form>
   );
