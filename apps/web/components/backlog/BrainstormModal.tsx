@@ -1011,7 +1011,7 @@ export function BrainstormModal({
           </div>
         )}
 
-        <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring transition-shadow">
+        <div className="rounded-2xl border border-border bg-background focus-within:ring-1 focus-within:ring-ring transition-shadow">
           <textarea
             ref={textareaRef}
             value={input}
@@ -1021,22 +1021,41 @@ export function BrainstormModal({
             placeholder="Descrivi cosa vuoi implementare…"
             rows={1}
             style={{ height: "auto" }}
-            className="flex-1 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
+            className="w-full px-4 pt-3.5 pb-2 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
           />
-          <button
-            onClick={() => void handleSend()}
-            disabled={streaming || !input.trim()}
-            aria-label="Invia messaggio"
-            className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {streaming ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ArrowUp className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2 px-3 pb-3">
+            {contextDocs.length > 0 && (
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setInput((prev) => (prev ? `${prev} /context ` : "/context "));
+                  setTimeout(() => textareaRef.current?.focus(), 0);
+                }}
+                title="Allega documento di contesto (/context)"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-foreground hover:bg-accent/80 transition-colors"
+              >
+                <FileText className="h-3.5 w-3.5" />
+              </button>
             )}
-          </button>
+            <div className="flex-1" />
+            <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${modelBadgeClass(displayModelName)}`}>
+              {displayModelName}
+            </span>
+            <button
+              onClick={() => void handleSend()}
+              disabled={streaming || !input.trim()}
+              aria-label="Invia messaggio"
+              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {streaming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
-        <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+        <p className="mt-2 text-center text-[10px] text-muted-foreground">
           Invio per inviare&nbsp;·&nbsp;Shift+Invio per andare a capo
         </p>
       </div>
