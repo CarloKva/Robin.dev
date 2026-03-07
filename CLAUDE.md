@@ -138,6 +138,16 @@ ssh -i ~/.ssh/robindev_provisioning root@46.225.212.237 "systemctl start robin-o
 ```
 Con `assigned_agent_id` settato entrambi i poller costruiscono il payload con lo stesso `agentId` → il loop si esaurisce naturalmente.
 
+### Restart agenti con sprint attivo — procedura sicura
+Se devi riavviare tutti gli agenti mentre uno sprint è in corso, i job BullMQ in `active` vengono droppati ma `queued_at` nel DB rimane settato → task bloccate per sempre (poller non re-accoda se `queued_at IS NOT NULL`).
+**Prima del restart**: resetta le task queued/in_progress o aspetta che finiscano.
+**Dopo il restart** (se dimentichi): esegui in Supabase SQL editor:
+```sql
+UPDATE tasks SET queued_at=NULL, status='pending', updated_at=NOW()
+WHERE status IN ('queued', 'in_progress') AND sprint_id IS NOT NULL;
+```
+Il poller ri-accoda entro ~5s.
+
 ### Procedura di sblocco generica
 ```bash
 # SSH ai VPS agenti (chiave: ~/.ssh/robindev_provisioning)

@@ -13,7 +13,8 @@ interface ImportPreviewCardProps {
   originalCount: number;
   repositories: Repository[];
   onDismiss: () => void;
-  onImported: () => void;
+  /** Called with the IDs of the tasks that were created. */
+  onImported: (taskIds: string[]) => void;
   /** When set, shows a countdown and auto-triggers import at 0. */
   autoApproveCountdownSeconds?: number;
 }
@@ -100,6 +101,7 @@ export function ImportPreviewCard({
         hint?: string;
         repositories?: string[];
         details?: { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+        tasks?: { id: string }[];
       };
       if (!res.ok) {
         const parts: string[] = [data.error ?? "Errore durante l'import"];
@@ -117,7 +119,8 @@ export function ImportPreviewCard({
         setApiError(parts.join("\n"));
         return;
       }
-      onImported();
+      const taskIds = (data.tasks ?? []).map((t) => t.id);
+      onImported(taskIds);
     } catch {
       setApiError("Errore di rete durante l'import");
     } finally {

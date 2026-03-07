@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import type { JobPayload, JobResult, ADWPPhase } from "@robin/shared-types";
+import type { JobPayload, JobResult, ADWPPhase, TaskAttachment } from "@robin/shared-types";
 import {
   AgentTimeoutError,
   AgentBlockedError,
@@ -10,7 +10,29 @@ import {
   ClaudeExitError,
 } from "../errors/job.errors";
 import { getInstallationToken } from "../services/github.service";
+import { getSupabaseClient } from "../db/supabase.client";
 import { log } from "../utils/logger";
+
+/** Maps MIME types to file extensions for attachment naming. */
+function mimeTypeToExtension(mimeType: string): string {
+  const map: Record<string, string> = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+    "application/pdf": ".pdf",
+    "text/plain": ".txt",
+  };
+  return map[mimeType] ?? ".bin";
+}
+
+interface DownloadedAttachment {
+  diskPath: string;
+  diskName: string;
+  originalName: string;
+}
 
 const STDOUT_TAIL_CHARS = 10_000;
 
@@ -59,9 +81,35 @@ export class ClaudeRunner {
       await this.cloneRepository(cloneUrl, payload.repositoryPath);
     }
 
+    // Download attachments (if any) before writing TASK.md
+    const downloadedAttachments: DownloadedAttachment[] = [];
+    if (payload.attachments && payload.attachments.length > 0) {
+      const supabase = getSupabaseClient();
+      for (let i = 0; i < payload.attachments.length; i++) {
+        const attachment = payload.attachments[i] as TaskAttachment;
+        const ext = mimeTypeToExtension(attachment.mime_type);
+        const diskName = `ATTACHMENT_${i + 1}${ext}`;
+        const diskPath = path.join(payload.repositoryPath, diskName);
+        try {
+          const { data, error } = await supabase.storage
+            .from("task-attachments")
+            .download(attachment.storage_path);
+          if (error || !data) {
+            throw error ?? new Error("No data returned from storage download");
+          }
+          const buffer = Buffer.from(await data.arrayBuffer());
+          fs.writeFileSync(diskPath, buffer);
+          downloadedAttachments.push({ diskPath, diskName, originalName: attachment.name });
+          log.info({ taskId: payload.taskId, diskName, storagePath: attachment.storage_path }, "Attachment downloaded");
+        } catch (err) {
+          log.error({ taskId: payload.taskId, diskName, error: String(err) }, "Failed to download attachment — skipping");
+        }
+      }
+    }
+
     // Write TASK.md
     const taskMdPath = path.join(payload.repositoryPath, "TASK.md");
-    fs.writeFileSync(taskMdPath, this.buildTaskMd(payload), "utf-8");
+    fs.writeFileSync(taskMdPath, this.buildTaskMd(payload, downloadedAttachments), "utf-8");
     log.info({ taskId: payload.taskId, taskMdPath }, "TASK.md written");
 
     let stdoutBuffer = "";
@@ -151,6 +199,13 @@ export class ClaudeRunner {
       // Always clean up TASK.md
       if (fs.existsSync(taskMdPath)) {
         fs.unlinkSync(taskMdPath);
+      }
+      // Clean up all downloaded attachment files
+      for (const { diskPath, diskName } of downloadedAttachments) {
+        if (fs.existsSync(diskPath)) {
+          fs.unlinkSync(diskPath);
+          log.info({ taskId: payload.taskId, diskName }, "Attachment file cleaned up");
+        }
       }
     }
   }
@@ -313,9 +368,12 @@ export class ClaudeRunner {
     });
   }
 
-  private buildTaskMd(payload: JobPayload): string {
+  private buildTaskMd(payload: JobPayload, attachments: DownloadedAttachment[] = []): string {
     const baseBranch = payload.targetBranch
       ?? (payload.branch === `feat/${payload.taskId}` ? "main" : payload.branch);
+    const attachmentsSection = attachments.length > 0
+      ? `\n## Attachments\n${attachments.map(a => `- ${a.diskName} (nome originale: ${a.originalName})`).join("\n")}\n`
+      : "";
     return `# Task: ${payload.taskTitle}
 
 **Type:** ${payload.taskType}
@@ -361,6 +419,6 @@ ${payload.taskDescription}
 - Follow the conventions in \`${payload.claudeMdPath}\` if it exists
 - Keep changes focused on this task only
 - Write tests if the codebase has a test suite
-`;
+${attachmentsSection}`;
   }
 }

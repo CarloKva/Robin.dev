@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -8,15 +8,28 @@ interface NavItem {
   label: string;
 }
 
-const navItems: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   { id: "workspace", label: "Workspace" },
   { id: "connections", label: "Connessioni" },
   { id: "repositories", label: "Repository" },
   { id: "environments", label: "Ambienti" },
+  { id: "mcp-servers", label: "MCP Servers" },
   { id: "notifications", label: "Notifiche" },
 ];
 
-export function SettingsSidebar() {
+interface SettingsSidebarProps {
+  isOwner?: boolean;
+}
+
+export function SettingsSidebar({ isOwner }: SettingsSidebarProps) {
+  const navItems = useMemo(
+    () =>
+      isOwner
+        ? BASE_NAV_ITEMS
+        : BASE_NAV_ITEMS.filter((item) => item.id !== "mcp-servers"),
+    [isOwner]
+  );
+
   const [activeId, setActiveId] = useState<string>("workspace");
 
   useEffect(() => {
@@ -39,7 +52,7 @@ export function SettingsSidebar() {
     return () => {
       observers.forEach((obs) => obs.disconnect());
     };
-  }, []);
+  }, [navItems]);
 
   return (
     <nav className="hidden lg:block w-52 shrink-0">

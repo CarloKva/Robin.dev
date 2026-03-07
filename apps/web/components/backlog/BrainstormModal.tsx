@@ -417,6 +417,12 @@ export function BrainstormModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Image attachments ───────────────────────────────────────────────────────
+  // Images staged in the input area before sending
+  const [attachedImages, setAttachedImages] = useState<File[]>([]);
+  // Images captured at send time, held until import completes or is discarded
+  const pendingImagesRef = useRef<File[]>([]);
+
   // ── Batch state ────────────────────────────────────────────────────────────
   const [batchManifest, setBatchManifest] = useState<BatchManifest | null>(null);
   const [batchPhase, setBatchPhase] = useState<BatchPhase>("idle");
@@ -528,6 +534,8 @@ export function BrainstormModal({
     setConfirmNewChat(false);
     setSelectedImages([]);
     setImageErrors([]);
+    setAttachedImages([]);
+    pendingImagesRef.current = [];
   }
 
   function handleNewChat() {
@@ -540,9 +548,34 @@ export function BrainstormModal({
     }
   }
 
+  async function uploadImagesToTasks(images: File[], taskIds: string[]) {
+    try {
+      const formData = new FormData();
+      formData.append("taskIds", JSON.stringify(taskIds));
+      images.forEach((img, i) => formData.append(`file_${i}`, img));
+      const res = await fetch("/api/tasks/attachments", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        console.error("[BrainstormModal] attachment upload failed:", res.status);
+      }
+    } catch (err) {
+      console.error("[BrainstormModal] attachment upload error:", err);
+    }
+  }
+
   async function sendMessage(text: string, isProgrammatic = false, images?: SelectedImage[]) {
     if (!text && !images?.length) return;
     if (streaming) return;
+
+    // Capture images for this turn (only for user-initiated messages)
+    if (isProgrammatic) {
+      pendingImagesRef.current = [];
+    } else {
+      pendingImagesRef.current = attachedImages;
+      setAttachedImages([]);
+    }
 
     const now = new Date();
     const imageUrls = images?.length ? images.map((img) => img.dataUrl) : undefined;
@@ -677,6 +710,8 @@ export function BrainstormModal({
         setBatchManifest(manifest);
         setBatchPhase("manifest_ready");
         isBatchGeneratingRef.current = false;
+        // Batch mode: discard pending images (multi-turn flow, not associable per-turn)
+        pendingImagesRef.current = [];
       } else {
         const tasksContent = extractGeneratedTasks(accumulated);
         if (tasksContent) {
@@ -692,7 +727,14 @@ export function BrainstormModal({
               setBatchPhase("batch_ready");
               isBatchGeneratingRef.current = false;
             }
+            // pendingImagesRef.current stays — will be uploaded after import
+          } else {
+            // No valid tasks parsed: discard pending images
+            pendingImagesRef.current = [];
           }
+        } else {
+          // No tasks in response (conversational reply): discard pending images
+          pendingImagesRef.current = [];
         }
       }
     } catch {
@@ -1009,9 +1051,17 @@ export function BrainstormModal({
             repositories={repositories}
             onDismiss={() => {
               setImportData(null);
+              // User dismissed import without creating tasks: discard pending images
+              pendingImagesRef.current = [];
               if (batchManifest) setBatchPhase("batch_ready");
             }}
-            onImported={() => {
+            onImported={(taskIds) => {
+              // Upload any pending images and associate them with the created tasks
+              if (pendingImagesRef.current.length > 0 && taskIds.length > 0) {
+                void uploadImagesToTasks(pendingImagesRef.current, taskIds);
+              }
+              pendingImagesRef.current = [];
+
               if (batchManifest) {
                 handleBatchImported(importData.tasks.length);
               } else {
@@ -1049,6 +1099,22 @@ export function BrainstormModal({
 
       {/* Input area */}
       <div className="shrink-0 border-t border-border bg-background px-3 py-3">
+        {/* Hidden file input for image selection */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) {
+              setAttachedImages((prev) => [...prev, ...files]);
+            }
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
+
         {/* Selected context doc chips */}
         {selectedDocs.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
@@ -1063,6 +1129,28 @@ export function BrainstormModal({
                   onClick={() => removeDoc(doc.id)}
                   className="ml-0.5 rounded-full hover:text-foreground text-muted-foreground transition-colors"
                   aria-label={`Rimuovi ${doc.title}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Attached image chips */}
+        {attachedImages.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {attachedImages.map((img, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
+              >
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span className="max-w-[120px] truncate">{img.name}</span>
+                <button
+                  onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
+                  className="ml-0.5 rounded-full hover:text-foreground text-muted-foreground transition-colors"
+                  aria-label={`Rimuovi ${img.name}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -1178,6 +1266,17 @@ export function BrainstormModal({
                 <FileText className="h-3.5 w-3.5" />
               </button>
             )}
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }}
+              title="Allega immagini"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-foreground hover:bg-accent/80 transition-colors"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </button>
             <div className="flex-1" />
             <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${modelBadgeClass(displayModelName)}`}>
               {displayModelName}
