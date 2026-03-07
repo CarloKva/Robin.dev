@@ -214,6 +214,12 @@ export type TimelineEntry = {
 
 export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
 
+export type TaskAttachment = {
+  name: string;
+  storage_path: string;
+  mime_type: string;
+};
+
 /**
  * Payload passed from the BullMQ queue to ClaudeRunner.
  * Contains everything the agent needs — no further DB lookups during execution.
@@ -238,6 +244,9 @@ export type JobPayload = {
   // Execution config
   timeoutMinutes: number;
   claudeMdPath: string;
+
+  // Optional attachments (screenshots, diagrams, etc.)
+  attachments?: TaskAttachment[];
 };
 
 /**
