@@ -118,19 +118,15 @@ async function processRepoJob(job: Job<RepoQueueJobPayload>): Promise<void> {
       ? `https://github.com/${repo.full_name}.git`
       : process.env["DEFAULT_REPOSITORY_URL"] ?? "",
     branch: repo?.default_branch ?? process.env["DEFAULT_BRANCH"] ?? "main",
-    repositoryPath: `/workspace/${repo?.full_name?.split("/")[1] ?? "repo"}`,
+    repositoryPath: `/home/agent/repos/${repositoryId}`,
     taskTitle: task.title,
     taskDescription: task.description ?? "",
     taskType: (task.type as JobPayload["taskType"]) ?? "feature",
     priority: (task.priority as JobPayload["priority"]) ?? "medium",
     timeoutMinutes: defaultTimeoutByType[task.type ?? "feature"] ?? 30,
     claudeMdPath: "CLAUDE.md",
+    attachments: (task.attachments as TaskAttachment[] | null) ?? [],
   };
-
-  const rawAttachments = task.attachments as TaskAttachment[] | null | undefined;
-  if (rawAttachments?.length) {
-    jobPayload.attachments = rawAttachments;
-  }
 
   await taskQueue.addJob(jobPayload);
   log.info({ taskId, agentId, repositoryId }, "Task dispatched to task worker queue");
@@ -284,7 +280,7 @@ export async function reconstructRepoQueues(): Promise<void> {
             sprintOrder: task.sprint_order as number ?? 0,
           },
           {
-            jobId: `sprint:${task.sprint_id}:task:${task.id}`,
+            jobId: `sprint_${task.sprint_id}_task_${task.id}`,
             priority: task.sprint_order as number ?? 999,
           }
         );

@@ -17,6 +17,7 @@ import { getSupabaseClient } from "../db/supabase.client";
 import { eventService } from "../events/event.service";
 import { notificationService } from "../services/notification.service";
 import { taskRepository } from "../repositories/task.repository";
+import { enableAutoMerge } from "../services/github.service";
 import { log } from "../utils/logger";
 
 export const GITHUB_EVENTS_QUEUE_NAME = "github-events";
@@ -35,6 +36,9 @@ interface GitHubPullRequest {
   number: number;
   merged: boolean;
   html_url: string;
+  base: {
+    ref: string;
+  };
 }
 
 interface GitHubRepository {
@@ -206,6 +210,142 @@ export async function handlePullRequestClosed(
   );
 }
 
+// ─── Pull request opened handler ─────────────────────────────────────────────
+
+/**
+ * handlePullRequestOpened — enables GitHub native auto-merge on PRs targeting
+ * branches configured with auto_merge=true in workspace_environments.
+ *
+ * Guard: never enables auto-merge if target_branch is 'main'.
+ */
+export async function handlePullRequestOpened(
+  payload: PullRequestPayload
+): Promise<void> {
+  const { pull_request: pr, repository } = payload;
+  const prNumber = pr.number;
+  const repoFullName = repository.full_name;
+  const baseBranch = pr.base.ref;
+
+  log.info(
+    { prNumber, repoFullName, baseBranch },
+    "handlePullRequestOpened: processing"
+  );
+
+  const db = getSupabaseClient();
+
+  // ── 1. Resolve repository ──────────────────────────────────────────────────
+  const { data: repo, error: repoError } = await db
+    .from("repositories")
+    .select("id, workspace_id")
+    .eq("full_name", repoFullName)
+    .maybeSingle();
+
+  if (repoError) {
+    log.error(
+      { repoFullName, error: repoError.message },
+      "handlePullRequestOpened: repo lookup failed"
+    );
+    return;
+  }
+
+  if (!repo) {
+    log.debug({ repoFullName }, "handlePullRequestOpened: repository not managed by Robin — skipping");
+    return;
+  }
+
+  const repositoryId = repo.id as string;
+
+  // ── 2. Load environments with auto_merge=true ──────────────────────────────
+  const { data: environments, error: envError } = await db
+    .from("workspace_environments")
+    .select("id, target_branch, environment_type")
+    .eq("repository_id", repositoryId)
+    .eq("auto_merge", true);
+
+  if (envError) {
+    log.error(
+      { repositoryId, error: envError.message },
+      "handlePullRequestOpened: environments lookup failed"
+    );
+    return;
+  }
+
+  if (!environments || environments.length === 0) {
+    log.debug({ repoFullName }, "handlePullRequestOpened: no auto-merge environments configured — skipping");
+    return;
+  }
+
+  // ── 3. For each matching environment, enable auto-merge ───────────────────
+  const appId = process.env["GITHUB_APP_ID"];
+  const privateKeyB64 = process.env["GITHUB_APP_PRIVATE_KEY_B64"];
+  const installationIdStr = process.env["GITHUB_INSTALLATION_ID"];
+
+  if (!appId || !privateKeyB64 || !installationIdStr) {
+    log.warn({}, "handlePullRequestOpened: GitHub App env vars not set — cannot enable auto-merge");
+    return;
+  }
+
+  const { getInstallationToken } = await import("../services/github.service");
+  let token: string;
+  try {
+    const { data: ghConn } = await db
+      .from("github_connections")
+      .select("installation_id")
+      .eq("workspace_id", repo.workspace_id as string)
+      .eq("status", "connected")
+      .maybeSingle();
+
+    const installationId = ghConn
+      ? (ghConn.installation_id as number)
+      : parseInt(installationIdStr, 10);
+
+    token = await getInstallationToken(appId, privateKeyB64, installationId);
+  } catch (err) {
+    log.error({ error: String(err) }, "handlePullRequestOpened: failed to get installation token");
+    return;
+  }
+
+  const [owner, repoName] = repoFullName.split("/");
+  if (!owner || !repoName) {
+    log.warn({ repoFullName }, "handlePullRequestOpened: cannot parse owner/repo");
+    return;
+  }
+
+  for (const env of environments) {
+    const targetBranch = env.target_branch as string;
+
+    // Hard guard: never auto-merge into main
+    if (targetBranch === "main") {
+      log.warn(
+        { repositoryId, environmentId: env.id, targetBranch },
+        "handlePullRequestOpened: auto_merge=true on main — skipping (guard)"
+      );
+      continue;
+    }
+
+    if (baseBranch !== targetBranch) {
+      log.debug(
+        { prNumber, baseBranch, targetBranch },
+        "handlePullRequestOpened: PR target does not match environment branch — skipping"
+      );
+      continue;
+    }
+
+    try {
+      await enableAutoMerge(token, owner, repoName, prNumber);
+      log.info(
+        { prNumber, repoFullName, targetBranch, environmentId: env.id },
+        "handlePullRequestOpened: auto-merge enabled"
+      );
+    } catch (err) {
+      log.warn(
+        { prNumber, repoFullName, targetBranch, error: String(err) },
+        "handlePullRequestOpened: failed to enable auto-merge (non-blocking)"
+      );
+    }
+  }
+}
+
 // ─── Worker factory ───────────────────────────────────────────────────────────
 
 async function processJob(job: Job<GitHubEventJobPayload>): Promise<void> {
@@ -219,6 +359,8 @@ async function processJob(job: Job<GitHubEventJobPayload>): Promise<void> {
 
     if (action === "closed") {
       await handlePullRequestClosed(prPayload);
+    } else if (action === "opened") {
+      await handlePullRequestOpened(prPayload);
     } else {
       log.debug({ action }, "GitHubEventsWorker: pull_request action not handled");
     }
