@@ -265,8 +265,10 @@ export type JobPayload = {
   environmentId?: string;
   targetBranch?: string;
 
-  // MCP (optional — passed as --mcp-config to Claude Code when present)
-  mcpConfig?: Record<string, unknown> | null;
+  // MCP configuration (optional — populated from workspace.mcp_config)
+  mcpConfig?: {
+    mcpServers: Record<string, MCPServerConfig>;
+  } | null;
 };
 
 /**
