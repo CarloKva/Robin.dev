@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, Check, Copy, CopyCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Repository } from "@robin/shared-types";
@@ -14,6 +14,8 @@ interface ImportPreviewCardProps {
   repositories: Repository[];
   onDismiss: () => void;
   onImported: () => void;
+  /** When set, shows a countdown and auto-triggers import at 0. */
+  autoApproveCountdownSeconds?: number;
 }
 
 const TYPE_LABEL: Record<ParsedTask["type"], string> = {
@@ -44,15 +46,41 @@ export function ImportPreviewCard({
   repositories,
   onDismiss,
   onImported,
+  autoApproveCountdownSeconds,
 }: ImportPreviewCardProps) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [defaultRepo, setDefaultRepo] = useState<string>(() => repositories[0]?.full_name ?? "");
 
+  // Auto-approve countdown
+  const [countdown, setCountdown] = useState<number | null>(
+    autoApproveCountdownSeconds != null ? autoApproveCountdownSeconds : null
+  );
+  const handleImportRef = useRef<() => Promise<void>>(async () => {});
+
   const tasksWithoutRepo = tasks.filter((t) => !t.repository);
   const needsFallback = tasksWithoutRepo.length > 0;
   const canImport = tasks.length > 0 && (!needsFallback || defaultRepo !== "");
+
+  // Keep ref to the latest handleImport to avoid stale closure in effects
+  useEffect(() => {
+    handleImportRef.current = handleImport;
+  });
+
+  // Tick countdown down every second
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) return;
+    const id = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000);
+    return () => clearTimeout(id);
+  }, [countdown]);
+
+  // Auto-trigger import when countdown reaches 0
+  useEffect(() => {
+    if (countdown === 0) {
+      void handleImportRef.current();
+    }
+  }, [countdown]);
 
   async function handleImport() {
     setLoading(true);
@@ -220,6 +248,21 @@ export function ImportPreviewCard({
           </pre>
         </div>
       )}
+      {/* Auto-approve countdown bar */}
+      {countdown !== null && countdown > 0 && (
+        <div className="flex items-center justify-between border-t border-border bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
+          <span className="text-xs text-blue-700 dark:text-blue-300">
+            Importazione automatica in{" "}
+            <span className="font-bold">{countdown}s</span>
+          </span>
+          <button
+            onClick={() => setCountdown(null)}
+            className="text-xs text-blue-600 underline hover:no-underline dark:text-blue-400"
+          >
+            Interrompi
+          </button>
+        </div>
+      )}
       <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border">
         <div className="flex-1" />
         <button
@@ -230,7 +273,10 @@ export function ImportPreviewCard({
           Scarta
         </button>
         <button
-          onClick={() => void handleImport()}
+          onClick={() => {
+            setCountdown(null);
+            void handleImport();
+          }}
           disabled={loading || !canImport}
           className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
         >

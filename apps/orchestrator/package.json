@@ -12,13 +12,15 @@
     "schema": "../../prisma/schema.prisma"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@bull-board/api": "^6.6.2",
     "@bull-board/express": "^6.6.2",
     "@robin/shared-types": "*",
     "@supabase/supabase-js": "^2.47.10",
     "bullmq": "^5.34.6",
     "express": "^4.21.2",
-    "ioredis": "^5.4.2"
+    "ioredis": "^5.4.2",
+    "node-ssh": "^13.2.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
