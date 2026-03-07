@@ -258,9 +258,15 @@ export type JobPayload = {
   timeoutMinutes: number;
   claudeMdPath: string;
 
+  // Optional attachments (screenshots, diagrams, etc.)
+  attachments?: TaskAttachment[];
+
   // Environment (optional — populated by task.worker.ts at execution time)
   environmentId?: string;
   targetBranch?: string;
+
+  // MCP (optional — passed as --mcp-config to Claude Code when present)
+  mcpConfig?: Record<string, unknown> | null;
 };
 
 /**
@@ -322,6 +328,14 @@ export type WorkspaceMember = {
   updated_at: string;
 };
 
+export type TaskAttachment = {
+  name: string;
+  storage_path: string;
+  mime_type: string;
+  size_bytes?: number;
+  uploaded_at?: string;
+};
+
 export type Task = {
   id: string;
   workspace_id: string;
@@ -337,6 +351,7 @@ export type Task = {
   sprint_order: number | null;
   context: string | null;
   estimated_effort: "xs" | "s" | "m" | "l" | null;
+  attachments: TaskAttachment[] | null;
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
