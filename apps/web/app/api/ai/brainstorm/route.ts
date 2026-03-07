@@ -55,12 +55,21 @@ export async function POST(request: Request) {
         });
 
         for await (const event of anthropicStream) {
-          if (
+          if (event.type === "message_start") {
+            const meta = JSON.stringify({
+              model: event.message.model,
+              inputTokens: event.message.usage.input_tokens,
+            });
+            controller.enqueue(encoder.encode(`data: ${meta}\n\n`));
+          } else if (
             event.type === "content_block_delta" &&
             event.delta.type === "text_delta"
           ) {
             const chunk = JSON.stringify({ text: event.delta.text });
             controller.enqueue(encoder.encode(`data: ${chunk}\n\n`));
+          } else if (event.type === "message_delta") {
+            const usage = JSON.stringify({ outputTokens: event.usage.output_tokens });
+            controller.enqueue(encoder.encode(`data: ${usage}\n\n`));
           }
         }
 
