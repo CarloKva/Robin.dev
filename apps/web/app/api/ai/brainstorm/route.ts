@@ -8,6 +8,49 @@ const anthropic = new Anthropic({
   apiKey: process.env["ANTHROPIC_API_KEY"],
 });
 
+type TextBlock = { type: "text"; text: string };
+type ImageBlock = {
+  type: "image";
+  source: { type: "base64"; media_type: string; data: string };
+};
+type ContentBlock = TextBlock | ImageBlock;
+
+type IncomingMessage = {
+  role: "user" | "assistant";
+  content: string;
+  images?: string[]; // base64 data URLs: "data:image/png;base64,..."
+};
+
+type AnthropicMessage = {
+  role: "user" | "assistant";
+  content: string | ContentBlock[];
+};
+
+function buildAnthropicContent(
+  msg: IncomingMessage,
+  prependText?: string
+): string | ContentBlock[] {
+  const text = prependText
+    ? `${prependText}\n\n---\n\n${msg.content}`
+    : msg.content;
+
+  if (!msg.images?.length) {
+    return text;
+  }
+
+  const blocks: ContentBlock[] = msg.images.flatMap((dataUrl): ImageBlock[] => {
+    const commaIdx = dataUrl.indexOf(",");
+    if (commaIdx === -1) return [];
+    const header = dataUrl.slice(0, commaIdx);
+    const data = dataUrl.slice(commaIdx + 1);
+    const mediaType = header.match(/data:([^;]+)/)?.[1] ?? "image/jpeg";
+    return [{ type: "image", source: { type: "base64", media_type: mediaType, data } }];
+  });
+
+  blocks.push({ type: "text", text });
+  return blocks;
+}
+
 export async function POST(request: Request) {
   const result = await requireWorkspace();
   if (result instanceof NextResponse) return result;
@@ -21,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   const { messages, contextDocIds } = body as {
-    messages: { role: "user" | "assistant"; content: string }[];
+    messages: IncomingMessage[];
     contextDocIds: string[];
   };
 
@@ -33,14 +76,12 @@ export async function POST(request: Request) {
   const contextDocs = await getContextDocumentsByIds(workspace.id, contextDocIds ?? []);
   const contextBlock = buildContextBlock(contextDocs);
 
-  // Prepend context block to the first user message if we have context
-  const anthropicMessages: { role: "user" | "assistant"; content: string }[] = [...messages];
-  if (contextBlock && anthropicMessages[0]?.role === "user") {
-    anthropicMessages[0] = {
-      role: "user",
-      content: `${contextBlock}\n\n---\n\n${anthropicMessages[0].content}`,
-    };
-  }
+  // Build Anthropic messages, prepending context block to the first user message if present
+  const anthropicMessages: AnthropicMessage[] = messages.map((msg, i) => {
+    const isFirstUser = i === 0 && msg.role === "user";
+    const prependText = isFirstUser && contextBlock ? contextBlock : undefined;
+    return { role: msg.role, content: buildAnthropicContent(msg, prependText) };
+  });
 
   // Set up SSE streaming response
   const encoder = new TextEncoder();
@@ -51,7 +92,8 @@ export async function POST(request: Request) {
           model: "claude-sonnet-4-6",
           max_tokens: 4096,
           system: BRAINSTORM_SYSTEM_PROMPT,
-          messages: anthropicMessages,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          messages: anthropicMessages as any,
         });
 
         for await (const event of anthropicStream) {
