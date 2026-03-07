@@ -5,61 +5,107 @@ import { cn } from "@/lib/utils";
 import type { AgentProvisioningStatus } from "@robin/shared-types";
 import type { DashboardAgent } from "@/lib/db/dashboard";
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Avatar color palette ─────────────────────────────────────────────────────
 
-const operationalConfig = {
+const AVATAR_COLORS = [
+  "bg-blue-500",
+  "bg-violet-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-cyan-500",
+  "bg-indigo-500",
+  "bg-pink-500",
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length] ?? AVATAR_COLORS[0]!;
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+// ─── Status badge config ──────────────────────────────────────────────────────
+
+type StatusBadge = {
+  label: string;
+  dotClass: string;
+  badgeClass: string;
+  pulse: boolean;
+};
+
+const operationalBadge: Record<string, StatusBadge> = {
   idle: {
-    label: "Pronto",
-    dot: "bg-slate-400",
-    badge: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+    label: "Online",
+    dotClass: "bg-emerald-500",
+    badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400",
+    pulse: true,
   },
   busy: {
-    label: "Working",
-    dot: "bg-emerald-500 animate-pulse",
-    badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800",
+    label: "In esecuzione",
+    dotClass: "bg-blue-500",
+    badgeClass: "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400",
+    pulse: true,
   },
   error: {
     label: "Errore",
-    dot: "bg-red-500",
-    badge: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800",
+    dotClass: "bg-red-500",
+    badgeClass: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-400",
+    pulse: false,
   },
   offline: {
     label: "Offline",
-    dot: "bg-zinc-300 dark:bg-zinc-600",
-    badge: "bg-zinc-50 text-zinc-500 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-700",
+    dotClass: "bg-zinc-400 dark:bg-zinc-600",
+    badgeClass: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+    pulse: false,
   },
-} as const;
+};
 
-const provisioningConfig: Record<AgentProvisioningStatus, { label: string; dot: string; badge: string }> = {
+const provisioningBadge: Record<AgentProvisioningStatus, StatusBadge> = {
   pending: {
     label: "In coda",
-    dot: "bg-zinc-300 dark:bg-zinc-600",
-    badge: "bg-zinc-50 text-zinc-500 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-700",
+    dotClass: "bg-zinc-400 dark:bg-zinc-600",
+    badgeClass: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+    pulse: false,
   },
   provisioning: {
     label: "Provisioning…",
-    dot: "bg-blue-500 animate-pulse",
-    badge: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800",
+    dotClass: "bg-blue-500",
+    badgeClass: "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400",
+    pulse: true,
   },
   online: {
     label: "Online",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800",
+    dotClass: "bg-emerald-500",
+    badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400",
+    pulse: true,
   },
   error: {
     label: "Errore prov.",
-    dot: "bg-red-500",
-    badge: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800",
+    dotClass: "bg-red-500",
+    badgeClass: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-400",
+    pulse: false,
   },
   deprovisioning: {
-    label: "Eliminazione",
-    dot: "bg-amber-500 animate-pulse",
-    badge: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800",
+    label: "Eliminazione…",
+    dotClass: "bg-amber-500",
+    badgeClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400",
+    pulse: true,
   },
   deprovisioned: {
     label: "Eliminato",
-    dot: "bg-zinc-300 dark:bg-zinc-600",
-    badge: "bg-zinc-50 text-zinc-400 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-600 dark:border-zinc-700",
+    dotClass: "bg-zinc-300 dark:bg-zinc-700",
+    badgeClass: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600",
+    pulse: false,
   },
 };
 
@@ -67,7 +113,7 @@ const provisioningConfig: Record<AgentProvisioningStatus, { label: string; dot: 
 
 export function AgentMiniCard({ agent }: { agent: DashboardAgent }) {
   const router = useRouter();
-  // Show provisioning badge when the agent hasn't yet reached a stable operational state
+
   const isProvisioning =
     agent.provisioning_status === "pending" ||
     agent.provisioning_status === "provisioning" ||
@@ -75,82 +121,79 @@ export function AgentMiniCard({ agent }: { agent: DashboardAgent }) {
     agent.provisioning_status === "error";
 
   const badge = isProvisioning
-    ? provisioningConfig[agent.provisioning_status]
-    : operationalConfig[(agent.effective_status as keyof typeof operationalConfig) ?? "offline"];
+    ? provisioningBadge[agent.provisioning_status]
+    : (operationalBadge[agent.effective_status] ?? operationalBadge["offline"]!);
 
-  const showTaskStrip = agent.effective_status === "busy" && agent.current_task_title;
-  const maxRepos = 2;
-  const visibleRepos = agent.repository_names.slice(0, maxRepos);
-  const extraRepos = agent.repository_names.length - maxRepos;
+  // Task pill text: max 30 chars + ellipsis
+  const taskLabel = agent.current_task_title
+    ? agent.current_task_title.length > 30
+      ? agent.current_task_title.slice(0, 30) + "…"
+      : agent.current_task_title
+    : null;
+
+  const initials = getInitials(agent.name);
+  const avatarColor = getAvatarColor(agent.name);
 
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => router.push(`/agents/${agent.id}`)}
-      onKeyDown={(e) => { if (e.key === "Enter") router.push(`/agents/${agent.id}`); }}
-      className="cursor-pointer rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+      onKeyDown={(e) => {
+        if (e.key === "Enter") router.push(`/agents/${agent.id}`);
+      }}
+      className="cursor-pointer rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-ios-md"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{agent.name}</p>
-          {agent.slug && (
-            <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{agent.slug}</p>
-          )}
-        </div>
-        <span
+      {/* Header row: avatar + name + badge */}
+      <div className="flex items-center gap-3">
+        {/* Avatar */}
+        <div
           className={cn(
-            "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            badge.badge
+            "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white",
+            avatarColor
           )}
         >
-          <span className={cn("h-1.5 w-1.5 rounded-full", badge.dot)} />
+          {initials}
+        </div>
+
+        {/* Name + slug */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{agent.name}</p>
+          {agent.slug && (
+            <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+              {agent.slug}
+            </p>
+          )}
+        </div>
+
+        {/* Status badge */}
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium",
+            badge.badgeClass
+          )}
+        >
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              badge.dotClass,
+              badge.pulse && "animate-pulse"
+            )}
+          />
           {badge.label}
         </span>
       </div>
 
-      {/* Repo chips */}
-      {agent.repository_names.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {visibleRepos.map((repo) => (
-            <span
-              key={repo}
-              className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-            >
-              {repo.split("/")[1] ?? repo}
-            </span>
-          ))}
-          {extraRepos > 0 && (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              +{extraRepos}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Active task strip */}
-      {showTaskStrip && (
-        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/60 px-2.5 py-1.5 dark:border-emerald-800 dark:bg-emerald-950/30">
-          <p className="truncate text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-            {agent.current_task_title}
-          </p>
-        </div>
-      )}
-
-      {/* Idle state */}
-      {!isProvisioning && agent.effective_status === "idle" && (
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          In attesa di task
-        </p>
-      )}
-
-      {/* Provisioning indicator */}
-      {isProvisioning && agent.provisioning_status === "provisioning" && (
-        <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
-          <div className="h-full w-1/2 animate-[shimmer_1.5s_infinite] rounded-full bg-blue-400 dark:bg-blue-600" />
-        </div>
-      )}
+      {/* Task pill or idle label */}
+      <div className="mt-3">
+        {taskLabel ? (
+          <span className="inline-block max-w-full rounded-full bg-zinc-100 px-3 py-1 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            {taskLabel}
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">In attesa</span>
+        )}
+      </div>
     </div>
   );
 }
