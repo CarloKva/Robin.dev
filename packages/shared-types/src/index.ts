@@ -529,6 +529,115 @@ export type TaskIteration = {
   updated_at: string;
 };
 
+// ── Ops Diagnostics ──────────────────────────────────────────────────────────
+
+export type OpsRunStatus = 'running' | 'completed' | 'failed';
+export type OpsRunScope = 'all' | 'workspace';
+export type OpsActionSeverity = 'safe' | 'destructive';
+
+export type OpsLogEntry = {
+  level: 'info' | 'warn' | 'error';
+  source: 'hetzner' | 'supabase' | 'ssh' | 'ai' | 'system';
+  message: string;
+  workspace?: string;
+};
+
+export type VpsDiagnostics = {
+  slug: string;
+  vpsIp: string;
+  sshReachable: boolean;
+  serviceStatus?: string;
+  redisOk?: boolean;
+  memUsedPct?: number;
+  diskUsedPct?: string;
+  inodeUsedPct?: string;
+  bullActiveJobs?: number;
+  bullPriorityJobs?: number;
+  lastLogLines?: string;
+  error?: string;
+};
+
+export type HetznerServerStatus = {
+  id: number;
+  name: string;
+  status: string;
+  publicIp: string;
+  serverType: string;
+  datacenter: string;
+  labels: Record<string, string>;
+};
+
+export type SupabaseDiagnostics = {
+  stuckTasks: Array<{
+    workspaceSlug: string;
+    taskId: string;
+    taskTitle: string;
+    status: string;
+    hoursStuck: number;
+  }>;
+  offlineAgents: Array<{
+    workspaceSlug: string;
+    agentName: string;
+    vpsIp: string;
+    minutesOffline: number;
+  }>;
+};
+
+export type OpsRawDiagnostics = {
+  collectedAt: string;
+  supabase: SupabaseDiagnostics;
+  hetzner: HetznerServerStatus[];
+  vps: VpsDiagnostics[];
+};
+
+export type OpsActionType =
+  | 'restart_orchestrator'
+  | 'restart_redis'
+  | 'reset_stuck_task'
+  | 'clear_bullmq_stalled'
+  | 'pull_and_rebuild'
+  | 'manual_only';
+
+export type OpsRecommendation = {
+  severity: OpsActionSeverity;
+  title: string;
+  description: string;
+  actionType: OpsActionType;
+  params: Record<string, string>;
+  workspace?: string;
+};
+
+export type OpsRun = {
+  id: string;
+  workspaceId: string | null;
+  triggeredByUserId: string;
+  scope: OpsRunScope;
+  status: OpsRunStatus;
+  progress: number;
+  log: OpsLogEntry[];
+  rawDiagnostics: OpsRawDiagnostics | null;
+  aiAnalysis: string | null;
+  aiRecommendations: OpsRecommendation[] | null;
+  actionsTaken: OpsRecommendation[];
+  createdAt: string;
+  completedAt: string | null;
+};
+
+// BullMQ Job Payload
+export type OpsDiagnosticsJobPayload = {
+  opsRunId: string;
+  scope: OpsRunScope;
+  workspaceId?: string;
+  triggeredBy: string;
+};
+
+export type OpsExecuteJobPayload = {
+  opsRunId: string;
+  actionType: OpsActionType;
+  params: Record<string, string>;
+  triggeredBy: string;
+};
+
 /** Default task description templates (seeded per-workspace on creation) */
 export const DEFAULT_TASK_TEMPLATES: Record<TaskType, string> = {
   bug: `## Comportamento attuale\n[Descrivi cosa succede]\n\n## Comportamento atteso\n[Descrivi cosa dovrebbe succedere]\n\n## Passi per riprodurre\n1. ...\n\n## Contesto aggiuntivo\n[Screenshot, log, URL...]`,
