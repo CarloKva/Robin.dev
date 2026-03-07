@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Dices } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import type { Repository } from "@robin/shared-types";
 
 interface AgentCreationFormProps {
@@ -145,7 +146,7 @@ export function AgentCreationForm({
               className="h-8 w-8 shrink-0 rounded-full border border-border object-cover"
             />
           )}
-          <input
+          <Input
             id="agent-name"
             type="text"
             value={name}
@@ -158,7 +159,7 @@ export function AgentCreationForm({
             maxLength={100}
             autoFocus
             disabled={isPending}
-            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+            className="min-w-0 flex-1"
           />
           <button
             type="button"

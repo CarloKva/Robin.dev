@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { X, Pencil } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { ContextDocument } from "@robin/shared-types";
 
 type Mode = "view" | "edit";
@@ -134,21 +136,20 @@ export function ContextDocEditor({ doc, onClose, onSaved }: ContextDocEditorProp
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Titolo</label>
-              <input
+              <Input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="es. Architettura del progetto"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
             <div className="flex flex-col flex-1">
               <label className="block text-sm font-medium mb-1.5">Contenuto (Markdown)</label>
-              <textarea
+              <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={"# Descrizione\n\nInserisci qui il documento..."}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-1 focus:ring-ring min-h-[300px]"
+                className="min-h-[300px] font-mono"
               />
             </div>
 

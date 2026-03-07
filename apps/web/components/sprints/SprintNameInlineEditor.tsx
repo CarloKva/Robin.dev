@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface SprintNameInlineEditorProps {
   sprintId: string;
@@ -82,7 +83,7 @@ export function SprintNameInlineEditor({
   if (editing) {
     return (
       <span className="flex flex-col gap-1">
-        <input
+        <Input
           ref={inputRef}
           value={name}
           onChange={(e) => {
@@ -93,11 +94,7 @@ export function SprintNameInlineEditor({
           onKeyDown={handleKeyDown}
           disabled={saving}
           maxLength={100}
-          className={cn(
-            "rounded border border-primary bg-background px-2 py-0.5 font-bold outline-none",
-            "focus:ring-2 focus:ring-primary/30 disabled:opacity-50",
-            className
-          )}
+          className={cn("font-bold", className)}
         />
         {error && (
           <span className="text-xs font-normal text-destructive">{error}</span>

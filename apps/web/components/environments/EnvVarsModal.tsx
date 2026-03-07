@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface EnvVarsModalProps {
   environmentId: string;
@@ -145,19 +146,19 @@ export function EnvVarsModal({
 
                 {rows.map((row, i) => (
                   <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                    <input
+                    <Input
                       type="text"
                       placeholder="KEY_NAME"
                       value={row.key}
                       onChange={(e) => updateRow(i, "key", e.target.value)}
-                      className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="font-mono"
                     />
-                    <input
+                    <Input
                       type="password"
                       placeholder="••••••••"
                       value={row.value}
                       onChange={(e) => updateRow(i, "value", e.target.value)}
-                      className="rounded-md border border-border bg-background px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="font-mono"
                     />
                     <button
                       onClick={() => removeRow(i)}
