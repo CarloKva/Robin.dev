@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { id: "connections", label: "Connessioni" },
   { id: "repositories", label: "Repository" },
   { id: "environments", label: "Ambienti" },
+  { id: "mcp-servers", label: "MCP Servers" },
   { id: "notifications", label: "Notifiche" },
 ];
 

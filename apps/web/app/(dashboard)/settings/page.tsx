@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { getWorkspaceForUser, getWorkspaceMemberRole, getWorkspaceMcpConfig } from "@/lib/db/workspace";
 import { getGitHubConnection } from "@/lib/db/github";
 import { listInstallationRepos } from "@/lib/github/app";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
@@ -9,6 +9,7 @@ import { GitHubConnectionCard } from "@/components/settings/GitHubConnectionCard
 import { RepositorySelector } from "@/components/settings/RepositorySelector";
 import { WorkspaceNameForm } from "@/components/settings/WorkspaceNameForm";
 import { NotificationsForm } from "@/components/settings/NotificationsForm";
+import { McpServersForm } from "@/components/settings/McpServersForm";
 import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
 import { EnvironmentsSection } from "@/components/settings/EnvironmentsSection";
 import { getEnvironmentsForRepository } from "@/lib/db/environments";
@@ -29,10 +30,14 @@ export default async function SettingsPage({
 
   const { github_connected, github_error } = await searchParams;
 
-  const [connection, wsSettings] = await Promise.all([
+  const [connection, wsSettings, userRole, mcpConfig] = await Promise.all([
     getGitHubConnection(workspace.id),
     getWorkspaceSettings(workspace.id),
+    getWorkspaceMemberRole(userId),
+    getWorkspaceMcpConfig(workspace.id),
   ]);
+
+  const isOwnerOrAdmin = userRole === "owner";
 
   // Build repo list for the selector (only if GitHub is connected)
   let repos: Awaited<ReturnType<typeof listInstallationRepos>> = [];
@@ -228,6 +233,22 @@ export default async function SettingsPage({
             initialEnvironmentsByRepo={environmentsByRepo}
           />
         </section>
+
+        {/* ── MCP Servers ────────────────────────────────────────── */}
+        {isOwnerOrAdmin && (
+          <section id="mcp-servers" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
+            <div className="border-b border-border pb-4">
+              <h2 className="text-base font-semibold text-foreground">MCP Servers</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Configura i server MCP disponibili per gli agenti di questo workspace.
+              </p>
+            </div>
+            <McpServersForm
+              workspaceId={workspace.id}
+              initialMcpConfig={mcpConfig}
+            />
+          </section>
+        )}
 
         {/* ── Notifiche ──────────────────────────────────────────── */}
         <section id="notifications" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
