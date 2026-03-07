@@ -72,6 +72,16 @@
   }
 }
 
+@layer utilities {
+  @keyframes task-landing {
+    from { transform: scale(1.02); }
+    to { transform: scale(1); }
+  }
+  .animate-task-landing {
+    animation: task-landing 200ms ease-out;
+  }
+}
+
 /* ProvisioningTimeline animations */
 @keyframes step-complete {
   0%   { transform: scale(1);   background-color: #007AFF; }
