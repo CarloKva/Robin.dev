@@ -214,6 +214,25 @@ export type TimelineEntry = {
 
 export type TaskType = "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
 
+// ---------------------------------------------------------------
+// Environments (staging/production per repo)
+// ---------------------------------------------------------------
+
+export type EnvironmentType = "staging" | "production";
+
+export type WorkspaceEnvironment = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  name: string;
+  environment_type: EnvironmentType;
+  target_branch: string;
+  auto_merge: boolean;
+  env_vars_encrypted: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /**
  * Payload passed from the BullMQ queue to ClaudeRunner.
  * Contains everything the agent needs — no further DB lookups during execution.
@@ -238,6 +257,10 @@ export type JobPayload = {
   // Execution config
   timeoutMinutes: number;
   claudeMdPath: string;
+
+  // Environment (optional — populated by task.worker.ts at execution time)
+  environmentId?: string;
+  targetBranch?: string;
 };
 
 /**

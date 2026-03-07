@@ -19,6 +19,8 @@ export interface ClaudeRunnerHooks {
   onCommitPushed?: (commitSha: string, branch: string) => Promise<void>;
   onPhaseStarted?: (phase: ADWPPhase | string) => Promise<void>;
   onPhaseCompleted?: (phase: ADWPPhase | string, durationSeconds?: number) => Promise<void>;
+  /** Decrypted env vars from the staging environment — injected into Claude's process env. */
+  envVars?: Record<string, string>;
 }
 
 /**
@@ -69,7 +71,7 @@ export class ClaudeRunner {
     await hooks.onPhaseStarted?.("write");
 
     try {
-      const result = await this.spawnClaude(payload, (chunk) => {
+      const result = await this.spawnClaude(payload, hooks.envVars ?? {}, (chunk) => {
         stdoutBuffer += chunk;
         log.info(
           { taskId: payload.taskId, chunk: chunk.slice(0, 200) },
@@ -155,6 +157,7 @@ export class ClaudeRunner {
 
   private spawnClaude(
     payload: JobPayload,
+    envVars: Record<string, string>,
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void
   ): Promise<{ exitCode: number }> {
@@ -175,6 +178,7 @@ export class ClaudeRunner {
             cwd: payload.repositoryPath,
             env: {
               ...process.env,
+              ...envVars,
               ANTHROPIC_API_KEY: process.env["ANTHROPIC_API_KEY"],
             },
             stdio: ["ignore", "pipe", "pipe"],
@@ -310,7 +314,8 @@ export class ClaudeRunner {
   }
 
   private buildTaskMd(payload: JobPayload): string {
-    const baseBranch = payload.branch === `feat/${payload.taskId}` ? "main" : payload.branch;
+    const baseBranch = payload.targetBranch
+      ?? (payload.branch === `feat/${payload.taskId}` ? "main" : payload.branch);
     return `# Task: ${payload.taskTitle}
 
 **Type:** ${payload.taskType}
