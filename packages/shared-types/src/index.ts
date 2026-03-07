@@ -307,6 +307,7 @@ export type Task = {
   sprint_order: number | null;
   context: string | null;
   estimated_effort: "xs" | "s" | "m" | "l" | null;
+  attachments: TaskAttachment[];
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
@@ -487,6 +488,18 @@ export type SprintControlJobPayload = {
   repositoryIds: string[];
   sprintId: string;
   workspaceId: string;
+};
+
+// ---------------------------------------------------------------
+// Task attachments (images uploaded via Brainstorm chat)
+// ---------------------------------------------------------------
+
+export type TaskAttachment = {
+  storage_path: string; // "{workspace_id}/{task_id}/{filename}" in Supabase Storage
+  filename: string;     // original file name
+  mime_type: string;    // MIME type, e.g. "image/png"
+  size_bytes: number;   // file size in bytes
+  uploaded_at: string;  // ISO timestamp
 };
 
 // ---------------------------------------------------------------
