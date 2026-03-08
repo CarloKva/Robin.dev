@@ -71,6 +71,9 @@ export type KVAAuthContext = {
 export function extractKVAAuth(
   request: Request
 ): { ok: true; ctx: KVAAuthContext } | { ok: false; response: NextResponse } {
+  // Use X-KVA-Token instead of Authorization: Bearer to avoid Clerk
+  // intercepting the header even on public routes (Clerk reads Authorization
+  // regardless of route protection status — by design).
   const token = request.headers.get("X-KVA-Token");
   if (!token) {
     return {
