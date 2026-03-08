@@ -45,8 +45,8 @@ const config: Config = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
-        // Robin.dev brand tokens
-        brand: {
+        // Neutral zinc scale
+        zinc: {
           50: "#fafafa",
           100: "#f4f4f5",
           200: "#e4e4e7",
@@ -64,24 +64,20 @@ const config: Config = {
           success: "#10b981", // emerald-500
           warning: "#f59e0b", // amber-500
           error: "#ef4444",   // red-500
-          info: "#0ea5e9",    // sky-500
         },
       },
       boxShadow: {
-        // iOS 18-style subtle shadows
-        "ios-sm": "0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04)",
-        "ios-md": "0 4px 12px 0 rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05)",
+        DEFAULT: "none",
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-        // iOS 18-style rounded corners
-        "ios-lg": "20px",
-        "ios-sm": "12px",
+        DEFAULT: "6px",
+        sm: "4px",
+        md: "6px",
+        lg: "8px",
+        xl: "12px",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["Geist", "ui-sans-serif", "system-ui", "sans-serif"],
       },
     },
   },
