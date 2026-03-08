@@ -288,7 +288,7 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
         </div>
 
         {/* Footer */}
-        <div className="border-t border-border px-6 py-4 shrink-0 flex gap-2 justify-end">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4 shrink-0">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={syncing}>
             Annulla
           </Button>

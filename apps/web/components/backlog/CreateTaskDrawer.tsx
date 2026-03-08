@@ -14,6 +14,7 @@ import {
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import type { TaskType, Repository, ContextDocument } from "@robin/shared-types";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ function ContextDocMultiSelect({ docs, selectedIds, onChange, disabled }: Contex
         type="button"
         onClick={() => !disabled && setOpen((p) => !p)}
         disabled={disabled}
-        className="w-full flex items-center justify-between gap-2 rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        className="w-full flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
       >
         <span className="text-muted-foreground truncate">
           {selectedDocs.length === 0
@@ -143,7 +144,7 @@ function ContextDocMultiSelect({ docs, selectedIds, onChange, disabled }: Contex
       </button>
 
       {open && (
-        <ul className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-border bg-white shadow-lg max-h-52 py-1">
+        <ul className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-border bg-background shadow-lg max-h-52 py-1">
           {docs.map((doc) => {
             const checked = selectedIds.includes(doc.id);
             return (
@@ -383,7 +384,7 @@ export function CreateTaskDrawer({
         aria-hidden="true"
         onClick={handleClose}
         className={[
-          "fixed inset-0 z-40 bg-black/40 transition-opacity duration-300",
+          "fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300",
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
         ].join(" ")}
       />
@@ -394,31 +395,33 @@ export function CreateTaskDrawer({
         aria-modal="true"
         aria-label="Crea nuova task"
         className={[
-          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out sm:w-[520px] sm:border-l sm:border-border",
+          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-background shadow-2xl transition-transform duration-300 ease-in-out sm:w-[520px] sm:border-l sm:border-border",
           isOpen ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <div>
             <h2 className="font-semibold text-base text-foreground">Crea task</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               La task verrà aggiunta al backlog.
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
+            className="w-7 h-7"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             aria-label="Chiudi"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <form
             id="create-task-drawer-form"
             onSubmit={handleSubmit(onSubmit)}
@@ -614,25 +617,24 @@ export function CreateTaskDrawer({
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-border px-5 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              form="create-task-drawer-form"
-              disabled={isSubmitting || repositories.length === 0}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSubmitting ? "Creazione…" : "Crea task"}
-            </button>
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isSubmitting}
-              className="rounded-md px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              Annulla
-            </button>
-          </div>
+        <div className="flex items-center justify-end gap-2 shrink-0 border-t border-border px-6 py-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Annulla
+          </Button>
+          <Button
+            type="submit"
+            form="create-task-drawer-form"
+            size="sm"
+            disabled={isSubmitting || repositories.length === 0}
+          >
+            {isSubmitting ? "Creazione…" : "Crea task"}
+          </Button>
         </div>
       </div>
     </>
