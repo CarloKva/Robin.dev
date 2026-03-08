@@ -1,4 +1,5 @@
 import FeaturesGrid from "@/components/marketing/FeaturesGrid";
+import HowAgentsWork from "@/components/marketing/HowAgentsWork";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import HeroSection from "@/components/marketing/HeroSection";
 
@@ -81,6 +82,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* How Agents Work */}
+      <HowAgentsWork />
 
       {/* Features Grid */}
       <FeaturesGrid />
