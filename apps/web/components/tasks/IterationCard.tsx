@@ -176,7 +176,7 @@ export function IterationCard({
         <div
           className={cn(
             "overflow-hidden transition-[max-height] duration-[250ms] ease-in-out",
-            expanded ? "max-h-64" : "max-h-0"
+            expanded ? "max-h-[1000px]" : "max-h-0"
           )}
         >
           <div

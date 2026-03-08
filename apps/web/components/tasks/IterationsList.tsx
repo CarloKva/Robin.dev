@@ -14,7 +14,11 @@ export function IterationsList({ iterations, allEvents }: IterationsListProps) {
   const maxNumber = Math.max(...iterations.map((i) => i.iteration_number));
 
   return (
-    <div className="relative pl-9">
+    <div>
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Iterazioni
+      </h3>
+      <div className="relative pl-9">
       {/* Vertical connector line */}
       <div
         className="absolute left-[13px] top-3 bottom-3 w-0.5 bg-[#D1D1D6] dark:bg-[#38383A]"
@@ -35,6 +39,7 @@ export function IterationsList({ iterations, allEvents }: IterationsListProps) {
             />
           );
         })}
+      </div>
       </div>
     </div>
   );
