@@ -1,6 +1,7 @@
 import FeaturesGrid from "@/components/marketing/FeaturesGrid";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import HeroSection from "@/components/marketing/HeroSection";
+import AiReadyStack from "@/components/marketing/AiReadyStack";
 
 export default function HomePage() {
   return (
@@ -84,6 +85,9 @@ export default function HomePage() {
 
       {/* Features Grid */}
       <FeaturesGrid />
+
+      {/* AI Ready Stack */}
+      <AiReadyStack />
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
