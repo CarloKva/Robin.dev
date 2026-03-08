@@ -18,16 +18,7 @@ export default async function ContextPage() {
   ]);
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Contesto</h1>
-          <p className="text-sm text-muted-foreground">
-            Documenti usati dall&apos;AI per generare task più accurate.
-          </p>
-        </div>
-      </div>
-
+    <div className="h-full overflow-hidden flex flex-col">
       <ContextPageClient
         initialDocs={docs}
         repositories={repositories.filter((r) => r.is_enabled)}
