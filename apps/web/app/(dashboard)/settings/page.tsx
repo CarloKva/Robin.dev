@@ -93,18 +93,20 @@ export default async function SettingsPage({
         : null;
 
   return (
-    <div className="flex gap-8 max-w-5xl">
+    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-5xl">
       <SettingsSidebar isOwner={isOwnerOrAdmin} />
 
-      <div className="flex-1 min-w-0 space-y-10">
+      <div className="flex-1 min-w-0 space-y-6">
         {/* Page header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Impostazioni</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1C1E] dark:text-white">
+            Impostazioni
+          </h1>
+          <p className="mt-1 text-sm text-[#8E8E93]">
             Gestisci le preferenze e le integrazioni del tuo workspace.
           </p>
           {github_connected === "true" && (
-            <div className="mt-3 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#34C759]/40 bg-[#34C759]/5 px-4 py-2.5 text-sm text-[#34C759]">
               <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
               </svg>
@@ -114,21 +116,24 @@ export default async function SettingsPage({
         </div>
 
         {/* ── Workspace ──────────────────────────────────────────── */}
-        <section id="workspace" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="border-b border-border pb-4">
-            <h2 className="text-base font-semibold text-foreground">Workspace</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+        <section
+          id="workspace"
+          className="scroll-mt-6 space-y-5 rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-6"
+        >
+          <div className="border-b border-[#D1D1D6]/60 dark:border-[#38383A] pb-4">
+            <h2 className="text-base font-semibold text-[#1C1C1E] dark:text-white">Workspace</h2>
+            <p className="mt-0.5 text-sm text-[#8E8E93]">
               Informazioni generali sul tuo workspace Robin.dev.
             </p>
           </div>
 
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
+            <label className="text-sm font-medium text-[#1C1C1E] dark:text-white">
               Nome workspace
             </label>
             <WorkspaceNameForm initialName={workspace.name} />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[#8E8E93]">
               Il nome viene mostrato nella sidebar e nelle notifiche.
             </p>
           </div>
@@ -136,33 +141,36 @@ export default async function SettingsPage({
           {/* Read-only fields */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Slug</p>
-              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 font-mono text-sm text-foreground">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#8E8E93]">Slug</p>
+              <p className="rounded-xl border border-[#D1D1D6]/60 dark:border-[#38383A] bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3 py-2 font-mono text-sm text-[#1C1C1E] dark:text-white">
                 {workspace.slug}
               </p>
-              <p className="text-xs text-muted-foreground">Identificatore URL del workspace.</p>
+              <p className="text-xs text-[#8E8E93]">Identificatore URL del workspace.</p>
             </div>
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Creato il</p>
-              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#8E8E93]">Creato il</p>
+              <p className="rounded-xl border border-[#D1D1D6]/60 dark:border-[#38383A] bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3 py-2 text-sm text-[#1C1C1E] dark:text-white">
                 {createdAt}
               </p>
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Workspace ID</p>
-              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#8E8E93]">Workspace ID</p>
+              <p className="rounded-xl border border-[#D1D1D6]/60 dark:border-[#38383A] bg-[#F2F2F7] dark:bg-[#2C2C2E] px-3 py-2 font-mono text-xs text-[#8E8E93]">
                 {workspace.id}
               </p>
-              <p className="text-xs text-muted-foreground">ID interno — utile per debug e supporto.</p>
+              <p className="text-xs text-[#8E8E93]">ID interno — utile per debug e supporto.</p>
             </div>
           </div>
         </section>
 
         {/* ── Connessioni ────────────────────────────────────────── */}
-        <section id="connections" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="border-b border-border pb-4">
-            <h2 className="text-base font-semibold text-foreground">Connessioni</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+        <section
+          id="connections"
+          className="scroll-mt-6 space-y-5 rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-6"
+        >
+          <div className="border-b border-[#D1D1D6]/60 dark:border-[#38383A] pb-4">
+            <h2 className="text-base font-semibold text-[#1C1C1E] dark:text-white">Connessioni</h2>
+            <p className="mt-0.5 text-sm text-[#8E8E93]">
               Collega il tuo account GitHub per permettere agli agenti di lavorare sui tuoi repository.
             </p>
           </div>
@@ -173,36 +181,41 @@ export default async function SettingsPage({
         </section>
 
         {/* ── Repository ─────────────────────────────────────────── */}
-        <section id="repositories" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="border-b border-border pb-4">
-            <h2 className="text-base font-semibold text-foreground">Repository</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+        <section
+          id="repositories"
+          className="scroll-mt-6 space-y-5 rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-6"
+        >
+          <div className="border-b border-[#D1D1D6]/60 dark:border-[#38383A] pb-4">
+            <h2 className="text-base font-semibold text-[#1C1C1E] dark:text-white">Repository</h2>
+            <p className="mt-0.5 text-sm text-[#8E8E93]">
               Abilita i repository su cui gli agenti possono operare.
             </p>
           </div>
 
           {!connection && (
-            <div className="flex items-center gap-3 rounded-lg border border-dashed border-border p-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                <svg className="h-4 w-4 text-muted-foreground" viewBox="0 0 20 20" fill="currentColor">
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-[#D1D1D6] dark:border-[#38383A] p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E]">
+                <svg className="h-4 w-4 text-[#8E8E93]" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
                 </svg>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Connetti GitHub nella sezione <span className="font-medium text-foreground">Connessioni</span> per abilitare i repository.
+              <p className="text-sm text-[#8E8E93]">
+                Connetti GitHub nella sezione{" "}
+                <span className="font-medium text-[#1C1C1E] dark:text-white">Connessioni</span>{" "}
+                per abilitare i repository.
               </p>
             </div>
           )}
 
           {connection && repoRows.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border p-4">
-              <p className="text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-[#D1D1D6] dark:border-[#38383A] p-4">
+              <p className="text-sm text-[#8E8E93]">
                 Nessun repository accessibile tramite Robin.dev App. Verifica la configurazione su{" "}
                 <a
                   href="https://github.com/settings/installations"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-foreground underline hover:no-underline"
+                  className="font-medium text-[#007AFF] hover:underline"
                 >
                   GitHub
                 </a>
@@ -217,10 +230,13 @@ export default async function SettingsPage({
         </section>
 
         {/* ── Ambienti ───────────────────────────────────────────── */}
-        <section id="environments" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="border-b border-border pb-4">
-            <h2 className="text-base font-semibold text-foreground">Ambienti</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+        <section
+          id="environments"
+          className="scroll-mt-6 space-y-5 rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-6"
+        >
+          <div className="border-b border-[#D1D1D6]/60 dark:border-[#38383A] pb-4">
+            <h2 className="text-base font-semibold text-[#1C1C1E] dark:text-white">Ambienti</h2>
+            <p className="mt-0.5 text-sm text-[#8E8E93]">
               Configura ambienti di staging e production per i tuoi repository. Definisci il branch target e abilita l&apos;auto-merge.
             </p>
           </div>
@@ -236,10 +252,13 @@ export default async function SettingsPage({
 
         {/* ── MCP Servers ────────────────────────────────────────── */}
         {isOwnerOrAdmin && (
-          <section id="mcp-servers" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
-            <div className="border-b border-border pb-4">
-              <h2 className="text-base font-semibold text-foreground">MCP Servers</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+          <section
+            id="mcp-servers"
+            className="scroll-mt-6 space-y-5 rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-6"
+          >
+            <div className="border-b border-[#D1D1D6]/60 dark:border-[#38383A] pb-4">
+              <h2 className="text-base font-semibold text-[#1C1C1E] dark:text-white">MCP Servers</h2>
+              <p className="mt-0.5 text-sm text-[#8E8E93]">
                 Configura i server MCP disponibili per gli agenti di questo workspace.
               </p>
             </div>
@@ -251,10 +270,13 @@ export default async function SettingsPage({
         )}
 
         {/* ── Notifiche ──────────────────────────────────────────── */}
-        <section id="notifications" className="scroll-mt-6 space-y-5 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="border-b border-border pb-4">
-            <h2 className="text-base font-semibold text-foreground">Notifiche</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+        <section
+          id="notifications"
+          className="scroll-mt-6 space-y-5 rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] p-6"
+        >
+          <div className="border-b border-[#D1D1D6]/60 dark:border-[#38383A] pb-4">
+            <h2 className="text-base font-semibold text-[#1C1C1E] dark:text-white">Notifiche</h2>
+            <p className="mt-0.5 text-sm text-[#8E8E93]">
               Configura dove ricevere notifiche sulle attività degli agenti.
             </p>
           </div>
