@@ -465,6 +465,16 @@ export function BrainstormModal({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onClose]);
 
+  // Body scroll lock on mobile when drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [isOpen]);
+
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -855,15 +865,26 @@ export function BrainstormModal({
   const displayModelName = modelName ?? AI_MODEL_NAME;
 
   return (
-    <div
-      className={cn(
-        "fixed right-0 top-0 z-40 h-screen w-full md:w-[480px]",
-        "flex flex-col border-l border-border bg-background shadow-2xl",
-        "transition-transform duration-300 ease-in-out",
-        isOpen ? "translate-x-0" : "translate-x-full"
-      )}
-      aria-hidden={!isOpen}
-    >
+    <>
+      {/* Overlay */}
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className={cn(
+          "fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+      />
+
+      <div
+        className={cn(
+          "fixed right-0 top-0 z-40 h-screen w-full md:w-[480px]",
+          "flex flex-col bg-white dark:bg-[#1C1C1E] shadow-2xl",
+          "transition-transform duration-300 ease-in-out",
+          isOpen ? "translate-x-0" : "translate-x-full"
+        )}
+        aria-hidden={!isOpen}
+      >
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
         <div className="flex items-center gap-2.5">
@@ -955,7 +976,7 @@ export function BrainstormModal({
           )}
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white transition-opacity hover:opacity-70"
             aria-label="Chiudi"
           >
             <X className="h-4 w-4" />
@@ -1300,5 +1321,6 @@ export function BrainstormModal({
         </p>
       </div>
     </div>
+    </>
   );
 }

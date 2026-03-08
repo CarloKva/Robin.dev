@@ -430,30 +430,113 @@ function TaskCreationTab({
   );
 }
 
+// ─── Shared close button ────────────────────────────────────────────────────
+
+function CloseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Chiudi"
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] transition-colors hover:bg-gray-200 dark:hover:bg-[#3A3A3C]"
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path
+          d="M12 4L4 12M4 4L12 12"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
 // ─── Main modal ────────────────────────────────────────────────────────────
 
 export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalCreateModalProps) {
   const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("task");
+  const [isMobile, setIsMobile] = useState(false);
 
+  // Swipe state for mobile drawer
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ y: 0, time: 0 });
+
+  // Mobile detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const openModal = useCallback(() => {
+    setOpen(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setVisible(false);
+    setDragY(0);
+    setTimeout(() => setOpen(false), 300);
+  }, []);
+
+  // Custom event listener
   useEffect(() => {
     function handler(e: Event) {
       const detail = (e as CustomEvent<{ tab?: Tab }>).detail;
       setActiveTab(detail?.tab ?? "task");
-      setOpen(true);
+      openModal();
     }
     document.addEventListener("open-create-modal", handler);
     return () => document.removeEventListener("open-create-modal", handler);
-  }, []);
+  }, [openModal]);
 
-  // Esc to close
+  // Escape key
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && open) setOpen(false);
+      if (e.key === "Escape" && open) closeModal();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
+  }, [open, closeModal]);
+
+  // Body scroll lock
+  useEffect(() => {
+    if (open) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = prev; };
+    }
   }, [open]);
+
+  // Touch handlers for swipe-to-close
+  function handleTouchStart(e: React.TouchEvent) {
+    dragStartRef.current = { y: e.touches[0]!.clientY, time: Date.now() };
+    setIsDragging(true);
+    setDragY(0);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!isDragging) return;
+    const delta = e.touches[0]!.clientY - dragStartRef.current.y;
+    if (delta > 0) setDragY(delta);
+  }
+
+  function handleTouchEnd() {
+    if (!isDragging) return;
+    const elapsed = Date.now() - dragStartRef.current.time;
+    const velocity = elapsed > 0 ? (dragY / elapsed) * 1000 : 0;
+    if (dragY > 80 || velocity > 500) {
+      closeModal();
+    } else {
+      setDragY(0);
+    }
+    setIsDragging(false);
+  }
 
   if (!open) return null;
 
@@ -462,69 +545,111 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
     { id: "agent", label: "Agente" },
   ];
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh]"
-      onClick={(e) => e.target === e.currentTarget && setOpen(false)}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-
-      <div className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 pt-4 pb-0">
-          <div className="flex gap-0">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "relative px-4 pb-3 pt-1 text-sm font-medium transition-colors",
-                  activeTab === tab.id
-                    ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-t"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+  const tabHeader = (
+    <div className="flex items-center justify-between border-b border-border px-5 pt-4 pb-0 shrink-0">
+      <div className="flex gap-0">
+        {tabs.map((tab) => (
           <button
+            key={tab.id}
             type="button"
-            onClick={() => setOpen(false)}
-            className="mb-3 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Chiudi"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "relative px-4 pb-3 pt-1 text-sm font-medium transition-colors",
+              activeTab === tab.id
+                ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-t"
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M12 4L4 12M4 4L12 12"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            {tab.label}
           </button>
-        </div>
+        ))}
+      </div>
+      <div className="mb-3">
+        <CloseButton onClick={closeModal} />
+      </div>
+    </div>
+  );
 
-        {/* Body */}
-        <div className="p-5">
-          {activeTab === "task" ? (
-            <TaskCreationTab repositories={repositories} onClose={() => setOpen(false)} />
-          ) : (
-            <AgentCreationForm
-              repositories={repositories}
-              hasGitHubConnection={hasGitHubConnection}
-              onClose={() => setOpen(false)}
-            />
-          )}
-        </div>
+  const bodyContent = (
+    <div className="p-6 overflow-y-auto flex-1">
+      {activeTab === "task" ? (
+        <TaskCreationTab repositories={repositories} onClose={closeModal} />
+      ) : (
+        <AgentCreationForm
+          repositories={repositories}
+          hasGitHubConnection={hasGitHubConnection}
+          onClose={closeModal}
+        />
+      )}
+    </div>
+  );
 
-        {/* Footer hint */}
-        <div className="border-t border-border px-5 py-2">
-          <p className="text-xs text-muted-foreground">
-            <kbd className="rounded border border-border px-1 font-mono">Esc</kbd> per chiudere
-          </p>
+  const overlayEl = (
+    <div
+      className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      style={{
+        opacity: visible ? 1 : 0,
+        transition: "opacity 200ms ease",
+      }}
+      onClick={closeModal}
+      aria-hidden="true"
+    />
+  );
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 z-50">
+        {overlayEl}
+        <div
+          className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl max-h-[90vh]"
+          style={{
+            transform: visible ? `translateY(${dragY}px)` : "translateY(100%)",
+            transition: isDragging
+              ? "none"
+              : visible
+                ? "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)"
+                : "transform 300ms ease-in",
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Handle bar */}
+          <div className="flex justify-center mt-3 shrink-0">
+            <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
+          </div>
+          {tabHeader}
+          {bodyContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      {overlayEl}
+      <div
+        className="absolute inset-0 flex items-start justify-center pt-[10vh]"
+        onClick={(e) => e.target === e.currentTarget && closeModal()}
+      >
+        <div
+          className="relative w-full max-w-lg rounded-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl flex flex-col"
+          style={{
+            opacity: visible ? 1 : 0,
+            transform: visible ? "scale(1)" : "scale(0.95)",
+            transition: visible
+              ? "transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease"
+              : "transform 200ms ease-in, opacity 200ms ease-in",
+          }}
+        >
+          {tabHeader}
+          {bodyContent}
+          {/* Footer hint */}
+          <div className="border-t border-border px-5 py-2 shrink-0">
+            <p className="text-xs text-muted-foreground">
+              <kbd className="rounded border border-border px-1 font-mono">Esc</kbd> per chiudere
+            </p>
+          </div>
         </div>
       </div>
     </div>
