@@ -6,6 +6,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks(.*)",
+  // KVA Room connector — uses own Bearer auth (not Clerk)
+  "/api/connector/(.*)",
+  "/api/auth/session",
 ]);
 
 export default clerkMiddleware(async (auth, request: NextRequest) => {
