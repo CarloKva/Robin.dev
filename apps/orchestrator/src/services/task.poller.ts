@@ -1,7 +1,8 @@
-import type { JobPayload, TaskType, TaskPriority } from "@robin/shared-types";
+import type { JobPayload, TaskType, TaskPriority, MCPServerConfig } from "@robin/shared-types";
 import { pollingConfig, defaultTimeoutByType } from "../config/bullmq.config";
 import { taskRepository } from "../repositories/task.repository";
 import { agentRepository } from "../repositories/agent.repository";
+import { getSupabaseClient } from "../db/supabase.client";
 import { taskQueue } from "../queues/task.queue";
 import { log } from "../utils/logger";
 
@@ -13,8 +14,9 @@ export class TaskPoller {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private currentInterval = pollingConfig.minIntervalMs;
   private running = false;
-  // undefined = not yet resolved; null = resolved but unknown
+  // undefined = not yet resolved; null = resolved but unknown/not set
   private workspaceId: string | null | undefined = undefined;
+  private mcpConfig: { mcpServers: Record<string, MCPServerConfig> } | null | undefined = undefined;
 
   start(): void {
     if (this.running) return;
@@ -57,6 +59,29 @@ export class TaskPoller {
     }
   }
 
+  private async resolveMcpConfig(): Promise<void> {
+    if (this.mcpConfig !== undefined) return;
+    if (!this.workspaceId) {
+      this.mcpConfig = null;
+      return;
+    }
+    try {
+      const { data, error } = await getSupabaseClient()
+        .from("workspaces")
+        .select("mcp_config")
+        .eq("id", this.workspaceId)
+        .single();
+      if (error) throw error;
+      this.mcpConfig = (data?.mcp_config as typeof this.mcpConfig) ?? null;
+      if (this.mcpConfig) {
+        log.info({ workspaceId: this.workspaceId }, "TaskPoller: MCP config loaded");
+      }
+    } catch (err) {
+      log.warn({ workspaceId: this.workspaceId, error: String(err) }, "TaskPoller: could not load MCP config — proceeding without it");
+      this.mcpConfig = null;
+    }
+  }
+
   private async recoverStuckQueued(): Promise<void> {
     const STUCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
     const stuckTasks = await taskRepository.getStuckQueued(STUCK_TIMEOUT_MS, this.workspaceId ?? undefined);
@@ -70,6 +95,7 @@ export class TaskPoller {
     if (!this.running) return;
 
     await this.resolveWorkspaceId();
+    await this.resolveMcpConfig();
 
     // Recovery: reset tasks stuck in 'queued' with no BullMQ job
     try {
@@ -139,6 +165,7 @@ export class TaskPoller {
       timeoutMinutes: defaultTimeoutByType[taskType] ?? 30,
       claudeMdPath: "CLAUDE.md",
       attachments: (task["attachments"] as JobPayload["attachments"]) ?? [],
+      mcpConfig: this.mcpConfig ?? null,
     };
   }
 

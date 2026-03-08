@@ -1,18 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import {
-  Sparkles,
-  X,
-  Loader2,
-  FileText,
-  Zap,
-  Pause,
-  Play,
-  CheckCircle2,
-  Paperclip,
-  Send,
-} from "lucide-react";
+import { Sparkles, X, Bot, ArrowUp, Loader2, FileText, Zap, Pause, Play, CheckCircle2, Paperclip } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { parseRobinMd } from "@/lib/robin-md-parser";
@@ -22,11 +11,7 @@ import {
   type BatchManifest,
 } from "@/lib/ai/brainstorm";
 import { ImportPreviewCard } from "./ImportPreviewCard";
-import {
-  validateImageFiles,
-  MAX_IMAGE_FILES,
-  ALLOWED_IMAGE_TYPES,
-} from "@/lib/utils/image-validation";
+import { validateImageFiles, MAX_IMAGE_FILES, ALLOWED_IMAGE_TYPES } from "@/lib/utils/image-validation";
 import type { Repository, ContextDocument } from "@robin/shared-types";
 import type { ParsedTask, ParseError } from "@/types/robin-md";
 
@@ -54,6 +39,7 @@ interface BrainstormDrawerProps {
   repositories: Repository[];
   contextDocs?: ContextDocument[];
   onImported: () => void;
+  workspaceId: string;
 }
 
 type ImportData = {
@@ -69,106 +55,32 @@ function formatTimestamp(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-// ─── Compound sub-components ──────────────────────────────────────────────────
-
-interface ChatPanelProps {
-  isOpen: boolean;
-  children: React.ReactNode;
-}
-
-function ChatPanel({ isOpen, children }: ChatPanelProps) {
-  return (
-    <div
-      className={cn(
-        "fixed z-50 flex flex-col bg-background border border-border rounded-xl shadow-lg overflow-hidden",
-        // Mobile: inset-x-4 bottom-20
-        "left-4 right-4 bottom-20",
-        // Desktop: right-6 bottom-24 w-[380px] h-[520px]
-        "sm:left-auto sm:right-6 sm:bottom-24 sm:w-[380px] sm:h-[520px]",
-        "transition-all duration-200 ease-in-out",
-        isOpen
-          ? "opacity-100 translate-y-0 pointer-events-auto"
-          : "opacity-0 translate-y-2 pointer-events-none"
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-interface ChatPanelHeaderProps {
-  streaming: boolean;
-  onClose: () => void;
-  children?: React.ReactNode;
-}
-
-ChatPanel.Header = function Header({ streaming, onClose, children }: ChatPanelHeaderProps) {
-  return (
-    <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border">
-      <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-        <span className="text-sm font-semibold text-foreground">Robin AI</span>
-        {streaming && (
-          <span className="text-xs text-muted-foreground">sta scrivendo…</span>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        {children}
-        <button
-          onClick={onClose}
-          aria-label="Chiudi"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-interface ChatPanelMessagesProps {
-  children: React.ReactNode;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-}
-
-ChatPanel.Messages = function Messages({ children, messagesEndRef }: ChatPanelMessagesProps) {
-  return (
-    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-      {children}
-      <div ref={messagesEndRef} />
-    </div>
-  );
-};
-
-interface ChatPanelInputProps {
-  children: React.ReactNode;
-}
-
-ChatPanel.Input = function Input({ children }: ChatPanelInputProps) {
-  return (
-    <div className="shrink-0 border-t border-border px-3 py-3">
-      {children}
-    </div>
-  );
-};
-
-// ─── Loading indicator ────────────────────────────────────────────────────────
-
 function LoadingDots() {
   return (
-    <div className="flex justify-start">
-      <div className="px-3 py-2 rounded-xl border border-border bg-background">
-        <span className="flex gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]" />
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]" />
-        </span>
-      </div>
-    </div>
+    <span className="inline-flex gap-1 items-center py-1">
+      <span
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: "0ms" }}
+      />
+      <span
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: "150ms" }}
+      />
+      <span
+        className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce"
+        style={{ animationDelay: "300ms" }}
+      />
+    </span>
   );
 }
 
-// ─── Message bubbles ──────────────────────────────────────────────────────────
+function RobinAvatar() {
+  return (
+    <div className="shrink-0 h-7 w-7 rounded-full bg-foreground flex items-center justify-center">
+      <Bot className="h-4 w-4 text-background" />
+    </div>
+  );
+}
 
 interface AssistantMessageProps {
   content: string;
@@ -179,10 +91,11 @@ interface AssistantMessageProps {
 
 function AssistantMessage({ content, timestamp, isStreaming, usage }: AssistantMessageProps) {
   return (
-    <div className="flex justify-start">
-      <div className="flex flex-col gap-1 max-w-[80%]">
-        {content ? (
-          <div className="rounded-xl rounded-bl-sm px-3 py-2 bg-background border border-border text-sm text-foreground">
+    <div className="flex items-start gap-2.5">
+      <RobinAvatar />
+      <div className="flex flex-col gap-1 max-w-[85%]">
+        <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5 text-sm text-foreground">
+          {content ? (
             <div className="prose-chat">
               <ReactMarkdown
                 components={{
@@ -252,10 +165,10 @@ function AssistantMessage({ content, timestamp, isStreaming, usage }: AssistantM
                 {content}
               </ReactMarkdown>
             </div>
-          </div>
-        ) : isStreaming ? (
-          <LoadingDots />
-        ) : null}
+          ) : isStreaming ? (
+            <LoadingDots />
+          ) : null}
+        </div>
         <span className="text-[10px] text-muted-foreground pl-1">
           Robin · {formatTimestamp(timestamp)}
           {usage && ` · ↑ ${usage.inputTokens} ↓ ${usage.outputTokens} tok`}
@@ -273,28 +186,26 @@ interface UserMessageProps {
 
 function UserMessage({ content, timestamp, imageUrls }: UserMessageProps) {
   return (
-    <div className="flex justify-end">
-      <div className="flex flex-col items-end gap-1 max-w-[80%]">
-        <div className="rounded-xl rounded-br-sm px-3 py-2 bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 text-sm leading-relaxed">
-          {imageUrls && imageUrls.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {imageUrls.map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={url}
-                  alt={`Allegato ${i + 1}`}
-                  className="h-20 w-20 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700"
-                />
-              ))}
-            </div>
-          )}
-          {content}
-        </div>
-        <span className="text-[10px] text-muted-foreground pr-1">
-          {formatTimestamp(timestamp)}
-        </span>
+    <div className="flex flex-col items-end gap-1">
+      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground leading-relaxed">
+        {imageUrls && imageUrls.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {imageUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={url}
+                alt={`Allegato ${i + 1}`}
+                className="h-20 w-20 rounded-lg object-cover border border-primary-foreground/20"
+              />
+            ))}
+          </div>
+        )}
+        {content}
       </div>
+      <span className="text-[10px] text-muted-foreground pr-1">
+        {formatTimestamp(timestamp)}
+      </span>
     </div>
   );
 }
@@ -353,6 +264,7 @@ function BatchManifestPreview({
       </ul>
 
       <div className="border-t border-border px-3 py-2.5 space-y-2.5">
+        {/* Auto-approve toggle */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <button
             type="button"
@@ -485,6 +397,7 @@ export function BrainstormModal({
   repositories,
   contextDocs = [],
   onImported,
+  workspaceId,
 }: BrainstormDrawerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -503,11 +416,30 @@ export function BrainstormModal({
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [imageErrors, setImageErrors] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Active repo from global selector ────────────────────────────────────────
+  const activeRepoFullName = (() => {
+    if (typeof window === "undefined") return repositories[0]?.full_name ?? "";
+    const storedId = localStorage.getItem(`robin:activeRepoId:${workspaceId}`);
+    if (!storedId) return repositories[0]?.full_name ?? "";
+    const repo = repositories.find((r) => r.id === storedId);
+    return repo?.full_name ?? repositories[0]?.full_name ?? "";
+  })();
+
+  // ── Mobile bottom drawer ────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ y: 0, time: 0 });
+
   // ── Image attachments ───────────────────────────────────────────────────────
+  // Images staged in the input area before sending
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
+  // Images captured at send time, held until import completes or is discarded
   const pendingImagesRef = useRef<File[]>([]);
 
   // ── Batch state ────────────────────────────────────────────────────────────
@@ -518,7 +450,9 @@ export function BrainstormModal({
   const [autoApprove, setAutoApprove] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmNewChat, setConfirmNewChat] = useState(false);
+  // Ref so async sendMessage can read latest manifest without stale closure
   const batchManifestRef = useRef<BatchManifest | null>(null);
+  // Signals to the response handler that a batch (not a manifest) is expected
   const isBatchGeneratingRef = useRef(false);
 
   // Load auto-approve preference from localStorage
@@ -528,15 +462,15 @@ export function BrainstormModal({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
 
-  // Focus textarea when panel opens
+  // Focus textarea when drawer opens
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => textareaRef.current?.focus(), 200);
+      setTimeout(() => textareaRef.current?.focus(), 300);
     }
   }, [isOpen]);
 
@@ -549,6 +483,24 @@ export function BrainstormModal({
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onClose]);
+
+  // Mobile detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Body scroll lock when drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [isOpen]);
 
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -653,7 +605,9 @@ export function BrainstormModal({
   async function sendMessage(text: string, isProgrammatic = false, images?: SelectedImage[]) {
     if (!text && !images?.length) return;
     if (streaming) return;
+    userScrolledUpRef.current = false;
 
+    // Capture images for this turn (only for user-initiated messages)
     if (isProgrammatic) {
       pendingImagesRef.current = [];
     } else {
@@ -787,12 +741,14 @@ export function BrainstormModal({
         });
       }
 
+      // Try manifest first; fall back to tasks extraction
       const manifest = extractBatchManifest(accumulated);
       if (manifest) {
         batchManifestRef.current = manifest;
         setBatchManifest(manifest);
         setBatchPhase("manifest_ready");
         isBatchGeneratingRef.current = false;
+        // Batch mode: discard pending images (multi-turn flow, not associable per-turn)
         pendingImagesRef.current = [];
       } else {
         const tasksContent = extractGeneratedTasks(accumulated);
@@ -809,10 +765,13 @@ export function BrainstormModal({
               setBatchPhase("batch_ready");
               isBatchGeneratingRef.current = false;
             }
+            // pendingImagesRef.current stays — will be uploaded after import
           } else {
+            // No valid tasks parsed: discard pending images
             pendingImagesRef.current = [];
           }
         } else {
+          // No tasks in response (conversational reply): discard pending images
           pendingImagesRef.current = [];
         }
       }
@@ -895,6 +854,7 @@ export function BrainstormModal({
     } else if (!paused) {
       triggerBatch(nextIndex);
     }
+    // If paused: batchPhase stays where it is; BatchProgressBar shows "Riprendi"
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -932,39 +892,125 @@ export function BrainstormModal({
 
   const displayModelName = modelName ?? AI_MODEL_NAME;
 
+  // Swipe-to-close handlers for mobile bottom drawer
+  function handleTouchStart(e: React.TouchEvent) {
+    dragStartRef.current = { y: e.touches[0]!.clientY, time: Date.now() };
+    setIsDragging(true);
+    setDragY(0);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!isDragging) return;
+    const delta = e.touches[0]!.clientY - dragStartRef.current.y;
+    if (delta > 0) setDragY(delta);
+  }
+
+  function handleTouchEnd() {
+    if (!isDragging) return;
+    const elapsed = Date.now() - dragStartRef.current.time;
+    const velocity = elapsed > 0 ? (dragY / elapsed) * 1000 : 0;
+    if (dragY > 80 || velocity > 500) {
+      setDragY(0);
+      onClose();
+    } else {
+      setDragY(0);
+    }
+    setIsDragging(false);
+  }
+
   return (
-    <ChatPanel isOpen={isOpen}>
-      {/* Header */}
-      <ChatPanel.Header streaming={streaming} onClose={onClose}>
-        {/* Auto-approve toggle — visible once batch has started */}
-        {batchManifest !== null && batchPhase !== "done" && (
-          <button
-            onClick={() => {
-              const next = !autoApprove;
-              setAutoApprove(next);
-              localStorage.setItem("robin-brainstorm-auto-approve", String(next));
-              if (next && paused && batchPhase !== "generating") {
-                setPaused(false);
-                triggerBatch(currentBatchIndex);
-              }
-            }}
-            title={autoApprove ? "Auto-approve attivo — clicca per disattivare" : "Attiva auto-approve"}
-            className={cn(
-              "flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
-              autoApprove
-                ? "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            )}
-          >
-            <Zap className="h-3 w-3" />
-            Auto
-          </button>
+    <>
+      {/* Overlay */}
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className={cn(
+          "fixed inset-0 z-30 transition-opacity duration-300",
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
-        {/* Pausa / Riprendi */}
-        {batchManifest !== null &&
-          batchPhase !== "idle" &&
-          batchPhase !== "manifest_ready" &&
-          batchPhase !== "done" && (
+      />
+
+      <div
+        className={cn(
+          "fixed z-40 flex flex-col bg-white dark:bg-[#1C1C1E] shadow-2xl",
+          isMobile
+            ? "inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]"
+            : "right-0 top-0 h-screen w-[480px]"
+        )}
+        style={
+          isMobile
+            ? {
+                transform: isOpen ? `translateY(${dragY}px)` : "translateY(100%)",
+                transition: isDragging
+                  ? "none"
+                  : isOpen
+                    ? "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)"
+                    : "transform 300ms ease-in",
+              }
+            : {
+                transform: isOpen ? "translateX(0)" : "translateX(100%)",
+                transition: "transform 300ms ease-in-out",
+              }
+        }
+        aria-hidden={!isOpen}
+        onTouchStart={isMobile ? handleTouchStart : undefined}
+        onTouchMove={isMobile ? handleTouchMove : undefined}
+        onTouchEnd={isMobile ? handleTouchEnd : undefined}
+      >
+        {/* Handle bar — mobile only */}
+        {isMobile && (
+          <div className="flex justify-center mt-3 shrink-0">
+            <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
+          </div>
+        )}
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-full bg-foreground flex items-center justify-center">
+            <Bot className="h-4 w-4 text-background" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-semibold leading-tight">Robin AI</p>
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${modelBadgeClass(displayModelName)}`}
+              >
+                {displayModelName}
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              {streaming ? "Sta scrivendo…" : "Online"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Auto-approve toggle — visible once batch has started */}
+          {batchManifest !== null && batchPhase !== "done" && (
+            <button
+              onClick={() => {
+                const next = !autoApprove;
+                setAutoApprove(next);
+                localStorage.setItem("robin-brainstorm-auto-approve", String(next));
+                // If we just enabled auto-approve while paused, un-pause and trigger next
+                if (next && paused && batchPhase !== "generating") {
+                  setPaused(false);
+                  triggerBatch(currentBatchIndex);
+                }
+              }}
+              title={autoApprove ? "Auto-approve attivo — clicca per disattivare" : "Attiva auto-approve"}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
+                autoApprove
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <Zap className="h-3 w-3" />
+              {autoApprove ? "Auto" : "Auto"}
+            </button>
+          )}
+          {/* Pausa / Riprendi — visible during active batch execution */}
+          {batchManifest !== null && batchPhase !== "idle" && batchPhase !== "manifest_ready" && batchPhase !== "done" && (
             <button
               onClick={() => {
                 if (paused) {
@@ -980,36 +1026,53 @@ export function BrainstormModal({
               {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
             </button>
           )}
-        {/* Nuova chat / confirm */}
-        {messages.length > 0 && !confirmNewChat && (
+          {/* Nuova chat / confirm */}
+          {messages.length > 0 && !confirmNewChat && (
+            <button
+              onClick={handleNewChat}
+              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              Nuova chat
+            </button>
+          )}
+          {confirmNewChat && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">Sei sicuro?</span>
+              <button
+                onClick={resetChat}
+                className="rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                Sì
+              </button>
+              <button
+                onClick={() => setConfirmNewChat(false)}
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent transition-colors"
+              >
+                No
+              </button>
+            </div>
+          )}
           <button
-            onClick={handleNewChat}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white transition-opacity hover:opacity-70"
+            aria-label="Chiudi"
           >
-            Nuova chat
+            <X className="h-4 w-4" />
           </button>
-        )}
-        {confirmNewChat && (
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-muted-foreground">Sei sicuro?</span>
-            <button
-              onClick={resetChat}
-              className="rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              Sì
-            </button>
-            <button
-              onClick={() => setConfirmNewChat(false)}
-              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent transition-colors"
-            >
-              No
-            </button>
-          </div>
-        )}
-      </ChatPanel.Header>
+        </div>
+      </div>
 
       {/* Messages */}
-      <ChatPanel.Messages messagesEndRef={messagesEndRef}>
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+        onScroll={() => {
+          const el = messagesContainerRef.current;
+          if (!el) return;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          userScrolledUpRef.current = !atBottom;
+        }}
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full py-8 text-center">
             <div className="h-12 w-12 rounded-full bg-foreground/5 flex items-center justify-center mb-3">
@@ -1071,7 +1134,7 @@ export function BrainstormModal({
           />
         )}
 
-        {/* Batch progress bar */}
+        {/* Batch progress bar (generating / batch_ready / done) */}
         {batchManifest !== null && batchPhase !== "idle" && batchPhase !== "manifest_ready" && (
           <BatchProgressBar
             manifest={batchManifest}
@@ -1094,12 +1157,15 @@ export function BrainstormModal({
             truncated={importData.truncated}
             originalCount={importData.originalCount}
             repositories={repositories}
+            initialDefaultRepo={activeRepoFullName}
             onDismiss={() => {
               setImportData(null);
+              // User dismissed import without creating tasks: discard pending images
               pendingImagesRef.current = [];
               if (batchManifest) setBatchPhase("batch_ready");
             }}
             onImported={(taskIds) => {
+              // Upload any pending images and associate them with the created tasks
               if (pendingImagesRef.current.length > 0 && taskIds.length > 0) {
                 void uploadImagesToTasks(pendingImagesRef.current, taskIds);
               }
@@ -1127,7 +1193,9 @@ export function BrainstormModal({
             </div>
           </div>
         )}
-      </ChatPanel.Messages>
+
+        <div ref={messagesEndRef} />
+      </div>
 
       {/* Session token counter */}
       {(sessionTokens.inputTokens > 0 || sessionTokens.outputTokens > 0) && (
@@ -1139,15 +1207,21 @@ export function BrainstormModal({
       )}
 
       {/* Input area */}
-      <ChatPanel.Input>
-        {/* Hidden file input */}
+      <div className="shrink-0 border-t border-border bg-background px-3 py-3">
+        {/* Hidden file input for image selection */}
         <input
           ref={fileInputRef}
           type="file"
-          accept={ALLOWED_IMAGE_TYPES.join(",")}
+          accept="image/jpeg,image/png,image/gif,image/webp"
           multiple
           className="hidden"
-          onChange={(e) => void handleFileChange(e)}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) {
+              setAttachedImages((prev) => [...prev, ...files]);
+            }
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
         />
 
         {/* Selected context doc chips */}
@@ -1255,65 +1329,86 @@ export function BrainstormModal({
           </div>
         )}
 
-        {/* Textarea + send */}
-        <div className="flex items-end gap-2">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ALLOWED_IMAGE_TYPES.join(",")}
+          multiple
+          className="hidden"
+          onChange={(e) => void handleFileChange(e)}
+        />
+
+        <div className="rounded-2xl border border-border bg-background focus-within:ring-1 focus-within:ring-ring transition-shadow">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             disabled={streaming}
-            placeholder="Scrivi un messaggio..."
+            placeholder="Descrivi cosa vuoi implementare…"
             rows={1}
             style={{ height: "auto" }}
-            className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none max-h-24 min-h-[36px] disabled:opacity-50"
+            className="w-full px-4 pt-3.5 pb-2 resize-none bg-transparent text-sm leading-5 focus:outline-none disabled:opacity-50 placeholder:text-muted-foreground"
           />
-          {/* Attach button */}
-          <button
-            onClick={handleAttachClick}
-            disabled={streaming || selectedImages.length >= MAX_IMAGE_FILES}
-            aria-label="Allega immagine"
-            title="Allega immagine (PNG, JPEG, WEBP · max 5 MB · max 3)"
-            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-          {/* Context button */}
-          {contextDocs.length > 0 && (
+          <div className="flex items-center gap-2 px-3 pb-3">
+            {/* Attach image button */}
             <button
+              onClick={handleAttachClick}
+              disabled={streaming || selectedImages.length >= MAX_IMAGE_FILES}
+              aria-label="Allega immagine"
+              title="Allega immagine (PNG, JPEG, WEBP · max 5 MB · max 3)"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </button>
+            {contextDocs.length > 0 && (
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setInput((prev) => (prev ? `${prev} /context ` : "/context "));
+                  setTimeout(() => textareaRef.current?.focus(), 0);
+                }}
+                title="Allega documento di contesto (/context)"
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-foreground hover:bg-accent/80 transition-colors"
+              >
+                <FileText className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                setInput((prev) => (prev ? `${prev} /context ` : "/context "));
-                setTimeout(() => textareaRef.current?.focus(), 0);
+                fileInputRef.current?.click();
               }}
-              title="Allega documento di contesto (/context)"
-              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="Allega immagini"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-foreground hover:bg-accent/80 transition-colors"
             >
-              <FileText className="h-4 w-4" />
+              <Paperclip className="h-3.5 w-3.5" />
             </button>
-          )}
-          {/* Model badge */}
-          <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium ${modelBadgeClass(displayModelName)}`}>
-            {displayModelName}
-          </span>
-          {/* Send button */}
-          <button
-            onClick={() => void handleSend()}
-            disabled={streaming || (!input.trim() && selectedImages.length === 0)}
-            aria-label="Invia messaggio"
-            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {streaming ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </button>
+            <div className="flex-1" />
+            <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${modelBadgeClass(displayModelName)}`}>
+              {displayModelName}
+            </span>
+            <button
+              onClick={() => void handleSend()}
+              disabled={streaming || (!input.trim() && selectedImages.length === 0)}
+              aria-label="Invia messaggio"
+              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {streaming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
         <p className="mt-2 text-center text-[10px] text-muted-foreground">
           Invio per inviare&nbsp;·&nbsp;Shift+Invio per andare a capo
         </p>
-      </ChatPanel.Input>
-    </ChatPanel>
+      </div>
+    </div>
+    </>
   );
 }
