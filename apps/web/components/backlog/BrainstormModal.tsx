@@ -39,6 +39,7 @@ interface BrainstormDrawerProps {
   repositories: Repository[];
   contextDocs?: ContextDocument[];
   onImported: () => void;
+  workspaceId: string;
 }
 
 type ImportData = {
@@ -396,6 +397,7 @@ export function BrainstormModal({
   repositories,
   contextDocs = [],
   onImported,
+  workspaceId,
 }: BrainstormDrawerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -414,8 +416,19 @@ export function BrainstormModal({
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [imageErrors, setImageErrors] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Active repo from global selector ────────────────────────────────────────
+  const activeRepoFullName = (() => {
+    if (typeof window === "undefined") return repositories[0]?.full_name ?? "";
+    const storedId = localStorage.getItem(`robin:activeRepoId:${workspaceId}`);
+    if (!storedId) return repositories[0]?.full_name ?? "";
+    const repo = repositories.find((r) => r.id === storedId);
+    return repo?.full_name ?? repositories[0]?.full_name ?? "";
+  })();
 
   // ── Mobile bottom drawer ────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(false);
@@ -449,7 +462,7 @@ export function BrainstormModal({
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
@@ -592,6 +605,7 @@ export function BrainstormModal({
   async function sendMessage(text: string, isProgrammatic = false, images?: SelectedImage[]) {
     if (!text && !images?.length) return;
     if (streaming) return;
+    userScrolledUpRef.current = false;
 
     // Capture images for this turn (only for user-initiated messages)
     if (isProgrammatic) {
@@ -911,7 +925,7 @@ export function BrainstormModal({
         aria-hidden="true"
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
+          "fixed inset-0 z-30 transition-opacity duration-300",
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
       />
@@ -1049,7 +1063,16 @@ export function BrainstormModal({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+        onScroll={() => {
+          const el = messagesContainerRef.current;
+          if (!el) return;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          userScrolledUpRef.current = !atBottom;
+        }}
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full py-8 text-center">
             <div className="h-12 w-12 rounded-full bg-foreground/5 flex items-center justify-center mb-3">
@@ -1134,6 +1157,7 @@ export function BrainstormModal({
             truncated={importData.truncated}
             originalCount={importData.originalCount}
             repositories={repositories}
+            initialDefaultRepo={activeRepoFullName}
             onDismiss={() => {
               setImportData(null);
               // User dismissed import without creating tasks: discard pending images

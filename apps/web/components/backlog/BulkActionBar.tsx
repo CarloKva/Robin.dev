@@ -42,7 +42,7 @@ export function BulkActionBar({ selectedIds, sprints, onDone }: BulkActionBarPro
 
   return (
     <div className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-2xl md:bottom-6">
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-popover px-4 py-3 shadow-lg">
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-white px-4 py-3 shadow-lg">
         {error && (
           <p className="text-xs text-destructive">{error}</p>
         )}

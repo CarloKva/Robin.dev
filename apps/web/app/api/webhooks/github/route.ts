@@ -38,6 +38,7 @@ function isHandledEvent(event: string, action?: string): boolean {
   if (event === "pull_request_review_comment") return true;
   if (event === "issue_comment") return true;
   if (event === "pull_request" && action === "closed") return true;
+  if (event === "pull_request" && action === "opened") return true;
   return false;
 }
 

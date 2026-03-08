@@ -8,12 +8,25 @@ export type DashboardMetrics = {
   inQueue: number;
   /** Tasks in `blocked` or `failed` status that need user attention. */
   needsAttention: number;
+  /** Tasks currently in `in_review` or `review_pending` status. */
+  inReview: number;
+  /** Count of active sprints (status = 'active'). */
+  activeSprint: number;
   /** Total task count across all statuses — used to show onboarding state. */
   total: number;
   /** Per-day counts for the last 7 days (index 0 = 6 days ago, index 6 = today). */
   completedSparkline: number[];
   inQueueSparkline: number[];
   needsAttentionSparkline: number[];
+};
+
+export type RecentTask = {
+  id: string;
+  title: string;
+  status: string;
+  agent_name: string | null;
+  sprint_name: string | null;
+  updated_at: string;
 };
 
 export type FeedEntry = {
@@ -160,6 +173,8 @@ export async function getDashboardMetrics(
     completedResult,
     queueResult,
     attentionResult,
+    inReviewResult,
+    activeSprintResult,
     totalResult,
     completedDailyResult,
     queueDailyResult,
@@ -183,6 +198,18 @@ export async function getDashboardMetrics(
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
       .in("status", ["blocked", "failed"]),
+
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .in("status", ["in_review", "review_pending"]),
+
+    supabase
+      .from("sprints")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "active"),
 
     supabase
       .from("tasks")
@@ -218,6 +245,8 @@ export async function getDashboardMetrics(
     completedThisWeek: completedResult.count ?? 0,
     inQueue: queueResult.count ?? 0,
     needsAttention: attentionResult.count ?? 0,
+    inReview: inReviewResult.count ?? 0,
+    activeSprint: activeSprintResult.count ?? 0,
     total: totalResult.count ?? 0,
     completedSparkline: buildSparkline(
       (completedDailyResult.data ?? []).map((r) => r.updated_at as string)
@@ -306,4 +335,63 @@ export async function getActiveTaskData(
     created_at: task.created_at as string,
     projectedState,
   };
+}
+
+/**
+ * Fetches the N most recently updated tasks with agent name and sprint name.
+ * Used for the dashboard "recent tasks" table.
+ */
+export async function getRecentTasksForDashboard(
+  workspaceId: string,
+  limit = 10
+): Promise<RecentTask[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: tasks, error } = await supabase
+    .from("tasks")
+    .select("id, title, status, updated_at, assigned_agent_id, sprint_id")
+    .eq("workspace_id", workspaceId)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !tasks || tasks.length === 0) return [];
+
+  // Fetch agent names
+  const agentIds = [...new Set(
+    tasks.map((t) => t.assigned_agent_id as string | null).filter((id): id is string => Boolean(id))
+  )];
+  const sprintIds = [...new Set(
+    tasks.map((t) => t.sprint_id as string | null).filter((id): id is string => Boolean(id))
+  )];
+
+  const [agentRows, sprintRows] = await Promise.all([
+    agentIds.length > 0
+      ? supabase.from("agents").select("id, name").in("id", agentIds).then(({ data }) => data ?? [])
+      : Promise.resolve([]),
+    sprintIds.length > 0
+      ? supabase.from("sprints").select("id, name").in("id", sprintIds).then(({ data }) => data ?? [])
+      : Promise.resolve([]),
+  ]);
+
+  const agentNameById: Record<string, string> = {};
+  for (const a of agentRows) {
+    agentNameById[a.id as string] = a.name as string;
+  }
+  const sprintNameById: Record<string, string> = {};
+  for (const s of sprintRows) {
+    sprintNameById[s.id as string] = s.name as string;
+  }
+
+  return tasks.map((t) => ({
+    id: t.id as string,
+    title: t.title as string,
+    status: t.status as string,
+    agent_name: (t.assigned_agent_id as string | null)
+      ? (agentNameById[t.assigned_agent_id as string] ?? null)
+      : null,
+    sprint_name: (t.sprint_id as string | null)
+      ? (sprintNameById[t.sprint_id as string] ?? null)
+      : null,
+    updated_at: t.updated_at as string,
+  }));
 }
