@@ -71,18 +71,19 @@ export type KVAAuthContext = {
 export function extractKVAAuth(
   request: Request
 ): { ok: true; ctx: KVAAuthContext } | { ok: false; response: NextResponse } {
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  // Use X-KVA-Token instead of Authorization: Bearer to avoid Clerk
+  // intercepting the header even on public routes (Clerk reads Authorization
+  // regardless of route protection status — by design).
+  const token = request.headers.get("X-KVA-Token");
+  if (!token) {
     return {
       ok: false,
       response: NextResponse.json(
-        { error: "Missing or malformed Authorization header" },
+        { error: "Missing X-KVA-Token header" },
         { status: 401 }
       ),
     };
   }
-
-  const token = authHeader.slice(7);
 
   try {
     const ssoPayload = verifyKVAJwt(token);
