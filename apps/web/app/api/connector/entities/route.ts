@@ -15,6 +15,15 @@ const querySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Strips ASCII control characters (U+0000–U+001F) that break JSON parsers. */
+function sanitizeText(text: string): string {
+  return text.replace(/[\x00-\x1F]/g, " ").trim();
+}
+
+// ---------------------------------------------------------------------------
 // Entity mappers
 // ---------------------------------------------------------------------------
 
@@ -41,11 +50,11 @@ type AgentRow = {
 };
 
 function mapTaskToKO(task: TaskRow): KOCompatibleEntity {
-  const rawSummary = task.description?.trim() ?? "";
+  const rawSummary = sanitizeText(task.description ?? "");
   const summary =
     rawSummary.length > 0
       ? rawSummary.slice(0, 500)
-      : `${task.status} task: ${task.title}`.slice(0, 500);
+      : sanitizeText(`${task.status} task: ${task.title}`).slice(0, 500);
 
   const entityType: KOEntityType =
     task.status === "completed" || task.status === "review_pending"
@@ -57,7 +66,7 @@ function mapTaskToKO(task: TaskRow): KOCompatibleEntity {
     type: entityType,
     title: task.title,
     summary,
-    content: task.description.length > 500 ? task.description : undefined,
+    content: task.description.length > 500 ? sanitizeText(task.description) : undefined,
     metadata: {
       source: "robin-dev",
       createdAt: task.created_at,
