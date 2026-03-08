@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Repository } from "@robin/shared-types";
@@ -54,59 +54,50 @@ export function ImportPreviewModal({
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [defaultRepo, setDefaultRepo] = useState<string>(() => repositories[0]?.full_name ?? "");
-  const [isEntered, setIsEntered] = useState(false);
 
-  // Touch drag for mobile bottom drawer
+  // Animation states
+  const [visible, setVisible] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Swipe state for mobile drawer
   const [dragY, setDragY] = useState(0);
-  const dragStartY = useRef(0);
-  const dragStartTime = useRef(0);
-  const isDragging = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ y: 0, time: 0 });
 
-  // Trigger enter animation on mount
+  // Mobile detection
   useEffect(() => {
-    requestAnimationFrame(() => requestAnimationFrame(() => setIsEntered(true)));
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Animate in on mount
+  useEffect(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
   }, []);
 
   // Body scroll lock
   useEffect(() => {
+    const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Escape key
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") handleClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleClose() {
-    setIsEntered(false);
-    setTimeout(onClose, 200);
-  }
-
-  function handleTouchStart(e: React.TouchEvent) {
-    const touch = e.touches[0];
-    if (!touch) return;
-    dragStartY.current = touch.clientY;
-    dragStartTime.current = Date.now();
-    isDragging.current = true;
+    setVisible(false);
     setDragY(0);
-  }
-
-  function handleTouchMove(e: React.TouchEvent) {
-    if (!isDragging.current) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const delta = touch.clientY - dragStartY.current;
-    setDragY(Math.max(0, delta));
-  }
-
-  function handleTouchEnd() {
-    if (!isDragging.current) return;
-    isDragging.current = false;
-    const elapsed = Date.now() - dragStartTime.current;
-    const velocity = dragY / (elapsed / 1000);
-    if (dragY > 80 || velocity > 500) {
-      handleClose();
-    } else {
-      setDragY(0);
-    }
+    setTimeout(onClose, 300);
   }
 
   const tasksWithoutRepo = tasks.filter((t) => !t.repository);
@@ -146,44 +137,45 @@ export function ImportPreviewModal({
     }
   }
 
-  const overlayStyle: React.CSSProperties = {
-    opacity: isEntered ? 1 : 0,
-    transition: "opacity 200ms",
-  };
+  // Touch handlers for swipe-to-close
+  function handleTouchStart(e: React.TouchEvent) {
+    dragStartRef.current = { y: e.touches[0]!.clientY, time: Date.now() };
+    setIsDragging(true);
+    setDragY(0);
+  }
 
-  const modalStyle: React.CSSProperties = {
-    opacity: isEntered ? 1 : 0,
-    transform: isEntered ? "scale(1)" : "scale(0.95)",
-    transition: isEntered
-      ? "opacity 250ms, transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1)"
-      : "opacity 200ms ease-in, transform 200ms ease-in",
-  };
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!isDragging) return;
+    const delta = e.touches[0]!.clientY - dragStartRef.current.y;
+    if (delta > 0) setDragY(delta);
+  }
 
-  const drawerStyle: React.CSSProperties = isDragging.current
-    ? { transform: `translateY(${dragY}px)`, transition: "none" }
-    : isEntered
-      ? { transform: "translateY(0)", transition: "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)" }
-      : { transform: "translateY(100%)", transition: "transform 200ms ease-in" };
+  function handleTouchEnd() {
+    if (!isDragging) return;
+    const elapsed = Date.now() - dragStartRef.current.time;
+    const velocity = elapsed > 0 ? (dragY / elapsed) * 1000 : 0;
+    if (dragY > 80 || velocity > 500) {
+      handleClose();
+    } else {
+      setDragY(0);
+    }
+    setIsDragging(false);
+  }
 
-  const closeButton = (
-    <button
+  const overlayEl = (
+    <div
+      className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      style={{
+        opacity: visible ? 1 : 0,
+        transition: "opacity 200ms ease",
+      }}
       onClick={handleClose}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white transition-opacity hover:opacity-70"
-      aria-label="Chiudi"
-    >
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path
-          d="M12 4L4 12M4 4L12 12"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    </button>
+      aria-hidden="true"
+    />
   );
 
-  const modalHeader = (
-    <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
+  const headerEl = (
+    <div className="flex items-center justify-between border-b border-border px-5 py-4 shrink-0">
       <div>
         <h2 className="font-semibold text-base">
           Anteprima import — {tasks.length}{" "}
@@ -195,12 +187,20 @@ export function ImportPreviewModal({
           </p>
         )}
       </div>
-      {closeButton}
+      <button
+        onClick={handleClose}
+        aria-label="Chiudi"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] transition-colors hover:bg-gray-200 dark:hover:bg-[#3A3A3C]"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
     </div>
   );
 
-  const modalBody = (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+  const bodyEl = (
+    <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
       {/* Fallback repository selector */}
       {needsFallback && (
         <div className="rounded-lg border border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20 px-4 py-3 space-y-2">
@@ -272,20 +272,10 @@ export function ImportPreviewModal({
                       <span className="font-medium text-sm leading-snug">
                         {task.title}
                       </span>
-                      <span
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-xs font-medium",
-                          TYPE_CLASS[task.type]
-                        )}
-                      >
+                      <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium", TYPE_CLASS[task.type])}>
                         {TYPE_LABEL[task.type]}
                       </span>
-                      <span
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-xs font-medium",
-                          PRIORITY_CLASS[task.priority]
-                        )}
-                      >
+                      <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium", PRIORITY_CLASS[task.priority])}>
                         {PRIORITY_ICON[task.priority]} {task.priority}
                       </span>
                       {repoLabel !== null ? (
@@ -329,8 +319,8 @@ export function ImportPreviewModal({
     </div>
   );
 
-  const modalFooter = (
-    <div className="border-t border-border px-6 py-4 shrink-0 space-y-2">
+  const footerEl = (
+    <div className="border-t border-border px-5 py-4 shrink-0 space-y-2">
       {apiError && (
         <p className="text-xs text-red-600 dark:text-red-400">{apiError}</p>
       )}
@@ -345,7 +335,7 @@ export function ImportPreviewModal({
         <button
           onClick={() => void handleImport()}
           disabled={loading || !canImport}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           {loading ? "Importando…" : `Importa ${tasks.length} task`}
         </button>
@@ -353,46 +343,56 @@ export function ImportPreviewModal({
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 z-50">
-      {/* Overlay */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        style={overlayStyle}
-        onClick={handleClose}
-        aria-hidden="true"
-      />
-
-      {/* Desktop modal (sm+) */}
-      <div className="hidden sm:flex absolute inset-0 items-center justify-center pointer-events-none">
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 z-50">
+        {overlayEl}
         <div
-          className="relative w-full sm:max-w-2xl rounded-2xl shadow-2xl bg-white dark:bg-[#1C1C1E] pointer-events-auto flex flex-col"
-          style={{ maxHeight: "85vh", ...modalStyle }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {modalHeader}
-          {modalBody}
-          {modalFooter}
-        </div>
-      </div>
-
-      {/* Mobile bottom drawer (< sm) */}
-      <div className="flex sm:hidden absolute inset-0 items-end justify-center pointer-events-none">
-        <div
-          className="relative w-full rounded-t-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl pointer-events-auto flex flex-col overflow-hidden"
-          style={{ maxHeight: "90vh", ...drawerStyle }}
-          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl max-h-[90vh]"
+          style={{
+            transform: visible ? `translateY(${dragY}px)` : "translateY(100%)",
+            transition: isDragging
+              ? "none"
+              : visible
+                ? "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)"
+                : "transform 300ms ease-in",
+          }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           {/* Handle bar */}
-          <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="flex justify-center mt-3 shrink-0">
             <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
           </div>
-          {modalHeader}
-          {modalBody}
-          {modalFooter}
+          {headerEl}
+          {bodyEl}
+          {footerEl}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      {overlayEl}
+      <div
+        className="absolute inset-0 flex items-center justify-center p-4"
+        onClick={(e) => e.target === e.currentTarget && handleClose()}
+      >
+        <div
+          className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl"
+          style={{
+            opacity: visible ? 1 : 0,
+            transform: visible ? "scale(1)" : "scale(0.95)",
+            transition: visible
+              ? "transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease"
+              : "transform 200ms ease-in, opacity 200ms ease-in",
+          }}
+        >
+          {headerEl}
+          {bodyEl}
+          {footerEl}
         </div>
       </div>
     </div>

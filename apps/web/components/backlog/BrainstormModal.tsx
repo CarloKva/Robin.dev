@@ -417,6 +417,12 @@ export function BrainstormModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Mobile bottom drawer ────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ y: 0, time: 0 });
+
   // ── Image attachments ───────────────────────────────────────────────────────
   // Images staged in the input area before sending
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
@@ -465,7 +471,15 @@ export function BrainstormModal({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onClose]);
 
-  // Body scroll lock on mobile when drawer is open
+  // Mobile detection
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Body scroll lock when drawer is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -864,6 +878,32 @@ export function BrainstormModal({
 
   const displayModelName = modelName ?? AI_MODEL_NAME;
 
+  // Swipe-to-close handlers for mobile bottom drawer
+  function handleTouchStart(e: React.TouchEvent) {
+    dragStartRef.current = { y: e.touches[0]!.clientY, time: Date.now() };
+    setIsDragging(true);
+    setDragY(0);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!isDragging) return;
+    const delta = e.touches[0]!.clientY - dragStartRef.current.y;
+    if (delta > 0) setDragY(delta);
+  }
+
+  function handleTouchEnd() {
+    if (!isDragging) return;
+    const elapsed = Date.now() - dragStartRef.current.time;
+    const velocity = elapsed > 0 ? (dragY / elapsed) * 1000 : 0;
+    if (dragY > 80 || velocity > 500) {
+      setDragY(0);
+      onClose();
+    } else {
+      setDragY(0);
+    }
+    setIsDragging(false);
+  }
+
   return (
     <>
       {/* Overlay */}
@@ -878,13 +918,37 @@ export function BrainstormModal({
 
       <div
         className={cn(
-          "fixed right-0 top-0 z-40 h-screen w-full md:w-[480px]",
-          "flex flex-col bg-white dark:bg-[#1C1C1E] shadow-2xl",
-          "transition-transform duration-300 ease-in-out",
-          isOpen ? "translate-x-0" : "translate-x-full"
+          "fixed z-40 flex flex-col bg-white dark:bg-[#1C1C1E] shadow-2xl",
+          isMobile
+            ? "inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]"
+            : "right-0 top-0 h-screen w-[480px]"
         )}
+        style={
+          isMobile
+            ? {
+                transform: isOpen ? `translateY(${dragY}px)` : "translateY(100%)",
+                transition: isDragging
+                  ? "none"
+                  : isOpen
+                    ? "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)"
+                    : "transform 300ms ease-in",
+              }
+            : {
+                transform: isOpen ? "translateX(0)" : "translateX(100%)",
+                transition: "transform 300ms ease-in-out",
+              }
+        }
         aria-hidden={!isOpen}
+        onTouchStart={isMobile ? handleTouchStart : undefined}
+        onTouchMove={isMobile ? handleTouchMove : undefined}
+        onTouchEnd={isMobile ? handleTouchEnd : undefined}
       >
+        {/* Handle bar — mobile only */}
+        {isMobile && (
+          <div className="flex justify-center mt-3 shrink-0">
+            <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
+          </div>
+        )}
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
         <div className="flex items-center gap-2.5">
