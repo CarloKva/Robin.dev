@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { UserButton } from "@clerk/nextjs";
 import {
   LayoutDashboard,
   ListTodo,
@@ -14,9 +13,10 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  ChevronsUpDown,
+  ChevronDown,
 } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
@@ -33,7 +33,6 @@ const NAV_ITEMS_PRIMARY: NavItem[] = [
 
 const NAV_ITEMS_SECONDARY: NavItem[] = [
   { href: "/reports", label: "Reports", icon: BarChart2 },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const STORAGE_KEY = "sidebar-collapsed";
@@ -57,6 +56,8 @@ export function Sidebar({ workspaceName }: SidebarProps) {
   const { user } = useUser();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -64,6 +65,19 @@ export function Sidebar({ workspaceName }: SidebarProps) {
     if (stored === "true") {
       setCollapsed(true);
     }
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        workspaceRef.current &&
+        !workspaceRef.current.contains(event.target as Node)
+      ) {
+        setWorkspaceOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const toggleCollapsed = () => {
@@ -86,6 +100,14 @@ export function Sidebar({ workspaceName }: SidebarProps) {
     user?.username ??
     "";
   const userEmail = user?.primaryEmailAddress?.emailAddress ?? "";
+  const userInitials = userName
+    ? userName
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+    : "?";
 
   function renderNavItem(item: NavItem) {
     const href = item.href === "/backlog" ? backlogHref : item.href;
@@ -98,19 +120,19 @@ export function Sidebar({ workspaceName }: SidebarProps) {
     const linkEl = (
       <Link
         href={href}
-        className={`flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-          isCollapsed ? "justify-center" : "gap-3"
-        } ${
+        className={cn(
+          "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md min-h-[36px]",
+          "transition-colors duration-150",
+          isCollapsed && "justify-center gap-0",
           isActive
-            ? "bg-[#007AFF]/10 dark:bg-[#007AFF]/15 text-[#007AFF]"
-            : "text-[#3A3A3C] dark:text-[#EBEBF5] hover:bg-gray-100 dark:hover:bg-[#2C2C2E]"
-        }`}
+            ? "bg-accent text-foreground border-l-2 border-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+        )}
       >
-        <Icon
-          className={`w-5 h-5 shrink-0 ${isActive ? "text-[#007AFF]" : ""}`}
-          strokeWidth={1.5}
-        />
-        {!isCollapsed && <span>{item.label}</span>}
+        <Icon size={16} className="shrink-0" />
+        <span className={cn(!isCollapsed ? "block" : "sr-only")}>
+          {item.label}
+        </span>
       </Link>
     );
 
@@ -125,82 +147,119 @@ export function Sidebar({ workspaceName }: SidebarProps) {
     return <div key={item.href}>{linkEl}</div>;
   }
 
+  const settingsItem = { href: "/settings", label: "Settings", icon: Settings };
+
   return (
-    <div className="relative hidden md:flex">
-      <aside
-        className={`flex flex-col border-r border-[#D1D1D6] dark:border-[#38383A] bg-white dark:bg-[#1C1C1E] overflow-hidden transition-all duration-[250ms] ease-in-out ${
-          isCollapsed ? "w-16" : "w-64"
-        }`}
-      >
-        {/* Workspace block */}
-        <div className={`px-3 pt-3 pb-2 ${isCollapsed ? "flex justify-center" : ""}`}>
-          <div
-            className={`flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#2C2C2E] cursor-pointer transition-colors duration-150 ${
-              isCollapsed ? "justify-center px-0" : ""
-            }`}
-          >
-            <div className="w-8 h-8 rounded-[10px] bg-[#007AFF] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-              {workspaceInitials}
-            </div>
-            {!isCollapsed && (
-              <>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-[#1C1C1E] dark:text-white truncate">
-                    {workspaceName}
-                  </span>
-                  <span className="text-xs text-[#8E8E93]">Workspace</span>
-                </div>
-                <ChevronsUpDown className="w-4 h-4 text-[#8E8E93] flex-shrink-0" />
-              </>
-            )}
+    <aside
+      className={cn(
+        "relative hidden md:flex flex-col h-screen sticky top-0",
+        "bg-background border-r border-border overflow-hidden",
+        "transition-[width] duration-150 ease-in-out",
+        isCollapsed ? "w-14" : "w-60"
+      )}
+    >
+      {/* Workspace switcher */}
+      <div className="px-2 pt-3 pb-2" ref={workspaceRef}>
+        <button
+          onClick={() => setWorkspaceOpen((o) => !o)}
+          className={cn(
+            "w-full flex items-center gap-2 px-3 py-2 rounded-md",
+            "text-sm font-medium hover:bg-accent transition-colors duration-150",
+            isCollapsed && "justify-center px-2"
+          )}
+        >
+          <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-primary-foreground text-[10px] font-semibold shrink-0">
+            {workspaceInitials}
           </div>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-2">
-          {NAV_ITEMS_PRIMARY.map(renderNavItem)}
-
-          {/* Separator */}
-          <div className="mx-0 my-1 h-px bg-[#D1D1D6] dark:bg-[#38383A]" />
-
-          {NAV_ITEMS_SECONDARY.map(renderNavItem)}
-        </nav>
-
-        {/* Footer */}
-        <div className="mt-auto border-t border-[#D1D1D6] dark:border-[#38383A] pt-3 px-3 pb-3 flex items-center gap-3">
-          <UserButton afterSignOutUrl="/" />
           {!isCollapsed && (
             <>
-              <div className="flex flex-col min-w-0 flex-1">
-                {userName && (
-                  <span className="text-sm font-medium text-[#1C1C1E] dark:text-white truncate">
-                    {userName}
-                  </span>
-                )}
-                {userEmail && (
-                  <span className="text-xs text-[#8E8E93] truncate">{userEmail}</span>
-                )}
-              </div>
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex-shrink-0">
-                beta
+              <span className="flex-1 text-left text-foreground truncate">
+                {workspaceName}
               </span>
+              <ChevronDown size={14} className="text-muted-foreground shrink-0" />
             </>
           )}
-        </div>
-      </aside>
+        </button>
 
-      {/* Toggle collapse button — right edge, vertically centered */}
+        {workspaceOpen && !isCollapsed && (
+          <div className="absolute left-2 right-2 top-[52px] z-50 rounded-md border border-border bg-background shadow-md p-1">
+            <div className="px-2 py-1.5 rounded-md bg-accent">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-primary flex items-center justify-center text-primary-foreground text-[10px] font-semibold">
+                  {workspaceInitials}
+                </div>
+                <span className="text-sm font-medium text-foreground truncate">
+                  {workspaceName}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex flex-1 flex-col gap-0.5 px-2 pb-2 overflow-y-auto">
+        {NAV_ITEMS_PRIMARY.map(renderNavItem)}
+
+        <div className="my-1 h-px bg-border" />
+
+        {NAV_ITEMS_SECONDARY.map(renderNavItem)}
+      </nav>
+
+      {/* Footer */}
+      <div className="border-t border-border px-2 pt-2 pb-3 flex flex-col gap-0.5">
+        {/* Settings link */}
+        {renderNavItem(settingsItem)}
+
+        {/* User info */}
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 mt-1",
+            isCollapsed && "justify-center px-2"
+          )}
+        >
+          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground text-xs font-semibold shrink-0 overflow-hidden">
+            {user?.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.imageUrl} alt={userName} className="w-full h-full object-cover" />
+            ) : (
+              userInitials
+            )}
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col min-w-0 flex-1">
+              {userName && (
+                <span className="text-sm font-medium text-foreground truncate">
+                  {userName}
+                </span>
+              )}
+              {userEmail && (
+                <span className="text-xs text-muted-foreground truncate">
+                  {userEmail}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Toggle collapse button */}
       <button
         onClick={toggleCollapsed}
-        className="absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-10 bg-gray-100 dark:bg-[#2C2C2E] rounded-r-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-[#3A3A3C] cursor-pointer transition-colors duration-150 border border-[#D1D1D6] dark:border-[#38383A] border-l-0"
+        className={cn(
+          "absolute -right-3 top-1/2 -translate-y-1/2 z-10",
+          "w-6 h-6 rounded-full bg-background border border-border",
+          "flex items-center justify-center",
+          "hover:bg-accent transition-colors duration-150 cursor-pointer"
+        )}
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {isCollapsed ? (
-          <ChevronRight className="w-3 h-3 text-[#8E8E93]" />
+          <ChevronRight size={12} className="text-muted-foreground" />
         ) : (
-          <ChevronLeft className="w-3 h-3 text-[#8E8E93]" />
+          <ChevronLeft size={12} className="text-muted-foreground" />
         )}
       </button>
-    </div>
+    </aside>
   );
 }
