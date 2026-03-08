@@ -10,6 +10,10 @@ export type DashboardMetrics = {
   needsAttention: number;
   /** Total task count across all statuses — used to show onboarding state. */
   total: number;
+  /** Per-day counts for the last 7 days (index 0 = 6 days ago, index 6 = today). */
+  completedSparkline: number[];
+  inQueueSparkline: number[];
+  needsAttentionSparkline: number[];
 };
 
 export type FeedEntry = {
@@ -124,9 +128,24 @@ export async function getDashboardAgents(workspaceId: string): Promise<Dashboard
   });
 }
 
+/** Builds a 7-element sparkline (oldest → today) from a list of ISO timestamps. */
+function buildSparkline(timestamps: string[]): number[] {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const counts: Record<string, number> = {};
+  for (const ts of timestamps) {
+    const day = ts.slice(0, 10);
+    counts[day] = (counts[day] ?? 0) + 1;
+  }
+  return days.map((day) => counts[day] ?? 0);
+}
+
 /**
  * Fetches task count metrics for the dashboard tiles.
- * All three queries run in parallel for performance.
+ * All queries run in parallel for performance.
  */
 export async function getDashboardMetrics(
   workspaceId: string
@@ -135,39 +154,80 @@ export async function getDashboardMetrics(
 
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgoIso = weekAgo.toISOString();
 
-  const [completedResult, queueResult, attentionResult, totalResult] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .eq("status", "completed")
-        .gte("updated_at", weekAgo.toISOString()),
+  const [
+    completedResult,
+    queueResult,
+    attentionResult,
+    totalResult,
+    completedDailyResult,
+    queueDailyResult,
+    attentionDailyResult,
+  ] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "completed")
+      .gte("updated_at", weekAgoIso),
 
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .in("status", ["queued", "in_progress"]),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .in("status", ["queued", "in_progress"]),
 
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .in("status", ["blocked", "failed"]),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .in("status", ["blocked", "failed"]),
 
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId),
-    ]);
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId),
+
+    // Sparkline: completed per day (last 7 days)
+    supabase
+      .from("tasks")
+      .select("updated_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "completed")
+      .gte("updated_at", weekAgoIso),
+
+    // Sparkline: queued/in_progress entries per day (last 7 days)
+    supabase
+      .from("tasks")
+      .select("updated_at")
+      .eq("workspace_id", workspaceId)
+      .in("status", ["queued", "in_progress"])
+      .gte("updated_at", weekAgoIso),
+
+    // Sparkline: blocked/failed entries per day (last 7 days)
+    supabase
+      .from("tasks")
+      .select("updated_at")
+      .eq("workspace_id", workspaceId)
+      .in("status", ["blocked", "failed"])
+      .gte("updated_at", weekAgoIso),
+  ]);
 
   return {
     completedThisWeek: completedResult.count ?? 0,
     inQueue: queueResult.count ?? 0,
     needsAttention: attentionResult.count ?? 0,
     total: totalResult.count ?? 0,
+    completedSparkline: buildSparkline(
+      (completedDailyResult.data ?? []).map((r) => r.updated_at as string)
+    ),
+    inQueueSparkline: buildSparkline(
+      (queueDailyResult.data ?? []).map((r) => r.updated_at as string)
+    ),
+    needsAttentionSparkline: buildSparkline(
+      (attentionDailyResult.data ?? []).map((r) => r.updated_at as string)
+    ),
   };
 }
 
