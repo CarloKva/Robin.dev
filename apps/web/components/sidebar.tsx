@@ -11,8 +11,8 @@ import {
   Bot,
   BarChart2,
   Settings,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   ChevronDown,
 } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -158,8 +158,29 @@ export function Sidebar({ workspaceName }: SidebarProps) {
         isCollapsed ? "w-14" : "w-60"
       )}
     >
+      {/* Top bar: collapse toggle */}
+      <div className={cn("px-2 pt-2 pb-1 flex", isCollapsed ? "justify-center" : "justify-end")}>
+        <Tooltip content={isCollapsed ? "Expand sidebar" : "Collapse sidebar"} side="right">
+          <button
+            onClick={toggleCollapsed}
+            className={cn(
+              "w-7 h-7 flex items-center justify-center rounded-md",
+              "text-muted-foreground hover:bg-accent hover:text-foreground",
+              "transition-colors duration-150"
+            )}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen size={15} />
+            ) : (
+              <PanelLeftClose size={15} />
+            )}
+          </button>
+        </Tooltip>
+      </div>
+
       {/* Workspace switcher */}
-      <div className="px-2 pt-3 pb-2" ref={workspaceRef}>
+      <div className="px-2 pb-2" ref={workspaceRef}>
         <button
           onClick={() => setWorkspaceOpen((o) => !o)}
           className={cn(
@@ -182,7 +203,7 @@ export function Sidebar({ workspaceName }: SidebarProps) {
         </button>
 
         {workspaceOpen && !isCollapsed && (
-          <div className="absolute left-2 right-2 top-[52px] z-50 rounded-md border border-border bg-background shadow-md p-1">
+          <div className="absolute left-2 right-2 top-[80px] z-50 rounded-md border border-border bg-background shadow-md p-1">
             <div className="px-2 py-1.5 rounded-md bg-accent">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded bg-primary flex items-center justify-center text-primary-foreground text-[10px] font-semibold">
@@ -242,24 +263,6 @@ export function Sidebar({ workspaceName }: SidebarProps) {
           )}
         </div>
       </div>
-
-      {/* Toggle collapse button */}
-      <button
-        onClick={toggleCollapsed}
-        className={cn(
-          "absolute -right-3 top-1/2 -translate-y-1/2 z-10",
-          "w-6 h-6 rounded-full bg-background border border-border",
-          "flex items-center justify-center",
-          "hover:bg-accent transition-colors duration-150 cursor-pointer"
-        )}
-        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {isCollapsed ? (
-          <ChevronRight size={12} className="text-muted-foreground" />
-        ) : (
-          <ChevronLeft size={12} className="text-muted-foreground" />
-        )}
-      </button>
     </aside>
   );
 }
