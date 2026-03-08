@@ -56,8 +56,8 @@ export default async function DashboardLayout({
             />
           )}
         </Header>
-        {/* pb-16 reserves space for the mobile bottom nav bar */}
-        <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6">{children}</main>
+        {/* padding-bottom accounts for the 49px tab bar + env(safe-area-inset-bottom) on mobile */}
+        <main className="flex-1 overflow-y-auto p-4 pb-[calc(49px+env(safe-area-inset-bottom))] md:p-6 md:pb-6">{children}</main>
       </div>
       <MobileNav />
       {/* Global quick task form — accessible via N shortcut from any page */}
