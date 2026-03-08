@@ -763,7 +763,31 @@ function BacklogJiraViewInner({
       <BulkActionBar
         selectedIds={[...selectedIds]}
         sprints={allSprints}
-        onDone={() => {
+        onDone={(action, taskIds, payload) => {
+          if (action === "add_to_sprint" && payload?.["sprintId"]) {
+            const sprintId = payload["sprintId"] as string;
+            const movedTasks = localBacklog.filter((t) => taskIds.includes(t.id));
+            setLocalBacklog((prev) => prev.filter((t) => !taskIds.includes(t.id)));
+            setLocalSprints((prev) =>
+              prev.map((s) =>
+                s.id === sprintId
+                  ? {
+                      ...s,
+                      tasks: [
+                        ...s.tasks,
+                        ...movedTasks.map((t) => ({
+                          ...t,
+                          sprint_id: sprintId,
+                          status: "sprint_ready" as TaskStatus,
+                        })),
+                      ],
+                    }
+                  : s
+              )
+            );
+          } else if (action === "cancel") {
+            setLocalBacklog((prev) => prev.filter((t) => !taskIds.includes(t.id)));
+          }
           setSelectedIds(new Set());
           refresh();
         }}
