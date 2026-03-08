@@ -1,46 +1,53 @@
-# Task: Dashboard — Redesign metric tiles con sparkline e count-up animation
+# Task: Task Detail — PR Card con status, commit list e link GitHub
 
 **Type:** feature
 **Priority:** medium
-**Task ID:** 1d5d3488-79fc-4b0c-b835-5a1910c4949d
+**Task ID:** 4f384eef-347f-434a-ab3c-91f91db130e8
 
 ## Description
 
 ## Obiettivo
-Redesign dei 3 MetricsTile nella dashboard populated (`DashboardClient.tsx`) con numero grande, colore semantico, micro sparkline e animazione count-up al mount.
+Redesign del componente `PRCard` nel task detail con bordo colorato, status PR visivo, lista commit compatta e link diretto a GitHub.
 
-## Layout
-- Grid 3 colonne su desktop, 1 colonna su mobile
-- Ogni tile: card rounded-ios-lg, shadow-ios-sm, bg-white dark:bg-[#1C1C1E], padding p-5
+## PR Card container
+- Card rounded-ios-lg, shadow-ios-sm, bg-white dark:bg-[#1C1C1E]
+- Bordo sinistro 3px colorato in base allo status PR:
+  - open: viola (#8B5CF6)
+  - merged: viola scuro (#6D28D9)
+  - closed: rosso (#FF3B30)
+  - draft: grigio (#8E8E93)
+- Posizionata nella colonna sinistra del task detail, sotto la descrizione
 
-## Contenuto ogni tile
-- Numero principale: font-bold text-4xl, colore semantico
-- Label descrittiva sotto: text-sm text-[#8E8E93]
-- Icona Lucide in alto a destra: colore semantico, sfondo colorato pill (opacity 10%)
-- Micro sparkline in basso: mini bar chart 7 valori (ultimi 7 giorni), altezza 32px
+## Header PR card
+- Icona GitPullRequest (colore basato su status)
+- Titolo PR: font-medium, troncato su 1 riga
+- Status badge: pill colorata (open=viola, merged=viola scuro, closed=rosso, draft=grigio)
+- Link "Apri su GitHub" con icona ExternalLink, allineato a destra, testo #007AFF
 
-## Colori semantici per tipo
-- Task completate → verde #34C759
-- Task in coda → blu #007AFF
-- Richiedono attenzione → arancio #FF9500
+## Dettagli PR
+- Numero PR: "#123" text-xs text-[#8E8E93]
+- Branch: icona GitBranch + nome branch, text-xs, pill grigia
+- Data apertura: text-xs text-[#8E8E93]
 
-## Sparkline
-- 7 barre verticali proporzionali ai valori
-- Colore barra: stesso colore semantico della tile, opacity 60%
-- Ultima barra: opacity 100% (oggi)
-- Nessuna libreria chart pesante — implementare con div CSS o SVG inline semplice
+## Commit list
+- Titolo sezione "Commit" con count pill
+- Lista compatta, max 5 commit visibili, resto collassabile con "Mostra altri N"
+- Ogni commit:
+  - Hash corto (7 char): font-mono text-xs, bg-gray-100 dark:bg-[#2C2C2E] pill
+  - Messaggio commit: text-sm, truncate 1 riga, flex-1
+  - Timestamp: text-xs text-[#8E8E93] allineato a destra
+- Separatore sottile tra commit
 
-## Count-up animation
-- Al mount della tile, il numero anima da 0 al valore reale
-- Durata: 1000ms, easing ease-out
-- Usare `react-countup` se già presente, altrimenti implementare con useEffect + requestAnimationFrame
+## Empty state
+- Se nessuna PR collegata: placeholder con icona GitPullRequest muted + testo "Nessuna PR aperta" + sottotitolo "L'agente aprirà una PR quando inizierà a lavorare"
 
 ## Criteri di accettazione
-- [ ] 3 tile con numero, label, icona e colore semantico corretto
-- [ ] Sparkline 7 barre visibile in ogni tile
-- [ ] Count-up animation funzionante al mount
-- [ ] Colori semantici applicati correttamente per tipo metrica
-- [ ] Grid responsive (3 colonne desktop, 1 mobile)
+- [ ] Bordo sinistro colorato corretto per ogni status PR
+- [ ] Header con icona, titolo, status badge e link GitHub
+- [ ] Branch e numero PR visibili
+- [ ] Lista commit con hash, messaggio e timestamp
+- [ ] Collasso commit oltre il quinto
+- [ ] Empty state visibile quando nessuna PR collegata
 - [ ] Dark mode funzionante
 
 ## Required Steps (ALL mandatory — do not skip any)
@@ -48,7 +55,7 @@ Redesign dei 3 MetricsTile nella dashboard populated (`DashboardClient.tsx`) con
 1. Sync with `main` and create a new branch from the latest upstream to avoid merge conflicts:
    ```bash
    git fetch origin
-   git checkout -b feat/1d5d3488-79fc-4b0c-b835-5a1910c4949d origin/main
+   git checkout -b feat/4f384eef-347f-434a-ab3c-91f91db130e8 origin/main
    ```
 2. Implement the task: create or edit files as needed
 3. Run lint and type-check — **both must pass before committing** (see `CLAUDE.md` for exact commands):
@@ -59,15 +66,15 @@ Redesign dei 3 MetricsTile nella dashboard populated (`DashboardClient.tsx`) con
    ```
    Fix all errors and warnings before continuing. Do not commit with failing checks.
 4. Run `git add -A && git commit -m "<descriptive message>"`
-5. Run `git push origin feat/1d5d3488-79fc-4b0c-b835-5a1910c4949d`
-6. Open a Pull Request from `feat/1d5d3488-79fc-4b0c-b835-5a1910c4949d` to `main`
+5. Run `git push origin feat/4f384eef-347f-434a-ab3c-91f91db130e8`
+6. Open a Pull Request from `feat/4f384eef-347f-434a-ab3c-91f91db130e8` to `main`
 7. After opening the PR, verify CI status checks pass:
    ```bash
    gh pr checks <PR_URL> --watch
    ```
    If any check fails (lint, typecheck, build), fix the issue, push to the same branch, and wait for CI again before reporting.
 8. Output the PR URL on the **very last line** of your response in this exact format:
-   `{"pr_url":"<url>","branch":"feat/1d5d3488-79fc-4b0c-b835-5a1910c4949d"}`
+   `{"pr_url":"<url>","branch":"feat/4f384eef-347f-434a-ab3c-91f91db130e8"}`
 
 > IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 4–8.
 > If you only output text without committing and creating a PR, the task will be considered failed.
