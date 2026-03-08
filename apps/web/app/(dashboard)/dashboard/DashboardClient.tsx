@@ -65,15 +65,20 @@ export function DashboardClient({
         <MetricsTile
           value={metrics.completedThisWeek}
           label="Completate questa settimana"
+          type="completed"
+          sparkline={metrics.completedSparkline}
         />
         <MetricsTile
           value={metrics.inQueue}
           label="In coda / in esecuzione"
+          type="queue"
+          sparkline={metrics.inQueueSparkline}
         />
         <MetricsTile
           value={metrics.needsAttention}
           label="Richiedono attenzione"
-          isAttention
+          type="attention"
+          sparkline={metrics.needsAttentionSparkline}
         />
       </div>
 
