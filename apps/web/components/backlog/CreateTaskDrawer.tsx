@@ -17,6 +17,7 @@ import { CustomSelect } from "@/components/ui/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUploader } from "@/components/ImageUploader";
+import { cn } from "@/lib/utils";
 import type { TaskType, Repository, ContextDocument, Sprint, TaskAttachment } from "@robin/shared-types";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
@@ -229,16 +230,33 @@ export function CreateTaskDrawer({
   const router = useRouter();
   const { getToken } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
-  const [destination, setDestination] = useState<"backlog" | "sprint">("backlog");
-  const [selectedSprintId, setSelectedSprintId] = useState<string>("");
   const titleRef = useRef<HTMLInputElement | null>(null);
 
-  const plannableSprints = sprints.filter(
-    (s) => s.status === "planning" || s.status === "active"
+  // Attachment state
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Destination state
+  const plannable = sprints.filter((s) => s.status === "planning" || s.status === "active");
+  const [destination, setDestination] = useState<"backlog" | "sprint">(
+    plannable.length > 0 ? "sprint" : "backlog"
   );
+  const [sprintId, setSprintId] = useState<string>(plannable[0]?.id ?? "");
+
+  // Sync destination when sprints prop changes
+  const sprintsLength = sprints.length;
+  useEffect(() => {
+    const p = sprints.filter((s) => s.status === "planning" || s.status === "active");
+    if (p.length > 0) {
+      setDestination("sprint");
+      setSprintId(p[0]!.id);
+    } else {
+      setDestination("backlog");
+      setSprintId("");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sprintsLength]);
 
   const {
     register,
@@ -295,11 +313,9 @@ export function CreateTaskDrawer({
         context: "",
       });
       setSelectedDocIds([]);
-      setFiles([]);
       setServerError(null);
+      setFiles([]);
       setUploadError(null);
-      setDestination("backlog");
-      setSelectedSprintId("");
     }
   }, [isOpen, reset, repositories]);
 
@@ -327,7 +343,7 @@ export function CreateTaskDrawer({
           : `--- Documenti di contesto allegati ---\n${docsSection}`;
       }
 
-      const body = {
+      const body: Record<string, unknown> = {
         title: data.title,
         description: data.description,
         type: data.type,
@@ -336,8 +352,11 @@ export function CreateTaskDrawer({
         estimated_effort: data.estimated_effort || undefined,
         context: finalContext || undefined,
         ...(data.agent_id ? { preferred_agent_id: data.agent_id } : {}),
-        ...(destination === "sprint" && selectedSprintId ? { sprint_id: selectedSprintId } : {}),
       };
+
+      if (destination === "sprint" && sprintId) {
+        body["sprint_id"] = sprintId;
+      }
 
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -355,7 +374,7 @@ export function CreateTaskDrawer({
 
       const { task } = await res.json() as { task: { id: string; workspace_id: string } };
 
-      // Upload attachments if any
+      // Upload files if any
       if (files.length > 0) {
         try {
           const token = await getToken({ template: "supabase" });
@@ -469,9 +488,7 @@ export function CreateTaskDrawer({
           <div>
             <h2 className="font-semibold text-base text-foreground">Crea task</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {destination === "sprint" && selectedSprintId
-                ? `La task verrà aggiunta allo sprint selezionato.`
-                : "La task verrà aggiunta al backlog."}
+              La task verrà aggiunta al backlog.
             </p>
           </div>
           <button
@@ -539,60 +556,6 @@ export function CreateTaskDrawer({
                 />
               )}
               <FieldError message={errors.repository_id?.message} />
-            </div>
-
-            {/* Destination: backlog or sprint */}
-            <div>
-              <FieldLabel htmlFor="drawer-task-destination">Destinazione</FieldLabel>
-              <div className="mt-1 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDestination("backlog")}
-                  disabled={isSubmitting}
-                  className={[
-                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50",
-                    destination === "backlog"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:bg-accent",
-                  ].join(" ")}
-                >
-                  Backlog
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDestination("sprint");
-                    if (!selectedSprintId && plannableSprints.length > 0) {
-                      setSelectedSprintId(plannableSprints[0]!.id);
-                    }
-                  }}
-                  disabled={isSubmitting || plannableSprints.length === 0}
-                  className={[
-                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50",
-                    destination === "sprint"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:bg-accent",
-                  ].join(" ")}
-                >
-                  Sprint
-                </button>
-              </div>
-              {plannableSprints.length === 0 && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Nessuno sprint in pianificazione disponibile.
-                </p>
-              )}
-              {destination === "sprint" && plannableSprints.length > 0 && (
-                <div className="mt-2">
-                  <CustomSelect
-                    value={selectedSprintId}
-                    onChange={setSelectedSprintId}
-                    options={plannableSprints.map((s) => ({ value: s.id, label: s.name }))}
-                    placeholder="Seleziona sprint"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              )}
             </div>
 
             {/* Type + Priority row */}
@@ -693,6 +656,122 @@ export function CreateTaskDrawer({
               <FieldError message={errors.description?.message} />
             </div>
 
+            {/* Attachments */}
+            <div>
+              <FieldLabel htmlFor="drawer-task-attachments">
+                Allegati{" "}
+                <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
+              </FieldLabel>
+              <div className="mt-1">
+                <ImageUploader files={files} onChange={setFiles} disabled={isSubmitting} />
+              </div>
+              {uploadError !== null && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
+              )}
+            </div>
+
+            {/* Destination: backlog or sprint */}
+            <div>
+              <FieldLabel htmlFor="drawer-task-destination">Destinazione</FieldLabel>
+              <div className="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDestination("backlog")}
+                  disabled={isSubmitting}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    destination === "backlog"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Backlog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDestination("sprint");
+                    if (!sprintId && plannable.length > 0) {
+                      setSprintId(plannable[0]!.id);
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    destination === "sprint"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Sprint
+                </button>
+              </div>
+
+              {destination === "sprint" && (
+                <div className="mt-2">
+                  {plannable.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                      Nessun sprint attivo o in pianificazione.{" "}
+                      <button
+                        type="button"
+                        className="underline hover:text-foreground"
+                        onClick={() => setDestination("backlog")}
+                      >
+                        Aggiungi al backlog
+                      </button>
+                    </p>
+                  ) : (
+                    <div className="space-y-1 rounded-lg border border-border p-1.5">
+                      {plannable.map((s) => (
+                        <label
+                          key={s.id}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                            sprintId === s.id
+                              ? "bg-primary/10 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                              sprintId === s.id
+                                ? "border-primary bg-primary"
+                                : "border-border"
+                            )}
+                          >
+                            {sprintId === s.id && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+                            )}
+                          </span>
+                          <input
+                            type="radio"
+                            name="drawer-sprint"
+                            value={s.id}
+                            checked={sprintId === s.id}
+                            onChange={() => setSprintId(s.id)}
+                            disabled={isSubmitting}
+                            className="sr-only"
+                          />
+                          <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                              s.status === "active"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                                : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                            )}
+                          >
+                            {s.status === "active" ? "attivo" : "planning"}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Context */}
             <div>
               <FieldLabel htmlFor="drawer-task-context">Contesto aggiuntivo</FieldLabel>
@@ -724,20 +803,6 @@ export function CreateTaskDrawer({
                 Opzionale — usato dall&apos;agente come contesto aggiuntivo.
               </p>
               <FieldError message={errors.context?.message} />
-            </div>
-
-            {/* Attachments */}
-            <div>
-              <FieldLabel htmlFor="drawer-task-attachments">
-                Allegati{" "}
-                <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
-              </FieldLabel>
-              <div className="mt-1">
-                <ImageUploader files={files} onChange={setFiles} disabled={isSubmitting} />
-              </div>
-              {uploadError !== null && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
-              )}
             </div>
 
             {/* Server error */}
