@@ -289,6 +289,53 @@ export function TaskDetailClient({
     setPendingCount(0);
   }
 
+  // ── Mobile bottom drawer ─────────────────────────────────────────────────────
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartYRef = useRef(0);
+  const dragStartTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (drawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen]);
+
+  function handleDrawerTouchStart(e: React.TouchEvent) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    dragStartYRef.current = touch.clientY;
+    dragStartTimeRef.current = Date.now();
+    setIsDragging(true);
+  }
+
+  function handleDrawerTouchMove(e: React.TouchEvent) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const delta = Math.max(0, touch.clientY - dragStartYRef.current);
+    setDragOffset(delta);
+  }
+
+  function handleDrawerTouchEnd() {
+    setIsDragging(false);
+    const elapsed = Date.now() - dragStartTimeRef.current;
+    const velocity = elapsed > 0 ? dragOffset / (elapsed / 1000) : 0;
+    if (dragOffset > 80 || velocity > 500) {
+      setDrawerOpen(false);
+    }
+    setDragOffset(0);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setDragOffset(0);
+  }
+
   // ── Repo URL for commit SHA links ────────────────────────────────────────────
 
   const repoUrl = projectedState.prData?.pr_url
@@ -457,8 +504,8 @@ export function TaskDetailClient({
           <IterationsList iterations={initialIterations} allEvents={events} />
         </div>
 
-        {/* ── RIGHT COLUMN: metadata panel ── */}
-        <div className="lg:sticky lg:top-6 lg:self-start">
+        {/* ── RIGHT COLUMN: metadata panel (hidden on mobile < md) ── */}
+        <div className="hidden md:block lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-[18px] bg-white shadow-sm dark:bg-[#1C1C1E] p-4 space-y-0 border border-border">
 
             {/* Status */}
@@ -577,6 +624,114 @@ export function TaskDetailClient({
               onCancelConfirm={handleCancel}
               onCancelAbort={() => setConfirmCancel(false)}
             />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Mobile trigger button (fixed bottom, visible only < md) ── */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 md:hidden">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="flex items-center gap-2 rounded-full bg-[#1C1C1E] dark:bg-white px-5 py-3 shadow-ios-md"
+        >
+          <SlidersHorizontal className="h-4 w-4 text-white dark:text-[#1C1C1E]" />
+          <span className="text-sm font-semibold text-white dark:text-[#1C1C1E]">
+            Dettagli
+          </span>
+        </button>
+      </div>
+
+      {/* ── Bottom drawer overlay (mobile only) ── */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 md:hidden"
+          onClick={closeDrawer}
+          style={{ transition: "opacity 200ms", opacity: 1 }}
+        />
+      )}
+
+      {/* ── Bottom drawer (mobile only) ── */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden max-h-[75vh] overflow-y-auto rounded-t-2xl bg-white dark:bg-[#1C1C1E]"
+        style={{
+          transform: drawerOpen ? `translateY(${dragOffset}px)` : "translateY(100%)",
+          transition: isDragging
+            ? "none"
+            : drawerOpen
+            ? "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)"
+            : "transform 250ms ease-in",
+        }}
+      >
+        {/* Handle bar */}
+        <div
+          className="flex justify-center pt-3 pb-1 touch-none"
+          onTouchStart={handleDrawerTouchStart}
+          onTouchMove={handleDrawerTouchMove}
+          onTouchEnd={handleDrawerTouchEnd}
+        >
+          <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
+        </div>
+
+        {/* Drawer content */}
+        <div className="px-4 pb-10 space-y-0">
+          <div className="rounded-[18px] bg-white dark:bg-[#1C1C1E] divide-y divide-border/60">
+
+            <MetaPanelRow label="Status">
+              <StatusBadge status={projectedState.status} />
+            </MetaPanelRow>
+
+            <MetaPanelRow label="Priorità">
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                  PRIORITY_BADGE[task.priority] ?? "bg-muted text-muted-foreground"
+                )}
+              >
+                {PRIORITY_LABEL[task.priority] ?? task.priority}
+              </span>
+            </MetaPanelRow>
+
+            <MetaPanelRow label="Agente">
+              {agent ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
+                    {agent.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {agent.name}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">Non assegnato</span>
+              )}
+            </MetaPanelRow>
+
+            {projectedState.prData?.pr_url && (
+              <MetaPanelRow label="Repository">
+                <a
+                  href={repoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm text-[#007AFF] hover:underline"
+                >
+                  <Github className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {repoUrl?.replace("https://github.com/", "") ?? "GitHub"}
+                  </span>
+                  <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+                </a>
+              </MetaPanelRow>
+            )}
+
+            <MetaPanelRow label="Creata">
+              <span className="text-sm text-foreground">{createdDate}</span>
+            </MetaPanelRow>
+
+            <MetaPanelRow label="Aggiornata">
+              <span className="text-sm text-foreground">{updatedDate}</span>
+            </MetaPanelRow>
+
           </div>
         </div>
       </div>
