@@ -7,6 +7,7 @@ import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { getAgentsForWorkspace } from "@/lib/db/agents";
 import { getContextDocuments } from "@/lib/db/context";
 import { BacklogJiraView } from "@/components/backlog/BacklogJiraView";
+import { PlanningHeader } from "@/components/backlog/PlanningHeader";
 
 export default async function BacklogPage() {
   const { userId } = await auth();
@@ -25,16 +26,14 @@ export default async function BacklogPage() {
       getContextDocuments(workspace.id),
     ]);
 
+  const activeSprintCount = allSprints.filter((s) => s.status === "active").length;
+
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Planning</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestisci sprint e backlog in un unico posto.
-          </p>
-        </div>
-      </div>
+      <PlanningHeader
+        activeSprintCount={activeSprintCount}
+        backlogTaskCount={backlogTasks.length}
+      />
 
       <BacklogJiraView
         sprints={sprints}
