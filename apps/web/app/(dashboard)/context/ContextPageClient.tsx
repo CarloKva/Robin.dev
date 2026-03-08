@@ -6,15 +6,22 @@ import {
   Plus,
   Search,
   FileText,
-  MousePointerClick,
-  Pencil,
-  Trash2,
-  Github,
+  Code,
+  FileCode,
+  ChevronLeft,
+  Bold,
+  Italic,
+  Link2,
+  Code2,
   Loader2,
   Check,
+  Github,
+  FileInput,
+  CheckSquare,
+  Square,
+  Trash2,
 } from "lucide-react";
 import { SyncFromGitHubModal } from "@/components/context/SyncFromGitHubModal";
-import { Input } from "@/components/ui/input";
 import type { ContextDocument, Repository } from "@robin/shared-types";
 import { cn } from "@/lib/utils";
 
@@ -24,35 +31,19 @@ interface ContextPageClientProps {
 }
 
 type SaveState = "idle" | "saving" | "saved";
-type DocType = "file" | "url" | "text" | "snippet";
 
-function getDocType(doc: ContextDocument): DocType {
-  if (doc.source_path) return "file";
-  if (doc.content.trimStart().startsWith("http")) return "url";
-  if (doc.content.length < 200 && !doc.content.includes("\n")) return "snippet";
-  return "text";
-}
-
-function getTypeBadgeClass(type: DocType): string {
-  switch (type) {
-    case "file":
-      return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
-    case "url":
-      return "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300";
-    case "text":
-      return "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300";
-    case "snippet":
-      return "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
+function getDocIcon(doc: ContextDocument) {
+  if (doc.source_path) {
+    const ext = doc.source_path.split(".").pop()?.toLowerCase();
+    if (ext === "md" || ext === "mdx") return <FileCode className="h-4 w-4 shrink-0 text-[#8E8E93]" />;
+    if (ext === "ts" || ext === "tsx" || ext === "js" || ext === "jsx") {
+      return <Code className="h-4 w-4 shrink-0 text-[#8E8E93]" />;
+    }
   }
+  return <FileText className="h-4 w-4 shrink-0 text-[#8E8E93]" />;
 }
 
-function formatSize(content: string): string {
-  const bytes = new TextEncoder().encode(content).length;
-  if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
@@ -63,6 +54,10 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
 }
 
+function getContentSnippet(content: string) {
+  return content.replace(/[#*_`\[\]>]/g, "").replace(/\n+/g, " ").trim().slice(0, 120);
+}
+
 export function ContextPageClient({ initialDocs, repositories }: ContextPageClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -71,115 +66,169 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
   const [selectedDocId, setSelectedDocId] = useState<string | "new" | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isEditMode, setIsEditMode] = useState(false);
+  // Mobile: 'list' shows left panel, 'editor' shows right panel
+  const [mobileView, setMobileView] = useState<"list" | "editor">("list");
+  // Batch selection
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Editor state
   const [editorTitle, setEditorTitle] = useState("");
   const [editorContent, setEditorContent] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setError] = useState<string | null>(null);
-
-  // Flag to open next selection in edit mode
-  const editOnSelectRef = useRef(false);
-
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNewDoc = selectedDocId === "new";
-  const selectedDoc =
-    selectedDocId && selectedDocId !== "new"
-      ? docs.find((d) => d.id === selectedDocId) ?? null
-      : null;
+
+  const selectedDoc = selectedDocId && selectedDocId !== "new"
+    ? docs.find((d) => d.id === selectedDocId) ?? null
+    : null;
 
   function refresh() {
     startTransition(() => router.refresh());
   }
 
+  // Load doc into editor when selection changes
   useEffect(() => {
     if (selectedDocId === "new") {
       setEditorTitle("");
       setEditorContent("");
       setSaveState("idle");
       setError(null);
-      setIsEditMode(true);
     } else if (selectedDoc) {
       setEditorTitle(selectedDoc.title);
       setEditorContent(selectedDoc.content);
       setSaveState("idle");
       setError(null);
-      setIsEditMode(editOnSelectRef.current);
-      editOnSelectRef.current = false;
     }
+    // Clear any pending save timers on selection change
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
   }, [selectedDocId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function selectDoc(docId: string | "new") {
     setSelectedDocId(docId);
+    setMobileView("editor");
   }
 
-  function handleEditDoc(docId: string) {
-    if (selectedDocId === docId) {
-      setIsEditMode(true);
-    } else {
-      editOnSelectRef.current = true;
-      setSelectedDocId(docId);
-    }
-  }
-
-  const saveDoc = useCallback(
-    async (title: string, content: string) => {
-      if (!title.trim() || !content.trim()) return;
-      setSaveState("saving");
-      setError(null);
-      try {
-        const isNew = selectedDocId === "new";
-        const url = isNew ? "/api/context" : `/api/context/${selectedDocId}`;
-        const method = isNew ? "POST" : "PUT";
-        const res = await fetch(url, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: title.trim(), content: content.trim() }),
-        });
-        const data = (await res.json()) as { doc?: ContextDocument; error?: string };
-        if (!res.ok || !data.doc) {
-          setError(data.error ?? "Errore durante il salvataggio.");
-          setSaveState("idle");
-          return;
-        }
-        const saved = data.doc;
-        setDocs((prev) => {
-          const idx = prev.findIndex((d) => d.id === saved.id);
-          if (idx === -1) return [saved, ...prev];
-          const next = [...prev];
-          next[idx] = saved;
-          return next;
-        });
-        if (isNew) setSelectedDocId(saved.id);
-        setSaveState("saved");
-        setIsEditMode(false);
-        setTimeout(() => setSaveState("idle"), 2000);
-        refresh();
-      } catch {
-        setError("Errore di rete.");
+  const saveDoc = useCallback(async (title: string, content: string) => {
+    if (!title.trim() || !content.trim()) return;
+    setSaveState("saving");
+    setError(null);
+    try {
+      const isNew = selectedDocId === "new";
+      const url = isNew ? "/api/context" : `/api/context/${selectedDocId}`;
+      const method = isNew ? "POST" : "PUT";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), content: content.trim() }),
+      });
+      const data = (await res.json()) as { doc?: ContextDocument; error?: string };
+      if (!res.ok || !data.doc) {
+        setError(data.error ?? "Errore durante il salvataggio.");
         setSaveState("idle");
+        return;
       }
-    },
-    [selectedDocId], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-
-  function handleCancel() {
-    if (isNewDoc) {
-      setSelectedDocId(null);
-    } else if (selectedDoc) {
-      setEditorTitle(selectedDoc.title);
-      setEditorContent(selectedDoc.content);
-      setIsEditMode(false);
+      const saved = data.doc;
+      setDocs((prev) => {
+        const idx = prev.findIndex((d) => d.id === saved.id);
+        if (idx === -1) return [saved, ...prev];
+        const next = [...prev];
+        next[idx] = saved;
+        return next;
+      });
+      if (isNew) setSelectedDocId(saved.id);
+      setSaveState("saved");
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaveState("idle"), 2000);
+      refresh();
+    } catch {
+      setError("Errore di rete.");
+      setSaveState("idle");
     }
-  }
+  }, [selectedDocId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save on content/title change (debounced 1.5s)
+  useEffect(() => {
+    if (!selectedDocId) return;
+    if (!editorTitle.trim() || !editorContent.trim()) return;
+    // Don't auto-save if content matches saved doc (no change)
+    if (
+      selectedDoc &&
+      editorTitle.trim() === selectedDoc.title &&
+      editorContent.trim() === selectedDoc.content
+    ) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveDoc(editorTitle, editorContent);
+    }, 1500);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [editorTitle, editorContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDelete(docId: string) {
     if (!confirm("Eliminare questo documento?")) return;
     const res = await fetch(`/api/context/${docId}`, { method: "DELETE" });
     if (res.ok) {
       setDocs((prev) => prev.filter((d) => d.id !== docId));
-      if (selectedDocId === docId) setSelectedDocId(null);
+      if (selectedDocId === docId) {
+        setSelectedDocId(null);
+        setMobileView("list");
+      }
       refresh();
+    }
+  }
+
+  function toggleSelection(docId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) next.delete(docId);
+      else next.add(docId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredDocs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredDocs.map((d) => d.id)));
+    }
+  }
+
+  function exitSelectionMode() {
+    setIsSelecting(false);
+    setSelectedIds(new Set());
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Eliminare ${selectedIds.size} document${selectedIds.size === 1 ? "o" : "i"}?`)) return;
+    setIsBulkDeleting(true);
+    try {
+      const res = await fetch("/api/context/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (res.ok) {
+        const deletedIds = new Set(selectedIds);
+        setDocs((prev) => prev.filter((d) => !deletedIds.has(d.id)));
+        if (selectedDocId && selectedDocId !== "new" && deletedIds.has(selectedDocId)) {
+          setSelectedDocId(null);
+          setMobileView("list");
+        }
+        exitSelectionMode();
+        refresh();
+      }
+    } finally {
+      setIsBulkDeleting(false);
     }
   }
 
@@ -198,263 +247,351 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
     return doc.title.toLowerCase().includes(q) || doc.content.toLowerCase().includes(q);
   });
 
+  function insertMarkdown(syntax: string) {
+    const textarea = document.getElementById("context-editor") as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = editorContent.slice(0, start);
+    const selected = editorContent.slice(start, end);
+    const after = editorContent.slice(end);
+    const newContent = before + syntax + selected + syntax + after;
+    setEditorContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = start + syntax.length;
+      textarea.setSelectionRange(newPos, newPos + selected.length);
+    }, 0);
+  }
+
+  function insertCodeBlock() {
+    const textarea = document.getElementById("context-editor") as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const before = editorContent.slice(0, start);
+    const after = editorContent.slice(start);
+    const newContent = before + "\n```\n\n```\n" + after;
+    setEditorContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + 5, start + 5);
+    }, 0);
+  }
+
+  function insertLink() {
+    const textarea = document.getElementById("context-editor") as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = editorContent.slice(start, end);
+    const before = editorContent.slice(0, start);
+    const after = editorContent.slice(end);
+    const link = `[${selected || "testo"}](url)`;
+    setEditorContent(before + link + after);
+    setTimeout(() => {
+      textarea.focus();
+      const urlStart = start + link.length - 4;
+      textarea.setSelectionRange(urlStart, urlStart + 3);
+    }, 0);
+  }
+
   return (
-    <div className="p-6 h-full overflow-auto flex flex-col gap-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-xl font-semibold">Context</h1>
-        <p className="text-sm text-muted-foreground">Documenti di contesto per gli agenti AI</p>
-      </div>
-
-      {/* Two-column grid */}
-      <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
-        {/* Left column — table */}
-        <div className="col-span-1 flex flex-col gap-3">
-          {/* Toolbar */}
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="relative w-full max-w-xs">
-              <Search
-                size={14}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                placeholder="Cerca contesto..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 text-sm h-8"
-              />
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {repositories.length > 0 && (
+    <div className="flex h-full overflow-hidden">
+      {/* ── LEFT PANEL ──────────────────────────────────────────────────── */}
+      <div
+        className={cn(
+          "flex flex-col border-r border-[#D1D1D6] dark:border-[#38383A] bg-background overflow-hidden",
+          "w-full md:w-[30%]",
+          // Mobile: hide left panel when in editor view
+          mobileView === "editor" ? "hidden md:flex" : "flex",
+        )}
+      >
+        {/* Panel header */}
+        <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-[#D1D1D6]/60 dark:border-[#38383A]/60">
+          <h2 className="font-semibold text-base">Context</h2>
+          <div className="flex items-center gap-1">
+            {!isSelecting ? (
+              <>
+                {repositories.length > 0 && (
+                  <button
+                    onClick={() => setIsSyncModalOpen(true)}
+                    className="rounded-lg p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                    title="Sincronizza da GitHub"
+                  >
+                    <Github className="h-4 w-4" />
+                  </button>
+                )}
                 <button
-                  onClick={() => setIsSyncModalOpen(true)}
-                  className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm hover:bg-accent transition-colors"
-                  title="Sincronizza da GitHub"
+                  onClick={() => selectDoc("new")}
+                  className="rounded-lg p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
+                  title="Nuovo documento"
                 >
-                  <Github size={14} />
+                  <Plus className="h-4 w-4" />
                 </button>
-              )}
-              <button
-                onClick={() => selectDoc("new")}
-                className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm hover:bg-accent transition-colors"
-              >
-                <Plus size={14} />
-                Add context
-              </button>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="border border-border rounded-md overflow-hidden">
-            {/* Table header */}
-            <div className="flex items-center px-3 py-2 bg-muted/50 border-b border-border">
-              <div className="flex-1 text-xs font-medium text-muted-foreground">Nome</div>
-              <div className="w-[72px] text-xs font-medium text-muted-foreground">Tipo</div>
-              <div className="w-20 text-right text-xs font-medium text-muted-foreground">Dim.</div>
-              <div className="w-24 text-right text-xs font-medium text-muted-foreground">
-                Aggiornato
-              </div>
-              <div className="w-16" />
-            </div>
-
-            {/* Rows */}
-            {filteredDocs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <FileText size={24} className="text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">Nessun contesto aggiunto</p>
-              </div>
+                {docs.length > 0 && (
+                  <button
+                    onClick={() => setIsSelecting(true)}
+                    className="rounded-lg px-2 py-1 text-xs text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                  >
+                    Seleziona
+                  </button>
+                )}
+              </>
             ) : (
-              <div className="overflow-y-auto">
-                {filteredDocs.map((doc) => {
-                  const isSelected = selectedDocId === doc.id;
-                  const type = getDocType(doc);
-                  return (
-                    <div
-                      key={doc.id}
-                      onClick={() => selectDoc(doc.id)}
-                      className={cn(
-                        "flex items-center px-3 border-b border-border cursor-pointer transition-colors relative",
-                        "h-11",
-                        isSelected ? "bg-accent" : "hover:bg-accent/50",
-                      )}
-                    >
-                      {isSelected && (
-                        <span className="absolute left-0 top-0 h-full w-[2px] bg-foreground" />
-                      )}
-                      {/* Nome */}
-                      <div className="flex-1 min-w-0 pr-2">
-                        <span className="text-sm font-medium text-foreground truncate block">
-                          {doc.title}
-                        </span>
-                      </div>
-                      {/* Tipo */}
-                      <div className="w-[72px]">
-                        <span
-                          className={cn(
-                            "text-xs px-1.5 py-0.5 rounded font-medium",
-                            getTypeBadgeClass(type),
-                          )}
-                        >
-                          {type}
-                        </span>
-                      </div>
-                      {/* Dimensione */}
-                      <div className="w-20 text-right">
-                        <span className="text-xs text-muted-foreground">
-                          {formatSize(doc.content)}
-                        </span>
-                      </div>
-                      {/* Aggiornato */}
-                      <div className="w-24 text-right">
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(doc.updated_at)}
-                        </span>
-                      </div>
-                      {/* Actions */}
-                      <div
-                        className="w-16 flex justify-end items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                          onClick={() => handleEditDoc(doc.id)}
-                          title="Modifica"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="rounded-md p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                          onClick={() => void handleDelete(doc.id)}
-                          title="Elimina"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <button
+                onClick={exitSelectionMode}
+                className="rounded-lg px-2 py-1 text-xs text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
+              >
+                Annulla
+              </button>
             )}
           </div>
         </div>
 
-        {/* Right column — preview/editor */}
-        <div className="col-span-2 flex flex-col">
-          {selectedDocId === null ? (
-            /* Empty state */
-            <div className="flex flex-col items-center justify-center h-full gap-3">
-              <MousePointerClick size={32} className="text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">
-                Seleziona un elemento per visualizzarlo
-              </p>
+        {/* Search bar */}
+        <div className="px-3 py-2 shrink-0">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8E8E93]" />
+            <input
+              type="text"
+              placeholder="Cerca documenti…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 w-full rounded-xl bg-gray-100 dark:bg-[#2C2C2E] pl-8 pr-3 text-sm text-foreground placeholder:text-[#8E8E93] border-none outline-none focus:ring-1 focus:ring-[#007AFF]/40 transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Doc list */}
+        <div className="flex-1 overflow-y-auto">
+          {filteredDocs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
+              {docs.length === 0 ? (
+                <>
+                  <FileInput className="h-10 w-10 text-[#C7C7CC]" />
+                  <p className="text-sm text-[#8E8E93]">Nessun documento</p>
+                  <button
+                    onClick={() => selectDoc("new")}
+                    className="text-xs text-[#007AFF] hover:underline"
+                  >
+                    Crea il primo documento
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-[#8E8E93]">Nessun risultato per &ldquo;{searchQuery}&rdquo;</p>
+              )}
             </div>
           ) : (
-            /* Editor */
-            <div className="flex flex-col h-full">
-              {/* Editor header */}
-              <div className="flex items-center gap-2">
-                {!isNewDoc && selectedDoc ? (
-                  <>
-                    <span className="text-sm font-semibold">{selectedDoc.title}</span>
-                    <span
+            <ul className="divide-y divide-[#D1D1D6]/40 dark:divide-[#38383A]/40">
+              {filteredDocs.map((doc) => {
+                const isDocSelected = selectedDocId === doc.id;
+                const isChecked = selectedIds.has(doc.id);
+                const snippet = getContentSnippet(doc.content);
+                return (
+                  <li key={doc.id}>
+                    <button
+                      onClick={() => isSelecting ? toggleSelection(doc.id) : selectDoc(doc.id)}
                       className={cn(
-                        "text-xs px-1.5 py-0.5 rounded font-medium",
-                        getTypeBadgeClass(getDocType(selectedDoc)),
+                        "w-full text-left px-4 py-3 transition-colors relative",
+                        !isSelecting && isDocSelected
+                          ? "bg-[#007AFF]/10 dark:bg-[#007AFF]/15"
+                          : isSelecting && isChecked
+                          ? "bg-[#007AFF]/5 dark:bg-[#007AFF]/10"
+                          : "hover:bg-gray-50 dark:hover:bg-[#2C2C2E]/50",
                       )}
                     >
-                      {getDocType(selectedDoc)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatSize(selectedDoc.content)}
-                    </span>
-                  </>
+                      {!isSelecting && isDocSelected && (
+                        <span className="absolute left-0 top-0 h-full w-0.5 bg-[#007AFF] rounded-r" />
+                      )}
+                      <div className="flex items-start gap-2.5">
+                        {isSelecting ? (
+                          isChecked
+                            ? <CheckSquare className="h-4 w-4 shrink-0 text-[#007AFF]" />
+                            : <Square className="h-4 w-4 shrink-0 text-[#8E8E93]" />
+                        ) : (
+                          getDocIcon(doc)
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-sm truncate text-foreground">
+                              {doc.title}
+                            </span>
+                            <span className="text-xs text-[#8E8E93] shrink-0">
+                              {formatDate(doc.updated_at)}
+                            </span>
+                          </div>
+                          {snippet && (
+                            <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-2 leading-relaxed">
+                              {snippet}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Bulk action bar */}
+        {isSelecting && (
+          <div className="shrink-0 border-t border-[#D1D1D6]/60 dark:border-[#38383A]/60 px-4 py-3 flex items-center gap-3 bg-background">
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs text-[#007AFF] hover:underline"
+            >
+              {selectedIds.size === filteredDocs.length ? "Deseleziona tutti" : "Seleziona tutti"}
+            </button>
+            <div className="flex-1" />
+            {selectedIds.size > 0 && (
+              <button
+                onClick={() => void handleBulkDelete()}
+                disabled={isBulkDeleting}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {isBulkDeleting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <span className="text-sm font-semibold text-muted-foreground">
-                    Nuovo documento
-                  </span>
+                  <Trash2 className="h-3.5 w-3.5" />
                 )}
-              </div>
+                Elimina {selectedIds.size}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
-              <div className="border-b border-border my-3" />
+      {/* ── RIGHT PANEL ─────────────────────────────────────────────────── */}
+      <div
+        className={cn(
+          "flex flex-col flex-1 overflow-hidden bg-background",
+          // Mobile: hide right panel when in list view
+          mobileView === "list" ? "hidden md:flex" : "flex",
+        )}
+      >
+        {selectedDocId !== null ? (
+          <>
+            {/* Editor toolbar */}
+            <div className="flex items-center gap-1 px-4 py-2 border-b border-[#D1D1D6]/60 dark:border-[#38383A]/60 shrink-0">
+              {/* Mobile back button */}
+              <button
+                onClick={() => setMobileView("list")}
+                className="md:hidden flex items-center gap-1 text-[#007AFF] text-sm mr-2"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Lista
+              </button>
 
-              {/* Title input (edit mode or new doc) */}
-              {(isEditMode || isNewDoc) && (
-                <div className="mb-3">
-                  <input
-                    type="text"
-                    value={editorTitle}
-                    onChange={(e) => setEditorTitle(e.target.value)}
-                    placeholder="Titolo documento"
-                    className="w-full text-base font-semibold bg-transparent border border-border rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                  />
-                </div>
+              {/* Formatting buttons */}
+              <button
+                onClick={() => insertMarkdown("**")}
+                className="rounded-md p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                title="Grassetto"
+              >
+                <Bold className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => insertMarkdown("_")}
+                className="rounded-md p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                title="Corsivo"
+              >
+                <Italic className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={insertLink}
+                className="rounded-md p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                title="Link"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+              </button>
+
+              <div className="w-px h-4 bg-[#D1D1D6] dark:bg-[#38383A] mx-1" />
+
+              <button
+                onClick={insertCodeBlock}
+                className="rounded-md p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                title="Blocco codice"
+              >
+                <Code2 className="h-3.5 w-3.5" />
+              </button>
+
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {/* Delete button */}
+              {!isNewDoc && selectedDoc && (
+                <button
+                  onClick={() => void handleDelete(selectedDoc.id)}
+                  className="text-xs text-[#8E8E93] hover:text-red-500 transition-colors px-2 py-1 rounded-md hover:bg-red-50 dark:hover:bg-red-950/20"
+                >
+                  Elimina
+                </button>
               )}
 
+              {/* Auto-save indicator */}
+              <div className="flex items-center gap-1 ml-2 min-w-[80px] justify-end">
+                {saveState === "saving" && (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 text-[#8E8E93] animate-spin" />
+                    <span className="text-xs text-[#8E8E93]">Salvataggio…</span>
+                  </>
+                )}
+                {saveState === "saved" && (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-[#34C759]" />
+                    <span className="text-xs text-[#34C759]">Salvato</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Editor content */}
+            <div className="flex-1 overflow-y-auto flex flex-col px-6 md:px-10 py-6">
               {/* Error */}
               {saveError && (
                 <p className="mb-3 text-xs text-red-600 dark:text-red-400">{saveError}</p>
               )}
 
-              {/* Content textarea */}
-              <textarea
-                value={isEditMode || isNewDoc ? editorContent : (selectedDoc?.content ?? "")}
-                onChange={(e) => setEditorContent(e.target.value)}
-                readOnly={!isEditMode && !isNewDoc}
-                placeholder={
-                  isEditMode || isNewDoc
-                    ? "# Descrizione\n\nInserisci qui il documento in Markdown…"
-                    : ""
-                }
-                className={cn(
-                  "bg-muted rounded-md p-4 font-mono text-xs text-foreground",
-                  "w-full min-h-[400px] resize-none border border-border",
-                  !isEditMode && !isNewDoc && "cursor-default",
-                )}
+              {/* Title input */}
+              <input
+                type="text"
+                value={editorTitle}
+                onChange={(e) => setEditorTitle(e.target.value)}
+                placeholder="Titolo documento"
+                className="w-full text-xl font-bold text-foreground bg-transparent border-none outline-none placeholder:text-[#C7C7CC] mb-4"
               />
 
-              {/* Bottom toolbar */}
-              <div className="flex items-center gap-2 mt-3">
-                {saveState === "saving" && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Loader2 size={14} className="animate-spin" />
-                    Salvataggio…
-                  </div>
-                )}
-                {saveState === "saved" && (
-                  <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                    <Check size={14} />
-                    Salvato
-                  </div>
-                )}
-                <div className="flex-1" />
-                {!isEditMode && !isNewDoc ? (
-                  <button
-                    onClick={() => setIsEditMode(true)}
-                    className="flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-                  >
-                    Modifica
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={handleCancel}
-                      className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                    >
-                      Annulla
-                    </button>
-                    <button
-                      onClick={() => void saveDoc(editorTitle, editorContent)}
-                      disabled={saveState === "saving"}
-                      className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    >
-                      Salva
-                    </button>
-                  </>
-                )}
-              </div>
+              {/* Content textarea */}
+              <textarea
+                id="context-editor"
+                value={editorContent}
+                onChange={(e) => setEditorContent(e.target.value)}
+                placeholder={"# Descrizione\n\nInserisci qui il documento in Markdown…"}
+                className="flex-1 w-full min-h-[400px] resize-none bg-transparent border-none outline-none text-sm text-foreground font-mono placeholder:text-[#C7C7CC] leading-relaxed"
+              />
             </div>
-          )}
-        </div>
+          </>
+        ) : (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
+            <FileText className="h-14 w-14 text-[#C7C7CC]" />
+            <div>
+              <p className="text-base font-medium text-foreground">Seleziona un documento</p>
+              <p className="text-sm text-[#8E8E93] mt-1">
+                Scegli un documento dalla lista o creane uno nuovo per iniziare.
+              </p>
+            </div>
+            <button
+              onClick={() => selectDoc("new")}
+              className="flex items-center gap-1.5 rounded-xl bg-[#007AFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#007AFF]/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Nuovo documento
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Sync modal */}
