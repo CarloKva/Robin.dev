@@ -200,6 +200,30 @@ export class TaskRepository {
     }
   }
 
+  /**
+   * Returns tasks stuck in 'queued' state whose queued_at is older than olderThanMs.
+   * Used by the TaskPoller to recover jobs lost from BullMQ (restart, Redis flush, dedup loop).
+   */
+  async getStuckQueued(olderThanMs: number, workspaceId?: string): Promise<{ id: string }[]> {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+    let query = this.db
+      .from("tasks")
+      .select("id")
+      .eq("status", "queued")
+      .lt("queued_at", cutoff);
+
+    if (workspaceId) {
+      query = query.eq("workspace_id", workspaceId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      log.warn({ error: error.message }, "TaskRepository.getStuckQueued failed");
+      return [];
+    }
+    return data ?? [];
+  }
+
   /** Fetch tasks eligible for queueing: pending or queued (not yet picked up by worker). */
   async getPendingUnqueued(workspaceId?: string) {
     let query = this.db
@@ -233,6 +257,42 @@ export class TaskRepository {
 
     if (error) {
       log.warn({ taskId, error: error.message }, "TaskRepository.resetToUnqueued failed");
+    }
+  }
+
+  /**
+   * Find tasks stuck in `in_progress` or `queued` with queued_at older than
+   * `olderThanMs` milliseconds for a given agent. These are candidates for
+   * orphan recovery when the corresponding BullMQ job no longer exists.
+   */
+  async getOrphanedCandidates(agentId: string, olderThanMs: number) {
+    const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+
+    const { data, error } = await this.db
+      .from("tasks")
+      .select("id, title, status")
+      .in("status", ["in_progress", "queued"])
+      .eq("assigned_agent_id", agentId)
+      .lt("queued_at", cutoff);
+
+    if (error) throw new Error(`TaskRepository.getOrphanedCandidates failed: ${error.message}`);
+    return data ?? [];
+  }
+
+  /**
+   * Reset an orphaned task back to pending.
+   * Bypasses the state machine intentionally — safe because the BullMQ job
+   * for this task no longer exists, so no work is in flight.
+   */
+  async resetOrphanedTask(taskId: string): Promise<void> {
+    const { error } = await this.db
+      .from("tasks")
+      .update({ queued_at: null, status: "pending", updated_at: new Date().toISOString() })
+      .eq("id", taskId)
+      .in("status", ["in_progress", "queued"]);
+
+    if (error) {
+      log.warn({ taskId, error: error.message }, "TaskRepository.resetOrphanedTask failed");
     }
   }
 }

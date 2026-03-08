@@ -15,6 +15,7 @@ import { repoWatchdog } from "./services/repo-watchdog.service";
 import { recoverPendingAgents } from "./services/provisioning-recovery.service";
 import { SelfUpdateService } from "./services/self-update.service";
 import { taskPoller } from "./services/task.poller";
+import { TaskRecoveryService } from "./services/task-recovery.service";
 import { HeartbeatService } from "./services/heartbeat.service";
 import { closeRedis, getRedisConnection } from "./db/redis.client";
 import { log } from "./utils/logger";
@@ -43,6 +44,7 @@ async function main() {
   // ─── Mode-specific setup ─────────────────────────────────────────────────
   const workersToClose: Array<{ close: () => Promise<void> }> = [];
   let heartbeat: HeartbeatService | null = null;
+  let taskRecovery: TaskRecoveryService | null = null;
   const selfUpdate = new SelfUpdateService(IS_CONTROL_PLANE);
 
   if (IS_CONTROL_PLANE) {
@@ -103,7 +105,10 @@ async function main() {
 
     taskPoller.start();
 
-    log.info({}, "Agent workers started (task execution + heartbeat + poller)");
+    taskRecovery = new TaskRecoveryService(AGENT_ID);
+    taskRecovery.start();
+
+    log.info({}, "Agent workers started (task execution + heartbeat + poller + recovery)");
   }
 
   // ─── Self-update: listen for remote restart commands via Redis pub/sub ────
@@ -169,6 +174,7 @@ async function main() {
     log.info({ signal }, "Shutting down gracefully");
 
     heartbeat?.stop();
+    taskRecovery?.stop();
     await selfUpdate.stop();
     if (!IS_CONTROL_PLANE) taskPoller.stop();
     if (IS_CONTROL_PLANE) repoWatchdog.stop();
