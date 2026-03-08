@@ -148,6 +148,28 @@ WHERE status IN ('queued', 'in_progress') AND sprint_id IS NOT NULL;
 ```
 Il poller ri-accoda entro ~5s.
 
+### Task `in_progress` o `queued` orfane dopo restart agente
+
+**Causa:** systemd riavvia l'agente (`Restart=always`) mentre un job BullMQ è in stato `active`. Il job viene droppato, ma il DB rimane `in_progress`/`queued` con `queued_at IS NOT NULL`. Il poller non le riaccoda (filtra `queued_at IS NULL`).
+
+**Segnale diagnostico:**
+```bash
+redis-cli --tls --insecure -a <pwd> -h 77.42.71.71 LLEN bull:tasks:active   # → 0
+redis-cli --tls --insecure -a <pwd> -h 77.42.71.71 ZCARD bull:tasks:prioritized  # → 0
+# + DB mostra task in_progress o queued → conferma: task orfane
+```
+
+**Fix (30 secondi):**
+```sql
+-- In Supabase SQL editor
+UPDATE tasks SET queued_at = NULL, status = 'pending', updated_at = NOW()
+WHERE workspace_id = '<workspace_id>'
+  AND status IN ('queued', 'in_progress');
+```
+Il poller riaccoda entro ~5s.
+
+**Nota:** questo bug si verifica anche dopo top-up crediti Anthropic se l'agente è rimasto in stato `Restart=always` — si riavvia autonomamente e riprende, ma i job che erano in active al momento dello stop vengono persi.
+
 ### Procedura di sblocco generica
 ```bash
 # SSH ai VPS agenti (chiave: ~/.ssh/robindev_provisioning)
