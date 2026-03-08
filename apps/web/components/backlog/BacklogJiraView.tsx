@@ -8,6 +8,8 @@ import {
   useEffect,
   useRef,
 } from "react";
+import { DndProvider, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 import { Search, X, ChevronRight, ArrowUpDown, Check, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -16,6 +18,8 @@ import { SprintCard } from "./SprintCard";
 import { BulkActionBar } from "./BulkActionBar";
 import { CreateTaskDrawer } from "./CreateTaskDrawer";
 import { BrainstormModal } from "./BrainstormModal";
+import { DraggableTaskWrapper, TASK_DND_TYPE } from "./DraggableTaskWrapper";
+import type { TaskDragItem } from "./DraggableTaskWrapper";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { useKeyboardShortcut } from "@/lib/hooks/useKeyboardShortcut";
 import type { Task, Repository, Sprint, SprintWithTasks, ContextDocument } from "@robin/shared-types";
@@ -73,7 +77,8 @@ interface BacklogJiraViewProps {
   contextDocs?: ContextDocument[];
 }
 
-export function BacklogJiraView({
+// Inner component that uses react-dnd hooks (must be inside DndProvider)
+function BacklogJiraViewInner({
   sprints: initialSprints,
   backlogTasks: initialBacklog,
   repositories,
@@ -107,6 +112,7 @@ export function BacklogJiraView({
   useEffect(() => {
     localStorage.setItem("backlog-expanded", JSON.stringify([...expanded]));
   }, [expanded]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBrainstormOpen, setIsBrainstormOpen] = useState(false);
@@ -122,10 +128,7 @@ export function BacklogJiraView({
   const [editingSprintName, setEditingSprintName] = useState("");
   const sprintNameInputRef = useRef<HTMLInputElement>(null);
 
-  // DnD state
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
-  const [dragOverSprintId, setDragOverSprintId] = useState<string | null>(null);
-  const [dragOverBacklog, setDragOverBacklog] = useState(false);
+  // Landing animation
   const [justDroppedTaskId, setJustDroppedTaskId] = useState<string | null>(null);
 
   // Sprint action state (per sprint)
@@ -291,75 +294,12 @@ export function BacklogJiraView({
     refresh();
   }
 
-  // Drag and drop
-
-  function handleDragStart(e: React.DragEvent, taskId: string) {
-    e.dataTransfer.setData("text/plain", taskId);
-    e.dataTransfer.effectAllowed = "move";
-    setDraggingTaskId(taskId);
-
-    // Custom drag ghost: rotated card with shadow
-    const el = e.currentTarget as HTMLElement;
-    const ghost = el.cloneNode(true) as HTMLElement;
-    const rect = el.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
-    ghost.style.width = `${el.offsetWidth}px`;
-    ghost.style.transform = "rotate(1.5deg)";
-    ghost.style.opacity = "0.85";
-    ghost.style.boxShadow = "0 8px 24px rgba(0,0,0,0.18)";
-    ghost.style.borderRadius = "8px";
-    ghost.style.pointerEvents = "none";
-    ghost.style.position = "fixed";
-    ghost.style.top = "-9999px";
-    ghost.style.left = "-9999px";
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, offsetX, offsetY);
-    setTimeout(() => { if (ghost.parentNode) document.body.removeChild(ghost); }, 200);
-  }
-
-  function handleDragEnd() {
-    setDraggingTaskId(null);
-    setDragOverSprintId(null);
-    setDragOverBacklog(false);
-  }
-
-  function handleDragOver(e: React.DragEvent, sprintId: string) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverSprintId(sprintId);
-    setDragOverBacklog(false);
-  }
-
-  function handleDragLeave(e: React.DragEvent) {
-    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
-      setDragOverSprintId(null);
-    }
-  }
-
-  function handleDragOverBacklog(e: React.DragEvent) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverBacklog(true);
-    setDragOverSprintId(null);
-  }
-
-  function handleDragLeaveBacklog(e: React.DragEvent) {
-    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
-      setDragOverBacklog(false);
-    }
-  }
-
   function landTask(taskId: string) {
     setJustDroppedTaskId(taskId);
     setTimeout(() => setJustDroppedTaskId(null), 300);
   }
 
-  async function handleDrop(e: React.DragEvent, targetSprintId: string) {
-    e.preventDefault();
-    const taskId = e.dataTransfer.getData("text/plain");
-    setDraggingTaskId(null);
-    setDragOverSprintId(null);
+  async function handleDropOnSprint(taskId: string, targetSprintId: string) {
     landTask(taskId);
 
     // Try backlog first
@@ -369,7 +309,13 @@ export function BacklogJiraView({
       setLocalSprints((prev) =>
         prev.map((s) =>
           s.id === targetSprintId
-            ? { ...s, tasks: [...s.tasks, { ...backlogTask, sprint_id: targetSprintId, status: "sprint_ready" as TaskStatus }] }
+            ? {
+                ...s,
+                tasks: [
+                  ...s.tasks,
+                  { ...backlogTask, sprint_id: targetSprintId, status: "sprint_ready" as TaskStatus },
+                ],
+              }
             : s
         )
       );
@@ -386,13 +332,22 @@ export function BacklogJiraView({
     const sourceSprintId = localSprints.find((s) => s.tasks.some((t) => t.id === taskId))?.id;
     if (!sourceSprintId || sourceSprintId === targetSprintId) return;
 
-    const sprintTask = localSprints.find((s) => s.id === sourceSprintId)?.tasks.find((t) => t.id === taskId);
+    const sprintTask = localSprints
+      .find((s) => s.id === sourceSprintId)
+      ?.tasks.find((t) => t.id === taskId);
     if (!sprintTask) return;
 
     setLocalSprints((prev) =>
       prev.map((s) => {
         if (s.id === sourceSprintId) return { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) };
-        if (s.id === targetSprintId) return { ...s, tasks: [...s.tasks, { ...sprintTask, sprint_id: targetSprintId, status: "sprint_ready" as TaskStatus }] };
+        if (s.id === targetSprintId)
+          return {
+            ...s,
+            tasks: [
+              ...s.tasks,
+              { ...sprintTask, sprint_id: targetSprintId, status: "sprint_ready" as TaskStatus },
+            ],
+          };
         return s;
       })
     );
@@ -404,22 +359,22 @@ export function BacklogJiraView({
     refresh();
   }
 
-  async function handleDropOnBacklog(e: React.DragEvent) {
-    e.preventDefault();
-    const taskId = e.dataTransfer.getData("text/plain");
-    setDraggingTaskId(null);
-    setDragOverBacklog(false);
+  async function handleDropOnBacklog(taskId: string) {
     landTask(taskId);
 
     // Only handle sprint tasks being dropped to backlog
     const sourceSprintId = localSprints.find((s) => s.tasks.some((t) => t.id === taskId))?.id;
     if (!sourceSprintId) return;
 
-    const task = localSprints.find((s) => s.id === sourceSprintId)?.tasks.find((t) => t.id === taskId);
+    const task = localSprints
+      .find((s) => s.id === sourceSprintId)
+      ?.tasks.find((t) => t.id === taskId);
     if (!task) return;
 
     setLocalSprints((prev) =>
-      prev.map((s) => s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s)
+      prev.map((s) =>
+        s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s
+      )
     );
     setLocalBacklog((prev) => [{ ...task, sprint_id: null, status: "backlog" as TaskStatus }, ...prev]);
 
@@ -431,13 +386,26 @@ export function BacklogJiraView({
     refresh();
   }
 
-  // Drawer
+  // Backlog drop zone
+  const backlogDropRef = useRef<HTMLDivElement>(null);
+  const [{ isOverBacklog }, backlogDrop] = useDrop<TaskDragItem, unknown, { isOverBacklog: boolean }>({
+    accept: TASK_DND_TYPE,
+    drop: (item, monitor) => {
+      if (!monitor.didDrop()) {
+        void handleDropOnBacklog(item.taskId);
+      }
+    },
+    collect: (monitor) => ({
+      isOverBacklog: monitor.isOver({ shallow: true }),
+    }),
+  });
+  backlogDrop(backlogDropRef);
 
+  // Drawer
   const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
   useKeyboardShortcut("n", openDrawer);
 
   // Filtered data
-
   const filteredBacklog = useMemo(() => {
     return localBacklog.filter((t) => {
       if (typeFilter && t.type !== typeFilter) return false;
@@ -583,11 +551,7 @@ export function BacklogJiraView({
                 sprint={sprint}
                 isExpanded={expanded.has(sprint.id)}
                 onToggleExpand={() => toggleExpand(sprint.id)}
-                isDragOver={dragOverSprintId === sprint.id}
-                onDragOver={(e) => handleDragOver(e, sprint.id)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => void handleDrop(e, sprint.id)}
-                draggingTaskId={draggingTaskId}
+                onTaskDrop={(taskId) => void handleDropOnSprint(taskId, sprint.id)}
                 justDroppedTaskId={justDroppedTaskId}
                 isEditingName={editingSprintId === sprint.id}
                 editingSprintName={editingSprintName}
@@ -605,8 +569,6 @@ export function BacklogJiraView({
                     ? (taskId) => void handleRemoveFromSprint(taskId, sprint.id)
                     : undefined
                 }
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
                 openDrawer={openDrawer}
                 repositories={repositories}
                 agents={agents}
@@ -672,15 +634,13 @@ export function BacklogJiraView({
 
       {/* Backlog section */}
       <div
+        ref={backlogDropRef}
         className={cn(
           "rounded-lg border bg-card transition-colors duration-150",
-          dragOverBacklog
+          isOverBacklog
             ? "border-dashed border-[#007AFF] bg-[#007AFF]/5"
             : "border-border"
         )}
-        onDragOver={handleDragOverBacklog}
-        onDragLeave={handleDragLeaveBacklog}
-        onDrop={(e) => void handleDropOnBacklog(e)}
       >
         {/* Backlog header */}
         <div
@@ -742,11 +702,11 @@ export function BacklogJiraView({
                 <p className="text-sm text-muted-foreground">
                   {search || typeFilter
                     ? "Nessuna task trovata con questi filtri."
-                    : dragOverBacklog
+                    : isOverBacklog
                     ? "Rilascia qui per spostare nel backlog."
                     : "Il backlog è vuoto."}
                 </p>
-                {!search && !typeFilter && !dragOverBacklog && (
+                {!search && !typeFilter && !isOverBacklog && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Premi{" "}
                     <kbd
@@ -765,32 +725,20 @@ export function BacklogJiraView({
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {filteredBacklog.map((task) => {
-                  const isDragging = draggingTaskId === task.id;
-                  const justLanded = justDroppedTaskId === task.id;
-                  return (
-                    <div
-                      key={task.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, task.id)}
-                      onDragEnd={handleDragEnd}
-                      className={cn(
-                        "cursor-grab active:cursor-grabbing",
-                        isDragging && "border border-dashed border-border/60 rounded-sm mx-1 my-0.5",
-                        justLanded && "animate-task-landing"
-                      )}
-                    >
-                      <div className={isDragging ? "invisible" : ""}>
-                        <TaskRow
-                          task={task}
-                          selected={selectedIds.has(task.id)}
-                          onSelectToggle={toggleSelectTask}
-                          repositories={repositories}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                {filteredBacklog.map((task) => (
+                  <DraggableTaskWrapper
+                    key={task.id}
+                    taskId={task.id}
+                    justLanded={justDroppedTaskId === task.id}
+                  >
+                    <TaskRow
+                      task={task}
+                      selected={selectedIds.has(task.id)}
+                      onSelectToggle={toggleSelectTask}
+                      repositories={repositories}
+                    />
+                  </DraggableTaskWrapper>
+                ))}
               </div>
             )}
 
@@ -818,5 +766,13 @@ export function BacklogJiraView({
         }}
       />
     </div>
+  );
+}
+
+export function BacklogJiraView(props: BacklogJiraViewProps) {
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <BacklogJiraViewInner {...props} />
+    </DndProvider>
   );
 }
