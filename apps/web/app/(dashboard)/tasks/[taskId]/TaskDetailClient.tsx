@@ -12,7 +12,6 @@ import { EditableField } from "@/components/tasks/EditableField";
 import { TaskExecutionMetrics } from "@/components/tasks/TaskExecutionMetrics";
 import { PRCard } from "@/components/tasks/PRCard";
 import { DeployPreviewCard } from "@/components/tasks/DeployPreviewCard";
-import { CommitList } from "@/components/tasks/CommitList";
 import { IterationsList } from "@/components/tasks/IterationsList";
 import { AgentCard } from "@/components/tasks/AgentCard";
 import { cn } from "@/lib/utils";
@@ -367,23 +366,16 @@ export function TaskDetailClient({
           <TaskExecutionMetrics events={events} createdAt={task.created_at} />
 
           {/* PR artifact */}
-          {projectedState.prData && (
-            <PRCard
-              data={projectedState.prData}
-              needsReview={
-                projectedState.prData.status === "open" &&
-                projectedState.status !== "approved"
-              }
-            />
-          )}
+          <PRCard
+            data={projectedState.prData}
+            events={events}
+            {...(repoUrl !== undefined && { repoUrl })}
+          />
 
           {/* Deploy preview */}
           {projectedState.deployData && (
             <DeployPreviewCard data={projectedState.deployData} />
           )}
-
-          {/* Commit list */}
-          <CommitList events={events} {...(repoUrl !== undefined && { repoUrl })} />
 
           {/* Iterations history */}
           <IterationsList iterations={initialIterations} allEvents={events} />
