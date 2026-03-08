@@ -5,7 +5,7 @@ import { getAgentsForWorkspace } from "@/lib/db/agents";
 import { getGitHubConnection, getRepositoriesForWorkspace } from "@/lib/db/github";
 import { AgentsClient } from "./AgentsClient";
 
-export const metadata = { title: "Agents — Robin.dev" };
+export const metadata = { title: "Agenti — Robin.dev" };
 
 export default async function AgentsPage() {
   const { userId } = await auth();
@@ -23,22 +23,11 @@ export default async function AgentsPage() {
   const enabledRepos = repositories.filter((r) => r.is_enabled && r.is_available);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Agents</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Stato real-time degli agenti — aggiornato ogni 30 secondi via heartbeat.
-          </p>
-        </div>
-      </div>
-
-      <AgentsClient
-        workspaceId={workspace.id}
-        initialAgents={agents}
-        hasGitHubConnection={!!connection}
-        enabledRepositories={enabledRepos}
-      />
-    </div>
+    <AgentsClient
+      workspaceId={workspace.id}
+      initialAgents={agents}
+      hasGitHubConnection={!!connection}
+      enabledRepositories={enabledRepos}
+    />
   );
 }
