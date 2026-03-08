@@ -46,7 +46,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar workspaceName={workspace.name} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header workspaceName={workspace.name} activeAgentsCount={activeAgentsCount}>
           {repositories.length > 0 && (
