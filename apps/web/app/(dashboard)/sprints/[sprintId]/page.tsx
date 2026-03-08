@@ -1,13 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { getWorkspaceForUser } from "@/lib/db/workspace";
 import { getSprintWithTasks } from "@/lib/db/sprints";
-import { getAgentsForWorkspace } from "@/lib/db/agents";
-import { getRepositoriesForWorkspace } from "@/lib/db/github";
-import { SprintPlanningView } from "@/components/sprints/SprintPlanningView";
-import { SprintActiveTable } from "@/components/sprints/SprintActiveTable";
-import { SprintNameInlineEditor } from "@/components/sprints/SprintNameInlineEditor";
+import { SprintDetailGroupedView } from "@/components/sprints/SprintDetailGroupedView";
 
 interface SprintDetailPageProps {
   params: Promise<{ sprintId: string }>;
@@ -24,60 +19,7 @@ export default async function SprintDetailPage({ params }: SprintDetailPageProps
   const sprint = await getSprintWithTasks(sprintId, workspace.id);
   if (!sprint) notFound();
 
-  // Fetch agents and repositories for the active sprint table
-  const [agents, repositories] = sprint.status === "active"
-    ? await Promise.all([
-        getAgentsForWorkspace(workspace.id),
-        getRepositoriesForWorkspace(workspace.id),
-      ])
-    : [[], []];
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Link href="/backlog?tab=sprint" className="text-sm text-muted-foreground hover:text-foreground">
-              ← Backlog / Sprint
-            </Link>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold">
-            <SprintNameInlineEditor sprintId={sprint.id} initialName={sprint.name} />
-          </h1>
-          {sprint.goal && (
-            <p className="mt-0.5 text-sm text-muted-foreground italic">&ldquo;{sprint.goal}&rdquo;</p>
-          )}
-        </div>
-
-      </div>
-
-      {/* Content based on sprint status */}
-      {sprint.status === "planning" && (
-        <SprintPlanningView sprint={sprint} tasks={sprint.tasks} />
-      )}
-
-      {sprint.status === "active" && (
-        <SprintActiveTable
-          initialTasks={sprint.tasks}
-          sprintId={sprint.id}
-          workspaceId={workspace.id}
-          agents={agents}
-          repositories={repositories}
-        />
-      )}
-
-      {sprint.status === "completed" && (
-        <div className="rounded-lg border border-border bg-card p-8 text-center">
-          <p className="text-muted-foreground">Sprint completato.</p>
-        </div>
-      )}
-
-      {sprint.status === "cancelled" && (
-        <div className="rounded-lg border border-border bg-card p-8 text-center">
-          <p className="text-muted-foreground">Sprint annullato.</p>
-        </div>
-      )}
-    </div>
+    <SprintDetailGroupedView sprint={sprint} initialTasks={sprint.tasks} />
   );
 }

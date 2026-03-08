@@ -81,6 +81,44 @@ export async function getSprintById(sprintId: string, workspaceId: string): Prom
   return data as Sprint | null;
 }
 
+export type SprintWithTaskCount = Sprint & { task_count: number };
+
+export async function getSprintsWithTaskCounts(workspaceId: string): Promise<SprintWithTaskCount[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const [sprintsResult, tasksResult] = await Promise.all([
+    supabase
+      .from("sprints")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("tasks")
+      .select("sprint_id")
+      .eq("workspace_id", workspaceId)
+      .not("sprint_id", "is", null),
+  ]);
+
+  if (sprintsResult.error) {
+    console.error("[getSprintsWithTaskCounts]", sprintsResult.error.message);
+    return [];
+  }
+
+  const sprints = (sprintsResult.data ?? []) as Sprint[];
+  const tasks = tasksResult.data ?? [];
+
+  const countBySprint = tasks.reduce<Record<string, number>>((acc, task) => {
+    const key = task.sprint_id as string;
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return sprints.map((sprint) => ({
+    ...sprint,
+    task_count: countBySprint[sprint.id] ?? 0,
+  }));
+}
+
 export async function getSprintWithTasks(
   sprintId: string,
   workspaceId: string
