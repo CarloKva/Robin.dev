@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, GitPullRequest, Bot } from "lucide-react";
+import { Bot, GitPullRequest, PenLine, Plus } from "lucide-react";
 import { AgentStatusGrid } from "@/components/dashboard/AgentStatusGrid";
 import { MetricsTile } from "@/components/dashboard/MetricsTile";
 import { ActiveTaskCard } from "@/components/dashboard/ActiveTaskCard";
@@ -96,12 +96,10 @@ export function DashboardClient({
 
 /** Shown on first access when the workspace has no tasks yet. */
 function OnboardingEmptyState({ userName }: { userName: string }) {
-  const firstName = userName || null;
-
   const steps = [
     {
       num: "1",
-      icon: <Plus className="h-4 w-4 text-primary" />,
+      icon: <PenLine className="h-4 w-4 text-primary" />,
       title: "Crea una task",
       desc: "Descrivi il lavoro in linguaggio naturale — titolo, tipo e priorità.",
     },
@@ -120,7 +118,9 @@ function OnboardingEmptyState({ userName }: { userName: string }) {
   ] as const;
 
   function openCreateModal() {
-    document.dispatchEvent(new CustomEvent("open-create-modal"));
+    document.dispatchEvent(
+      new CustomEvent("open-create-modal", { detail: { tab: "task" } })
+    );
   }
 
   return (
@@ -136,16 +136,32 @@ function OnboardingEmptyState({ userName }: { userName: string }) {
           viewBox="0 0 96 96"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-          className="text-primary"
+          aria-label="Illustrazione agente Robin"
+          role="img"
         >
-          <rect width="96" height="96" rx="24" className="fill-primary/10" />
-          <circle cx="48" cy="38" r="14" className="fill-primary/20 stroke-primary" strokeWidth="2" />
-          <circle cx="42" cy="35" r="2.5" className="fill-primary" />
-          <circle cx="54" cy="35" r="2.5" className="fill-primary" />
-          <path d="M42 42 Q48 47 54 42" className="stroke-primary" strokeWidth="2" strokeLinecap="round" fill="none" />
-          <rect x="30" y="58" width="36" height="6" rx="3" className="fill-primary/30" />
-          <rect x="36" y="68" width="24" height="6" rx="3" className="fill-primary/20" />
+          {/* Background */}
+          <circle cx="48" cy="48" r="48" fill="#007AFF" fillOpacity="0.08" />
+          {/* Antenna */}
+          <line x1="48" y1="18" x2="48" y2="10" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" />
+          <circle cx="48" cy="8" r="3" fill="#007AFF" />
+          {/* Head */}
+          <rect x="22" y="18" width="52" height="38" rx="12" fill="#007AFF" fillOpacity="0.12" stroke="#007AFF" strokeWidth="2" />
+          {/* Eyes */}
+          <circle cx="36" cy="35" r="5" fill="#007AFF" />
+          <circle cx="60" cy="35" r="5" fill="#007AFF" />
+          {/* Pupils */}
+          <circle cx="37.5" cy="33.5" r="2" fill="white" />
+          <circle cx="61.5" cy="33.5" r="2" fill="white" />
+          {/* Smile */}
+          <path d="M38 47 Q48 54 58 47" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Body */}
+          <rect x="28" y="58" width="40" height="24" rx="9" fill="#007AFF" fillOpacity="0.12" stroke="#007AFF" strokeWidth="2" />
+          {/* Chest button */}
+          <circle cx="48" cy="70" r="4" fill="#007AFF" fillOpacity="0.35" stroke="#007AFF" strokeWidth="1.5" />
+          {/* Left arm */}
+          <rect x="10" y="60" width="16" height="10" rx="5" fill="#007AFF" fillOpacity="0.12" stroke="#007AFF" strokeWidth="2" />
+          {/* Right arm */}
+          <rect x="70" y="60" width="16" height="10" rx="5" fill="#007AFF" fillOpacity="0.12" stroke="#007AFF" strokeWidth="2" />
         </svg>
       </div>
 
@@ -154,8 +170,9 @@ function OnboardingEmptyState({ userName }: { userName: string }) {
         style={{ animation: "fadeInUp 0.4s ease both", animationDelay: "100ms" }}
       >
         <h2 className="text-2xl font-bold text-foreground">
-          {firstName ? `Benvenuto, ${firstName}! ` : "Benvenuto! "}
-          Robin è pronto a lavorare.
+          {userName
+            ? `Benvenuto, ${userName}! Robin è pronto a lavorare.`
+            : "Benvenuto! Robin è pronto a lavorare."}
         </h2>
         <p className="mt-2 text-muted-foreground">
           Crea la tua prima task e lascia che l&apos;agente scriva il codice per te.
