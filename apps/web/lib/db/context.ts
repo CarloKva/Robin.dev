@@ -79,6 +79,17 @@ export async function deleteContextDocument(workspaceId: string, docId: string):
   if (error) throw new Error(`Failed to delete context document: ${error.message}`);
 }
 
+export async function deleteContextDocuments(workspaceId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("context_documents")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  if (error) throw new Error(`Failed to delete context documents: ${error.message}`);
+}
+
 export async function upsertContextDocumentFromGitHub(
   workspaceId: string,
   doc: {
