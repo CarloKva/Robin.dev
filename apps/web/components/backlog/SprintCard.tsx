@@ -26,7 +26,7 @@ interface SprintCardProps {
   onEditNameChange: (name: string) => void;
   onSaveName: () => void;
   onStartEditName: () => void;
-  sprintNameInputRef: React.RefObject<HTMLInputElement>;
+  sprintNameInputRef: React.RefObject<HTMLInputElement | null>;
   onSprintNameKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   loading: boolean;
   error: string | null;
