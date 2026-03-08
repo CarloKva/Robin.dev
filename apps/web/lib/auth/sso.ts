@@ -71,6 +71,11 @@ export type KVAAuthContext = {
 export function extractKVAAuth(
   request: Request
 ): { ok: true; ctx: KVAAuthContext } | { ok: false; response: NextResponse } {
+  // TODO: remove diagnostic logs before going to production
+  console.log("[SSO] KVA_SSO_SECRET present:", !!process.env["KVA_SSO_SECRET"]);
+  console.log("[SSO] KVA_SSO_ISSUER:", process.env["KVA_SSO_ISSUER"]);
+  console.log("[SSO] X-KVA-Token present:", !!request.headers.get("X-KVA-Token"));
+
   // Use X-KVA-Token instead of Authorization: Bearer to avoid Clerk
   // intercepting the header even on public routes (Clerk reads Authorization
   // regardless of route protection status — by design).
