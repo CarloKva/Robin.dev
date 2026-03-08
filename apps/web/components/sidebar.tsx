@@ -12,8 +12,8 @@ import {
   Bot,
   BarChart2,
   Settings,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   ChevronsUpDown,
 } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -132,8 +132,25 @@ export function Sidebar({ workspaceName }: SidebarProps) {
           isCollapsed ? "w-16" : "w-64"
         }`}
       >
+        {/* Collapse toggle — top of sidebar */}
+        <div className={`px-3 pt-3 pb-1 flex ${isCollapsed ? "justify-center" : "justify-end"}`}>
+          <Tooltip content={isCollapsed ? "Expand sidebar" : "Collapse sidebar"} side="right">
+            <button
+              onClick={toggleCollapsed}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#8E8E93] hover:bg-gray-100 dark:hover:bg-[#2C2C2E] hover:text-[#1C1C1E] dark:hover:text-white transition-colors duration-150"
+              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" strokeWidth={1.5} />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" strokeWidth={1.5} />
+              )}
+            </button>
+          </Tooltip>
+        </div>
+
         {/* Workspace block */}
-        <div className={`px-3 pt-3 pb-2 ${isCollapsed ? "flex justify-center" : ""}`}>
+        <div className={`px-3 pb-2 ${isCollapsed ? "flex justify-center" : ""}`}>
           <div
             className={`flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#2C2C2E] cursor-pointer transition-colors duration-150 ${
               isCollapsed ? "justify-center px-0" : ""
@@ -189,18 +206,6 @@ export function Sidebar({ workspaceName }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Toggle collapse button — right edge, vertically centered */}
-      <button
-        onClick={toggleCollapsed}
-        className="absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-10 bg-gray-100 dark:bg-[#2C2C2E] rounded-r-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-[#3A3A3C] cursor-pointer transition-colors duration-150 border border-[#D1D1D6] dark:border-[#38383A] border-l-0"
-        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {isCollapsed ? (
-          <ChevronRight className="w-3 h-3 text-[#8E8E93]" />
-        ) : (
-          <ChevronLeft className="w-3 h-3 text-[#8E8E93]" />
-        )}
-      </button>
     </div>
   );
 }
