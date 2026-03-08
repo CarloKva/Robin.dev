@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Github,
   Pencil,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 import type { Agent, Sprint, Task, TimelineEntry, TaskProjectedState, TaskIteration } from "@robin/shared-types";
