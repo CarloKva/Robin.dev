@@ -22,7 +22,6 @@ import { EditableField } from "@/components/tasks/EditableField";
 import { TaskExecutionMetrics } from "@/components/tasks/TaskExecutionMetrics";
 import { PRCard } from "@/components/tasks/PRCard";
 import { DeployPreviewCard } from "@/components/tasks/DeployPreviewCard";
-import { CommitList } from "@/components/tasks/CommitList";
 import { IterationsList } from "@/components/tasks/IterationsList";
 import { cn } from "@/lib/utils";
 
@@ -588,17 +587,11 @@ export function TaskDetailClient({
           </div>
 
           {/* PR artifact */}
-          {projectedState.prData && (
-            <div className="mt-4">
-              <PRCard
-                data={projectedState.prData}
-                needsReview={
-                  projectedState.prData.status === "open" &&
-                  projectedState.status !== "approved"
-                }
-              />
-            </div>
-          )}
+          <PRCard
+            data={projectedState.prData}
+            events={events}
+            {...(repoUrl !== undefined && { repoUrl })}
+          />
 
           {/* Deploy preview */}
           {projectedState.deployData && (
@@ -606,11 +599,6 @@ export function TaskDetailClient({
               <DeployPreviewCard data={projectedState.deployData} />
             </div>
           )}
-
-          {/* Commit list */}
-          <div className="mt-4">
-            <CommitList events={events} {...(repoUrl !== undefined && { repoUrl })} />
-          </div>
 
           {/* Contextual actions */}
           <div className="mt-4">

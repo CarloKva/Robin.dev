@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, ChevronDown, ExternalLink } from "lucide-react";
 import type { TaskIteration, TimelineEntry } from "@robin/shared-types";
+import { Timeline } from "@/components/timeline/Timeline";
 import { cn } from "@/lib/utils";
 
 // ── Label maps ────────────────────────────────────────────────────────────────
@@ -20,7 +21,6 @@ function formatTimestamp(iso: string | null): string {
   return new Date(iso).toLocaleDateString("it-IT", {
     day: "numeric",
     month: "short",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -44,20 +44,6 @@ function filterEvents(
   });
 }
 
-// ── Dot state ─────────────────────────────────────────────────────────────────
-
-type DotState = "completed" | "current" | "failed" | "waiting";
-
-function getDotState(
-  iteration: TaskIteration,
-  isCurrent: boolean
-): DotState {
-  if (isCurrent) return "current";
-  if (iteration.status === "completed") return "completed";
-  if (iteration.status === "failed") return "failed";
-  return "waiting";
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface IterationCardProps {
@@ -76,16 +62,23 @@ export function IterationCard({
   stepIndex,
 }: IterationCardProps) {
   const [expanded, setExpanded] = useState(isCurrent);
+  const [visible, setVisible] = useState(false);
 
-  const dotState = getDotState(iteration, isCurrent);
-  const isError = iteration.status === "failed";
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), stepIndex * 80);
+    return () => clearTimeout(timer);
+  }, [stepIndex]);
+
   const filteredEvents = filterEvents(allEvents, iteration, nextIterationStartedAt);
+  const isError = iteration.status === "failed";
 
-  const snippet =
-    iteration.summary ??
-    (filteredEvents.length > 0
-      ? filteredEvents.map((e) => e.narrative).join("\n")
-      : null);
+  // Dot visual state
+  const dotState: "current" | "completed" | "waiting" =
+    isCurrent
+      ? "current"
+      : iteration.status === "completed"
+      ? "completed"
+      : "waiting";
 
   const timestamp = formatTimestamp(
     iteration.started_at ?? iteration.created_at
@@ -93,26 +86,15 @@ export function IterationCard({
 
   return (
     <div
-      className="animate-iteration-step relative"
-      style={{ animationDelay: `${stepIndex * 80}ms` }}
+      className="relative flex gap-3"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateX(0)" : "translateX(-8px)",
+        transition: "opacity 300ms ease, transform 300ms ease",
+      }}
     >
-      {/* Dot — absolutely positioned to sit on the connector line */}
-      <div
-        className={cn(
-          "absolute -left-9 flex items-center justify-center rounded-full text-xs font-semibold select-none z-10",
-          "h-7 w-7",
-          dotState === "completed" &&
-            "bg-[#34C759] text-white",
-          dotState === "current" &&
-            "bg-[#007AFF] text-white",
-          dotState === "failed" &&
-            "bg-red-500 text-white",
-          dotState === "waiting" &&
-            "bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#8E8E93] border border-[#D1D1D6] dark:border-[#48484A]"
-        )}
-      >
-        {iteration.iteration_number}
-
+      {/* Numbered dot — sits on the vertical connector line */}
+      <div className="relative z-10 shrink-0">
         {/* Pulsing ring for current step */}
         {dotState === "current" && (
           <span
@@ -120,17 +102,28 @@ export function IterationCard({
             aria-hidden="true"
           />
         )}
+        <div
+          className={cn(
+            "relative flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold select-none",
+            dotState === "current" && "bg-[#007AFF] text-white",
+            dotState === "completed" && "bg-[#34C759] text-white",
+            dotState === "waiting" &&
+              "border border-[#D1D1D6] bg-[#F2F2F7] text-[#8E8E93] dark:border-[#48484A] dark:bg-[#2C2C2E] dark:text-[#8E8E93]"
+          )}
+        >
+          {iteration.iteration_number}
+        </div>
       </div>
 
-      {/* Card */}
+      {/* Step card */}
       <div
         className={cn(
-          "rounded-xl border transition-colors",
-          isCurrent
+          "flex-1 min-w-0 rounded-xl border bg-card overflow-hidden",
+          isCurrent && !isError
             ? "border-[#007AFF]/30 bg-[#007AFF]/5"
             : isError
-            ? "border-red-400/40 bg-card"
-            : "border-border bg-card"
+            ? "border-red-400/40 dark:border-red-800/60"
+            : "border-border"
         )}
       >
         {/* Header — always visible */}
@@ -151,7 +144,7 @@ export function IterationCard({
             <span className="text-xs text-[#8E8E93]">{timestamp}</span>
           </div>
 
-          {iteration.pr_url && (
+          {iteration.pr_url !== null && (
             <a
               href={iteration.pr_url}
               target="_blank"
@@ -172,31 +165,45 @@ export function IterationCard({
           />
         </button>
 
-        {/* Body — collapsible */}
+        {/* Body — collapsible with max-height transition */}
         <div
-          className={cn(
-            "overflow-hidden transition-[max-height] duration-[250ms] ease-in-out",
-            expanded ? "max-h-[1000px]" : "max-h-0"
-          )}
+          className="overflow-hidden"
+          style={{
+            maxHeight: expanded ? "1000px" : "0",
+            transition: "max-height 250ms ease",
+          }}
         >
           <div
             className={cn(
-              "border-t px-4 pb-4 pt-3",
-              isError ? "border-red-400/40" : "border-border"
+              "border-t px-4 pb-4 pt-3 space-y-2",
+              isError ? "border-red-400/40 dark:border-red-800/60" : "border-border"
             )}
           >
-            {snippet ? (
+            {/* Output snippet */}
+            {iteration.summary !== null ? (
               <div
                 className={cn(
-                  "font-mono text-xs rounded-lg p-3 max-h-32 overflow-y-auto",
+                  "font-mono text-xs rounded-ios-sm p-3 max-h-32 overflow-y-auto",
                   "bg-gray-50 dark:bg-[#2C2C2E]",
                   isError && "border border-red-400/60"
                 )}
               >
-                <pre className="whitespace-pre-wrap break-words">{snippet}</pre>
+                <pre className="whitespace-pre-wrap break-words">{iteration.summary}</pre>
               </div>
             ) : (
-              <p className="text-xs text-[#8E8E93]">Nessun output disponibile.</p>
+              filteredEvents.length === 0 && (
+                <p className="text-xs text-[#8E8E93]">Nessun output disponibile.</p>
+              )
+            )}
+
+            {/* Filtered events timeline */}
+            {filteredEvents.length > 0 && (
+              <div className="mt-1">
+                <Timeline
+                  entries={filteredEvents}
+                  emptyMessage="Nessun evento per questa iterazione."
+                />
+              </div>
             )}
           </div>
         </div>

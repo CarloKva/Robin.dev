@@ -1,57 +1,53 @@
-# Task: Context — Redesign layout due pannelli con doc list ed editor
+# Task: Task Detail — PR Card con status, commit list e link GitHub
 
 **Type:** feature
 **Priority:** medium
-**Task ID:** 3f755dc3-003c-4ee7-b5d6-9ef74c277416
+**Task ID:** 4f384eef-347f-434a-ab3c-91f91db130e8
 
 ## Description
 
 ## Obiettivo
-Redesign della pagina Context con layout a due pannelli stile Apple Notes: lista documenti a sinistra (30%) ed editor a destra (70%).
+Redesign del componente `PRCard` nel task detail con bordo colorato, status PR visivo, lista commit compatta e link diretto a GitHub.
 
-## Layout generale
-- Altezza: calc(100vh - header height), overflow hidden
-- Pannello sinistro: 30% width, border-r border-[#D1D1D6] dark:border-[#38383A], overflow-y-auto
-- Pannello destro: 70% width, overflow-y-auto
-- Su mobile: pannello sinistro occupa tutto lo schermo, tap su doc apre l'editor in overlay (back button per tornare alla lista)
+## PR Card container
+- Card rounded-ios-lg, shadow-ios-sm, bg-white dark:bg-[#1C1C1E]
+- Bordo sinistro 3px colorato in base allo status PR:
+  - open: viola (#8B5CF6)
+  - merged: viola scuro (#6D28D9)
+  - closed: rosso (#FF3B30)
+  - draft: grigio (#8E8E93)
+- Posizionata nella colonna sinistra del task detail, sotto la descrizione
 
-## Pannello sinistro — Lista documenti
-- Header: titolo "Context" font-semibold + bottone "Nuovo documento" icona Plus
-- Search bar: input rounded-xl h-9 con icona Search, filtra la lista in tempo reale
-- Lista doc card:
-  - Icona tipo documento: FileText (generico), Code (codice), FileMarkdown (markdown)
-  - Titolo documento: font-medium text-sm
-  - Snippet contenuto: 2 righe, text-xs text-[#8E8E93], truncate
-  - Data modifica: text-xs text-[#8E8E93] allineata a destra
-- Doc selezionato: bg-[#007AFF]/10 dark:bg-[#007AFF]/15, bordo sinistro blu 2px
-- Hover doc non selezionato: bg-gray-50 dark:bg-[#2C2C2E]/50
-- Empty state: "Nessun documento" con CTA "Crea il primo documento"
+## Header PR card
+- Icona GitPullRequest (colore basato su status)
+- Titolo PR: font-medium, troncato su 1 riga
+- Status badge: pill colorata (open=viola, merged=viola scuro, closed=rosso, draft=grigio)
+- Link "Apri su GitHub" con icona ExternalLink, allineato a destra, testo #007AFF
 
-## Pannello destro — Editor
-- Toolbar minimalista in cima: icone Bold, Italic, Link, Code block — separate da divider verticale
-- Titolo documento: input large, font-bold text-xl, no bordo, placeholder "Titolo documento"
-- Area editor: textarea o rich text editor esistente, padding generoso
-- Auto-save indicator in alto a destra:
-  - Salvataggio in corso: icona Loader spin + "Salvataggio..." text-xs text-[#8E8E93]
-  - Salvato: icona Check verde + "Salvato" text-xs text-[#34C759], scompare dopo 2s
-- Empty state editor (nessun doc selezionato): illustrazione centrata + "Seleziona un documento per iniziare"
+## Dettagli PR
+- Numero PR: "#123" text-xs text-[#8E8E93]
+- Branch: icona GitBranch + nome branch, text-xs, pill grigia
+- Data apertura: text-xs text-[#8E8E93]
 
-## Modal sincronizzazione GitHub
-- Desktop: modal centrata max-w-lg, rounded-2xl, shadow-2xl
-- Mobile: bottom drawer (stesso pattern Step 7)
-- Contenuto: lista file dal repository con checkbox, search bar, bottone "Importa selezionati"
-- Ogni file: icona tipo file, nome, path, checkbox a destra
-- Stato importato: checkmark verde, testo muted
+## Commit list
+- Titolo sezione "Commit" con count pill
+- Lista compatta, max 5 commit visibili, resto collassabile con "Mostra altri N"
+- Ogni commit:
+  - Hash corto (7 char): font-mono text-xs, bg-gray-100 dark:bg-[#2C2C2E] pill
+  - Messaggio commit: text-sm, truncate 1 riga, flex-1
+  - Timestamp: text-xs text-[#8E8E93] allineato a destra
+- Separatore sottile tra commit
+
+## Empty state
+- Se nessuna PR collegata: placeholder con icona GitPullRequest muted + testo "Nessuna PR aperta" + sottotitolo "L'agente aprirà una PR quando inizierà a lavorare"
 
 ## Criteri di accettazione
-- [ ] Layout due pannelli 30/70 funzionante su desktop
-- [ ] Pannello sinistro con search e lista doc card
-- [ ] Doc selezionato con bg blu e bordo sinistro
-- [ ] Auto-save indicator funzionante
-- [ ] Toolbar editor minimalista visibile
-- [ ] Modal GitHub: lista file con checkbox e importazione
-- [ ] Empty state per lista vuota e editor senza selezione
-- [ ] Mobile: pannello lista a schermo intero con navigazione back
+- [ ] Bordo sinistro colorato corretto per ogni status PR
+- [ ] Header con icona, titolo, status badge e link GitHub
+- [ ] Branch e numero PR visibili
+- [ ] Lista commit con hash, messaggio e timestamp
+- [ ] Collasso commit oltre il quinto
+- [ ] Empty state visibile quando nessuna PR collegata
 - [ ] Dark mode funzionante
 
 ## Required Steps (ALL mandatory — do not skip any)
@@ -59,7 +55,7 @@ Redesign della pagina Context con layout a due pannelli stile Apple Notes: lista
 1. Sync with `main` and create a new branch from the latest upstream to avoid merge conflicts:
    ```bash
    git fetch origin
-   git checkout -b feat/3f755dc3-003c-4ee7-b5d6-9ef74c277416 origin/main
+   git checkout -b feat/4f384eef-347f-434a-ab3c-91f91db130e8 origin/main
    ```
 2. Implement the task: create or edit files as needed
 3. Run lint and type-check — **both must pass before committing** (see `CLAUDE.md` for exact commands):
@@ -70,15 +66,15 @@ Redesign della pagina Context con layout a due pannelli stile Apple Notes: lista
    ```
    Fix all errors and warnings before continuing. Do not commit with failing checks.
 4. Run `git add -A && git commit -m "<descriptive message>"`
-5. Run `git push origin feat/3f755dc3-003c-4ee7-b5d6-9ef74c277416`
-6. Open a Pull Request from `feat/3f755dc3-003c-4ee7-b5d6-9ef74c277416` to `main`
+5. Run `git push origin feat/4f384eef-347f-434a-ab3c-91f91db130e8`
+6. Open a Pull Request from `feat/4f384eef-347f-434a-ab3c-91f91db130e8` to `main`
 7. After opening the PR, verify CI status checks pass:
    ```bash
    gh pr checks <PR_URL> --watch
    ```
    If any check fails (lint, typecheck, build), fix the issue, push to the same branch, and wait for CI again before reporting.
 8. Output the PR URL on the **very last line** of your response in this exact format:
-   `{"pr_url":"<url>","branch":"feat/3f755dc3-003c-4ee7-b5d6-9ef74c277416"}`
+   `{"pr_url":"<url>","branch":"feat/4f384eef-347f-434a-ab3c-91f91db130e8"}`
 
 > IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 4–8.
 > If you only output text without committing and creating a PR, the task will be considered failed.
