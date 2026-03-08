@@ -616,7 +616,7 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
         onClick={(e) => e.target === e.currentTarget && closeModal()}
       >
         <div
-          className="relative w-full max-w-lg rounded-xl bg-background border border-border shadow-lg flex flex-col"
+          className="relative w-full max-w-lg rounded-xl bg-background border border-border shadow-lg flex flex-col max-h-[85vh]"
           style={{
             opacity: visible ? 1 : 0,
             transform: visible ? "scale(1)" : "scale(0.95)",

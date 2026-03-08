@@ -1,77 +1,94 @@
-# Task: Reports — Redesign con metric cards, charts stile iOS e date range picker
+# Task: Settings page redesign — layout stile Vercel Settings
 
 **Type:** feature
 **Priority:** medium
-**Task ID:** ef7a9926-2be0-4f72-bb41-815aa771f30e
+**Task ID:** 6f34d8cd-7e3b-4647-8e58-3e318262017c
 
 ## Description
 
 ## Obiettivo
-Redesign di `ReportsClient.tsx` con header date range picker, metric cards con trend, charts con stile iOS e bottone export.
+Ridisegnare `app/(dashboard)/settings/page.tsx` con layout Vercel Settings: sidebar nav secondaria per sezioni, ogni sezione con header separatore, form shadcn/ui allineati, danger zone con border destructive.
 
-## Page header
-- Titolo "Reports" font-bold text-2xl
-- Date range picker a destra: pill cliccabile che mostra il range selezionato (es. "1 Gen — 31 Gen 2025")
-  - Click apre un popover con calendario o selezione rapida: "Ultima settimana", "Ultimo mese", "Ultimi 3 mesi", "Custom"
-  - Stile pill: bg-white dark:bg-[#1C1C1E], border, rounded-xl, h-9, icona Calendar a sinistra
-- Bottone "Esporta" a destra della pill: icona Download, variante secondary, rounded-xl
+## Skills da attivare
+`web-design-guidelines`, `react-best-practices`, `composition-patterns`, `contrast-checker`
 
-## Metric cards con trend
-- Grid 4 colonne desktop / 2 tablet / 1 mobile
-- Ogni card: rounded-ios-lg, shadow-ios-sm, bg-white dark:bg-[#1C1C1E], padding p-5
-- Contenuto:
-  - Icona Lucide in cerchio colorato (bg semantico/10)
-  - Numero principale: font-bold text-3xl con count-up animation al mount
-  - Label: text-sm text-[#8E8E93]
-  - Trend indicator: freccia ↑ verde o ↓ rossa + percentuale + "vs settimana scorsa"
-- Metriche: Task completate, PR aperte, Tempo medio completamento, Agenti attivi
+## Struttura layout
+`grid grid-cols-4 gap-8` — sidebar nav `col-span-1`, contenuto sezione `col-span-3`
 
-## Charts
-Usare la libreria charts già presente nel progetto (verificare recharts o chart.js). Applicare stile iOS:
-- Colori: blu #007AFF, verde #34C759, arancio #FF9500
-- Griglia: linee orizzontali sottili, colore #F2F2F7 dark:#2C2C2E
-- Nessun bordo attorno al chart
-- Tooltip: rounded-ios, shadow-ios-sm, bg-white dark:bg-[#1C1C1E]
-- Label assi: text-xs text-[#8E8E93]
+### Sidebar settings nav (colonna sinistra)
+- Label gruppo: `text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2`
+- Nav items:
+  ```
+  General | GitHub | Agents | Billing | Danger Zone
+  ```
+- Ogni item: `text-sm px-3 py-1.5 rounded-md cursor-pointer`
+- Stato default: `text-muted-foreground hover:text-foreground hover:bg-accent`
+- Stato attivo: `text-foreground bg-accent font-medium`
+- Navigazione: scroll-to-section con `id` anchor o routing con query param `?section=github`
+- "Danger Zone" item: `text-destructive hover:text-destructive hover:bg-destructive/10`
 
-### Line chart — Velocità completamento task
-- Card full-width, titolo "Task completate nel tempo"
-- Area chart con gradiente sotto la linea (colore #007AFF, opacity 10%→0%)
-- Punti dati evidenziati su hover
+### Contenuto sezioni (colonna destra)
 
-### Bar chart — Task per giorno
-- Card metà larghezza, titolo "Task per giorno"
-- Barre arrotondate in cima (borderRadius 4px)
-- Colore barre: #007AFF
+**Pattern header sezione** (ripetuto per ogni sezione):
+```jsx
+<div className="border-b border-border pb-4 mb-6">
+  <h2 className="text-base font-semibold text-foreground">General</h2>
+  <p className="text-sm text-muted-foreground mt-1">Gestisci le impostazioni generali del workspace</p>
+</div>
+```
 
-### Donut chart — Distribuzione status
-- Card metà larghezza, titolo "Distribuzione status"
-- Colori per status: done=verde, running=blu, failed=rosso, in_review=giallo
-- Legenda sotto il donut con label e percentuale
+**Sezione General**
+- Nome workspace: `<Input>` con label `text-sm font-medium` sopra
+- Slug workspace: `<Input>` readonly con prefisso `robin.dev/` in `text-muted-foreground`
+- Save button: `variant="default" size="sm"` allineato a destra
 
-## Export
-- Click bottone "Esporta": dropdown con opzioni "Esporta CSV" e "Esporta PDF"
-- CSV: genera e scarica file con i dati delle metric cards e tabelle
-- PDF: placeholder toast "Funzionalità in arrivo"
+**Sezione GitHub**
+- GitHub token: `<Input type="password">` con toggle show/hide (`Eye`/`EyeOff` Lucide)
+- GitHub org/user: `<Input>`
+- Stato connessione: badge `bg-emerald-50 text-emerald-700` "Connesso" o `bg-zinc-100 text-zinc-600` "Non configurato"
+
+**Sezione Agents**
+- VPS default: `<Input>` per IP
+- SSH key path: `<Input>`
+- Timeout task (min): `<Input type="number">`
+
+**Sezione Billing**
+- Layout placeholder: `border border-border rounded-lg p-6 text-center`
+- Icona `CreditCard` Lucide + `text-sm text-muted-foreground "Gestione billing disponibile a breve"`
+
+**Sezione Danger Zone**
+- Container: `border border-destructive/50 rounded-lg p-4`
+- Header: `text-base font-semibold text-destructive`
+- Descrizione: `text-sm text-muted-foreground`
+- Azioni distruttive (es. "Elimina workspace", "Reset dati"):
+  - Ogni azione: layout `flex items-center justify-between py-3 border-b border-destructive/20 last:border-0`
+  - Label + descrizione a sinistra, bottone a destra: `variant="outline" size="sm" className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"`
+
+### Compound component
+Se la pagina supera 3 boolean props o sezioni props-dipendenti, applica `composition-patterns`:
+- `<SettingsSection>`, `<SettingsSection.Header>`, `<SettingsSection.Body>`
+
+## Note tecniche
+- Mantieni logica save/fetch settings esistente — solo layer UI
+- Zero modifiche a API routes, logica business o tipi TypeScript condivisi
+- Testa in light e dark mode
 
 ## Criteri di accettazione
-- [ ] Date range picker funzionante con selezioni rapide
-- [ ] 4 metric cards con trend indicator
-- [ ] Count-up animation al mount
-- [ ] Line chart con area gradient
-- [ ] Bar chart con barre arrotondate
-- [ ] Donut chart con legenda
-- [ ] Stile iOS applicato a tutti i chart (colori, griglia, tooltip)
-- [ ] Bottone export con dropdown CSV/PDF
-- [ ] Responsive funzionante
-- [ ] Dark mode funzionante
+- [ ] Layout 1/4 + 3/4 con sidebar nav secondaria funzionante
+- [ ] Nav item attivo evidenziato correttamente
+- [ ] Ogni sezione con header `border-b border-border` e descrizione
+- [ ] Danger zone con `border border-destructive/50` e bottoni destructive outlined
+- [ ] "Danger Zone" nav item in `text-destructive`
+- [ ] `contrast-checker` superato per testo destructive su sfondo card
+- [ ] Dark mode verificata visivamente
+- [ ] Zero modifiche a logica business o tipi condivisi
 
 ## Required Steps (ALL mandatory — do not skip any)
 
-1. Sync with `main` and create a new branch from the latest upstream to avoid merge conflicts:
+1. Sync with `staging` and create a new branch from the latest upstream to avoid merge conflicts:
    ```bash
    git fetch origin
-   git checkout -b feat/ef7a9926-2be0-4f72-bb41-815aa771f30e origin/main
+   git checkout -b feat/6f34d8cd-7e3b-4647-8e58-3e318262017c origin/staging
    ```
 2. Implement the task: create or edit files as needed
 3. Run lint and type-check — **both must pass before committing** (see `CLAUDE.md` for exact commands):
@@ -82,15 +99,15 @@ Usare la libreria charts già presente nel progetto (verificare recharts o chart
    ```
    Fix all errors and warnings before continuing. Do not commit with failing checks.
 4. Run `git add -A && git commit -m "<descriptive message>"`
-5. Run `git push origin feat/ef7a9926-2be0-4f72-bb41-815aa771f30e`
-6. Open a Pull Request from `feat/ef7a9926-2be0-4f72-bb41-815aa771f30e` to `main`
+5. Run `git push origin feat/6f34d8cd-7e3b-4647-8e58-3e318262017c`
+6. Open a Pull Request from `feat/6f34d8cd-7e3b-4647-8e58-3e318262017c` to `staging`
 7. After opening the PR, verify CI status checks pass:
    ```bash
    gh pr checks <PR_URL> --watch
    ```
    If any check fails (lint, typecheck, build), fix the issue, push to the same branch, and wait for CI again before reporting.
 8. Output the PR URL on the **very last line** of your response in this exact format:
-   `{"pr_url":"<url>","branch":"feat/ef7a9926-2be0-4f72-bb41-815aa771f30e"}`
+   `{"pr_url":"<url>","branch":"feat/6f34d8cd-7e3b-4647-8e58-3e318262017c"}`
 
 > IMPORTANT: You MUST create a branch, commit, push, and open a PR. Do not skip steps 4–8.
 > If you only output text without committing and creating a PR, the task will be considered failed.
