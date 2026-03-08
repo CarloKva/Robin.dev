@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getWorkspaceForUser, getWorkspaceMemberRole } from "@/lib/db/workspace";
+import { getAgentsForWorkspace } from "@/lib/db/agents";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { OpsPanel } from "./OpsPanel";
 import type { OpsRun } from "@robin/shared-types";
@@ -45,6 +46,7 @@ export default async function OpsPage() {
     .maybeSingle();
 
   const initialRun = data ? mapRow(data as Record<string, unknown>) : null;
+  const initialAgents = await getAgentsForWorkspace(workspace.id);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -52,7 +54,7 @@ export default async function OpsPage() {
         <h1 className="text-sm font-semibold">Ops Diagnostics</h1>
       </div>
       <div className="flex-1 overflow-y-auto p-6">
-        <OpsPanel initialRun={initialRun} />
+        <OpsPanel initialRun={initialRun} initialAgents={initialAgents} />
       </div>
     </div>
   );
