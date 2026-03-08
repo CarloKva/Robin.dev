@@ -497,6 +497,7 @@ export function BacklogJiraView({
         repositories={repositories}
         agents={agents}
         contextDocs={contextDocs}
+        sprints={localSprints}
       />
 
       {/* Filter bar */}

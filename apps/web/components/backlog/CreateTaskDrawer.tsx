@@ -3,6 +3,8 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import { createClient } from "@supabase/supabase-js";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,7 +16,8 @@ import {
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { TaskType, Repository, ContextDocument } from "@robin/shared-types";
+import { ImageUploader } from "@/components/ImageUploader";
+import type { TaskType, Repository, ContextDocument, Sprint, TaskAttachment } from "@robin/shared-types";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
 
@@ -209,6 +212,7 @@ interface CreateTaskDrawerProps {
   repositories: Repository[];
   agents?: Agent[];
   contextDocs?: ContextDocument[];
+  sprints?: Sprint[];
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -220,11 +224,21 @@ export function CreateTaskDrawer({
   repositories,
   agents = [],
   contextDocs = [],
+  sprints = [],
 }: CreateTaskDrawerProps) {
   const router = useRouter();
+  const { getToken } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [destination, setDestination] = useState<"backlog" | "sprint">("backlog");
+  const [selectedSprintId, setSelectedSprintId] = useState<string>("");
   const titleRef = useRef<HTMLInputElement | null>(null);
+
+  const plannableSprints = sprints.filter(
+    (s) => s.status === "planning" || s.status === "active"
+  );
 
   const {
     register,
@@ -281,7 +295,11 @@ export function CreateTaskDrawer({
         context: "",
       });
       setSelectedDocIds([]);
+      setFiles([]);
       setServerError(null);
+      setUploadError(null);
+      setDestination("backlog");
+      setSelectedSprintId("");
     }
   }, [isOpen, reset, repositories]);
 
@@ -293,6 +311,7 @@ export function CreateTaskDrawer({
 
   const onSubmit = async (data: FormValues) => {
     setServerError(null);
+    setUploadError(null);
     try {
       // Build context: merge user text + referenced doc IDs
       let finalContext = data.context ?? "";
@@ -317,6 +336,7 @@ export function CreateTaskDrawer({
         estimated_effort: data.estimated_effort || undefined,
         context: finalContext || undefined,
         ...(data.agent_id ? { preferred_agent_id: data.agent_id } : {}),
+        ...(destination === "sprint" && selectedSprintId ? { sprint_id: selectedSprintId } : {}),
       };
 
       const res = await fetch("/api/tasks", {
@@ -331,6 +351,52 @@ export function CreateTaskDrawer({
           (json as { error?: string }).error ?? "Errore durante la creazione della task."
         );
         return;
+      }
+
+      const { task } = await res.json() as { task: { id: string; workspace_id: string } };
+
+      // Upload attachments if any
+      if (files.length > 0) {
+        try {
+          const token = await getToken({ template: "supabase" });
+          const supabase = createClient(
+            process.env["NEXT_PUBLIC_SUPABASE_URL"]!,
+            process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"]!,
+            token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : {}
+          );
+
+          const attachments: TaskAttachment[] = [];
+
+          for (const file of files) {
+            const storagePath = `${task.workspace_id}/${task.id}/${file.name}`;
+            const { error: uploadErr } = await supabase.storage
+              .from("task-attachments")
+              .upload(storagePath, file);
+
+            if (uploadErr) {
+              console.error("[CreateTaskDrawer] storage upload error:", uploadErr.message);
+              setUploadError(`Errore caricamento allegati: ${uploadErr.message}`);
+              break;
+            }
+
+            attachments.push({
+              name: file.name,
+              storage_path: storagePath,
+              mime_type: file.type,
+            });
+          }
+
+          if (attachments.length > 0) {
+            await fetch(`/api/tasks/${task.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ attachments }),
+            });
+          }
+        } catch (uploadEx) {
+          console.error("[CreateTaskDrawer] upload exception:", uploadEx);
+          setUploadError("Errore durante il caricamento degli allegati.");
+        }
       }
 
       onCreated();
@@ -403,7 +469,9 @@ export function CreateTaskDrawer({
           <div>
             <h2 className="font-semibold text-base text-foreground">Crea task</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              La task verrà aggiunta al backlog.
+              {destination === "sprint" && selectedSprintId
+                ? `La task verrà aggiunta allo sprint selezionato.`
+                : "La task verrà aggiunta al backlog."}
             </p>
           </div>
           <button
@@ -471,6 +539,60 @@ export function CreateTaskDrawer({
                 />
               )}
               <FieldError message={errors.repository_id?.message} />
+            </div>
+
+            {/* Destination: backlog or sprint */}
+            <div>
+              <FieldLabel htmlFor="drawer-task-destination">Destinazione</FieldLabel>
+              <div className="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDestination("backlog")}
+                  disabled={isSubmitting}
+                  className={[
+                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50",
+                    destination === "backlog"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-accent",
+                  ].join(" ")}
+                >
+                  Backlog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDestination("sprint");
+                    if (!selectedSprintId && plannableSprints.length > 0) {
+                      setSelectedSprintId(plannableSprints[0]!.id);
+                    }
+                  }}
+                  disabled={isSubmitting || plannableSprints.length === 0}
+                  className={[
+                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50",
+                    destination === "sprint"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-accent",
+                  ].join(" ")}
+                >
+                  Sprint
+                </button>
+              </div>
+              {plannableSprints.length === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Nessuno sprint in pianificazione disponibile.
+                </p>
+              )}
+              {destination === "sprint" && plannableSprints.length > 0 && (
+                <div className="mt-2">
+                  <CustomSelect
+                    value={selectedSprintId}
+                    onChange={setSelectedSprintId}
+                    options={plannableSprints.map((s) => ({ value: s.id, label: s.name }))}
+                    placeholder="Seleziona sprint"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Type + Priority row */}
@@ -602,6 +724,20 @@ export function CreateTaskDrawer({
                 Opzionale — usato dall&apos;agente come contesto aggiuntivo.
               </p>
               <FieldError message={errors.context?.message} />
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <FieldLabel htmlFor="drawer-task-attachments">
+                Allegati{" "}
+                <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
+              </FieldLabel>
+              <div className="mt-1">
+                <ImageUploader files={files} onChange={setFiles} disabled={isSubmitting} />
+              </div>
+              {uploadError !== null && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
+              )}
             </div>
 
             {/* Server error */}
