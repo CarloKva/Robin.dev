@@ -57,10 +57,26 @@ export class TaskPoller {
     }
   }
 
+  private async recoverStuckQueued(): Promise<void> {
+    const STUCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+    const stuckTasks = await taskRepository.getStuckQueued(STUCK_TIMEOUT_MS, this.workspaceId ?? undefined);
+    for (const task of stuckTasks) {
+      log.warn({ taskId: task.id }, "TaskPoller: resetting stuck queued task (BullMQ job lost)");
+      await taskRepository.resetToUnqueued(task.id);
+    }
+  }
+
   private async poll(): Promise<void> {
     if (!this.running) return;
 
     await this.resolveWorkspaceId();
+
+    // Recovery: reset tasks stuck in 'queued' with no BullMQ job
+    try {
+      await this.recoverStuckQueued();
+    } catch (err) {
+      log.error({ error: String(err) }, "TaskPoller.recoverStuckQueued failed");
+    }
 
     try {
       const tasks = await taskRepository.getPendingUnqueued(this.workspaceId ?? undefined);
