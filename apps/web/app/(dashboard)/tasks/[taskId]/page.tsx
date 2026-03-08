@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTaskTimeline, projectTaskState } from "@/lib/db/events";
 import { getTaskIterations } from "@/lib/db/iterations";
-import type { Agent, Task } from "@robin/shared-types";
+import type { Agent, Sprint, Task } from "@robin/shared-types";
 import { TaskDetailClient } from "./TaskDetailClient";
 
 interface TaskDetailPageProps {
@@ -30,8 +30,8 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   const typedTask = task as Task;
 
-  // Load event history, iteration history, and agent data server-side for SSR
-  const [initialEvents, initialIterations, agentResult] = await Promise.all([
+  // Load event history, iteration history, agent data, and sprint data server-side for SSR
+  const [initialEvents, initialIterations, agentResult, sprintResult] = await Promise.all([
     getTaskTimeline(taskId),
     getTaskIterations(taskId),
     typedTask.assigned_agent_id
@@ -41,9 +41,17 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
           .eq("id", typedTask.assigned_agent_id)
           .single()
       : Promise.resolve({ data: null }),
+    typedTask.sprint_id
+      ? supabase
+          .from("sprints")
+          .select("id, name, status")
+          .eq("id", typedTask.sprint_id)
+          .single()
+      : Promise.resolve({ data: null }),
   ]);
 
   const agent = (agentResult.data as Agent | null) ?? null;
+  const sprint = (sprintResult.data as Pick<Sprint, "id" | "name" | "status"> | null) ?? null;
 
   const projectedState = projectTaskState(
     initialEvents.map((e) => ({
@@ -65,6 +73,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
       initialProjectedState={projectedState}
       initialIterations={initialIterations}
       agent={agent}
+      sprint={sprint}
     />
   );
 }
