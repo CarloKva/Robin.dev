@@ -1,32 +1,14 @@
 import Link from "next/link";
 import FeaturesGrid from "@/components/marketing/FeaturesGrid";
+import MarketingNav from "@/components/marketing/MarketingNav";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Nav */}
-      <nav className="flex h-14 items-center justify-between border-b border-border px-6">
-        <span className="text-sm font-semibold tracking-tight text-foreground">
-          Robin.dev
-        </span>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/sign-in"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/sign-up"
-            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
-          >
-            Get started
-          </Link>
-        </div>
-      </nav>
+      <MarketingNav />
 
       {/* Hero */}
-      <section className="mx-auto max-w-3xl px-6 py-24 text-center">
+      <section className="mx-auto max-w-3xl px-6 pt-14 py-24 text-center">
         <p className="mb-4 inline-block rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
           AI-powered development
         </p>
