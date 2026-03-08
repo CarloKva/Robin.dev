@@ -244,8 +244,14 @@ export function createWorker(): Worker<JobPayload, JobResult> {
     }
   });
 
-  worker.on("stalled", (jobId) => {
-    log.warn({ jobId }, "Job stalled — will be retried");
+  worker.on("stalled", async (jobId) => {
+    log.warn({ jobId }, "Job stalled — will be retried by BullMQ");
+    // If the task is still in 'queued' state (job stalled before processJob started),
+    // reset queued_at so the poller can re-enqueue if BullMQ drops the job.
+    // resetToUnqueued has a .in("status", ["queued"]) guard — safe for in_progress tasks.
+    await taskRepository.resetToUnqueued(jobId).catch((err) => {
+      log.warn({ jobId, error: String(err) }, "Failed to reset queued_at on stall");
+    });
   });
 
   worker.on("error", (err) => {

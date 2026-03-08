@@ -12,7 +12,7 @@ import { Search, X, ChevronRight, ArrowUpDown, Check, Sparkles } from "lucide-re
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
-import { SprintTaskRow } from "./SprintTaskRow";
+import { SprintCard } from "./SprintCard";
 import { BulkActionBar } from "./BulkActionBar";
 import { CreateTaskDrawer } from "./CreateTaskDrawer";
 import { BrainstormModal } from "./BrainstormModal";
@@ -93,10 +93,20 @@ export function BacklogJiraView({
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("backlog-expanded");
+        if (stored) return new Set<string>(JSON.parse(stored) as string[]);
+      } catch { /* ignore */ }
+    }
     const s = new Set<string>(["backlog"]);
     initialSprints.forEach((sp) => s.add(sp.id));
     return s;
   });
+
+  useEffect(() => {
+    localStorage.setItem("backlog-expanded", JSON.stringify([...expanded]));
+  }, [expanded]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBrainstormOpen, setIsBrainstormOpen] = useState(false);
@@ -566,200 +576,41 @@ export function BacklogJiraView({
           </div>
         ) : (
           <>
-            {filteredSprints.map((sprint) => {
-              const isExpanded = expanded.has(sprint.id);
-              const isActive = sprint.status === "active";
-              const isPlanning = sprint.status === "planning";
-              const loading = sprintLoading[sprint.id] ?? false;
-              const error = sprintError[sprint.id] ?? null;
-              const isDragOver = dragOverSprintId === sprint.id;
-              const counts = getStatusCounts(sprint.tasks);
-              const readyCount = sprint.tasks.filter((t) => t.status === "sprint_ready").length;
-              const isEditingName = editingSprintId === sprint.id;
-
-              const startedDate = sprint.started_at
-                ? new Date(sprint.started_at).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
-                : null;
-
-              return (
-                <div
-                  key={sprint.id}
-                  className={cn(
-                    "rounded-lg border bg-card transition-colors duration-150",
-                    isDragOver
-                      ? "border-dashed border-[#007AFF] bg-[#007AFF]/5"
-                      : "border-border"
-                  )}
-                  onDragOver={(e) => handleDragOver(e, sprint.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => void handleDrop(e, sprint.id)}
-                >
-                  {/* Sprint header */}
-                  <div
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 select-none",
-                      isExpanded && sprint.tasks.length > 0 && "border-b border-border"
-                    )}
-                  >
-                    <button
-                      onClick={() => toggleExpand(sprint.id)}
-                      className="flex items-center gap-2 min-w-0 flex-1 text-left"
-                      aria-expanded={isExpanded}
-                    >
-                      <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0", isExpanded ? "rotate-90" : "")} />
-                    </button>
-
-                    {isEditingName ? (
-                      <input
-                        ref={sprintNameInputRef}
-                        type="text"
-                        value={editingSprintName}
-                        onChange={(e) => setEditingSprintName(e.target.value)}
-                        onBlur={() => void saveSprintName(sprint.id)}
-                        onKeyDown={(e) => handleSprintNameKeyDown(e, sprint.id)}
-                        className="flex-1 rounded border border-ring bg-background px-2 py-0.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        onClick={() => toggleExpand(sprint.id)}
-                        onDoubleClick={() => startEditSprintName(sprint)}
-                        className="flex items-center gap-2 min-w-0 flex-1 text-left"
-                        title="Doppio clic per rinominare"
-                      >
-                        <span className="font-semibold text-sm truncate">{sprint.name}</span>
-                        {isActive && startedDate && (
-                          <span className="text-xs text-muted-foreground shrink-0">avviato {startedDate}</span>
-                        )}
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          ({sprint.tasks.length} {sprint.tasks.length === 1 ? "ticket" : "ticket"})
-                        </span>
-                        {isActive && (
-                          <span className="shrink-0 rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
-                            Attivo
-                          </span>
-                        )}
-                        {isPlanning && (
-                          <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                            Pianificazione
-                          </span>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Status counts */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {counts.map(({ key, count, color, bg }) => (
-                        <span
-                          key={key}
-                          className={cn(
-                            "min-w-[22px] rounded px-1.5 py-0.5 text-center text-xs font-medium tabular-nums",
-                            color,
-                            bg
-                          )}
-                        >
-                          {count}
-                        </span>
-                      ))}
-                    </div>
-
-                    {isPlanning && (
-                      <button
-                        onClick={() => void handleStartSprint(sprint.id)}
-                        disabled={loading || readyCount === 0}
-                        className="shrink-0 rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-40"
-                        title={readyCount === 0 ? "Nessuna task pronta" : "Avvia lo sprint"}
-                      >
-                        {loading ? "Avviando..." : "Avvia sprint"}
-                      </button>
-                    )}
-                    {isActive && (
-                      <button
-                        onClick={() => void handleCompleteSprint(sprint.id)}
-                        disabled={loading}
-                        className="shrink-0 rounded border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
-                      >
-                        {loading ? "Completando..." : "Completa lo sprint"}
-                      </button>
-                    )}
-                  </div>
-
-                  {error && (
-                    <div className="mx-3 mt-1 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                      {error}
-                    </div>
-                  )}
-
-                  {/* Sprint task list */}
-                  {isExpanded && (
-                    <div>
-                      {sprint.tasks.length === 0 ? (
-                        <div
-                          className={cn(
-                            "flex flex-col items-center justify-center gap-1 px-4 py-8 text-center transition-colors duration-150",
-                            isDragOver && "bg-[#007AFF]/5"
-                          )}
-                        >
-                          <p className="text-sm text-muted-foreground">
-                            {isDragOver
-                              ? "Rilascia qui per aggiungere allo sprint"
-                              : "Nessuna task in questo sprint"}
-                          </p>
-                          {!isDragOver && isPlanning && (
-                            <p className="text-xs text-muted-foreground">
-                              Trascina task dal backlog qui sotto per aggiungerle allo sprint.
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          {sprint.tasks.map((task) => {
-                            const isDragging = draggingTaskId === task.id;
-                            const justLanded = justDroppedTaskId === task.id;
-                            return (
-                              <div
-                                key={task.id}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, task.id)}
-                                onDragEnd={handleDragEnd}
-                                className={cn(
-                                  "cursor-grab active:cursor-grabbing",
-                                  isDragging && "border border-dashed border-border/60 rounded-sm mx-1 my-0.5",
-                                  justLanded && "animate-task-landing"
-                                )}
-                              >
-                                <div className={isDragging ? "invisible" : ""}>
-                                  <SprintTaskRow
-                                    task={task}
-                                    repositories={repositories}
-                                    agents={agents}
-                                    {...(isPlanning && {
-                                      onRemove: () => void handleRemoveFromSprint(task.id, sprint.id),
-                                    })}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {isPlanning && (
-                        <div className="border-t border-border">
-                          <button
-                            onClick={openDrawer}
-                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
-                          >
-                            <span>+</span>
-                            <span>Crea</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {filteredSprints.map((sprint) => (
+              <SprintCard
+                key={sprint.id}
+                sprint={sprint}
+                isExpanded={expanded.has(sprint.id)}
+                onToggleExpand={() => toggleExpand(sprint.id)}
+                isDragOver={dragOverSprintId === sprint.id}
+                onDragOver={(e) => handleDragOver(e, sprint.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => void handleDrop(e, sprint.id)}
+                draggingTaskId={draggingTaskId}
+                justDroppedTaskId={justDroppedTaskId}
+                isEditingName={editingSprintId === sprint.id}
+                editingSprintName={editingSprintName}
+                onEditNameChange={setEditingSprintName}
+                onSaveName={() => void saveSprintName(sprint.id)}
+                onStartEditName={() => startEditSprintName(sprint)}
+                sprintNameInputRef={sprintNameInputRef}
+                onSprintNameKeyDown={(e) => handleSprintNameKeyDown(e, sprint.id)}
+                loading={sprintLoading[sprint.id] ?? false}
+                error={sprintError[sprint.id] ?? null}
+                onStartSprint={() => void handleStartSprint(sprint.id)}
+                onCompleteSprint={() => void handleCompleteSprint(sprint.id)}
+                onRemoveFromSprint={
+                  sprint.status === "planning"
+                    ? (taskId) => void handleRemoveFromSprint(taskId, sprint.id)
+                    : undefined
+                }
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                openDrawer={openDrawer}
+                repositories={repositories}
+                agents={agents}
+              />
+            ))}
 
             {/* Create sprint form */}
             {showCreateSprintForm ? (

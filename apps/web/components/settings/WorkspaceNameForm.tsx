@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export function WorkspaceNameForm({ initialName }: { initialName: string }) {
   const [name, setName] = useState(initialName);
@@ -10,6 +11,8 @@ export function WorkspaceNameForm({ initialName }: { initialName: string }) {
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+
+  const isDirty = name.trim() !== initialName && name.trim() !== "";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,10 +37,8 @@ export function WorkspaceNameForm({ initialName }: { initialName: string }) {
     });
   }
 
-  const isUnchanged = name.trim() === initialName || name.trim() === "";
-
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+    <form onSubmit={handleSubmit} className="space-y-2">
       <Input
         type="text"
         value={name}
@@ -48,22 +49,30 @@ export function WorkspaceNameForm({ initialName }: { initialName: string }) {
         }}
         maxLength={100}
         error={error !== null}
-        className="h-9 flex-1"
         aria-label="Nome workspace"
       />
-      <button
-        type="submit"
-        disabled={isPending || isUnchanged}
-        className="h-9 rounded-xl bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+
+      {/* Save button — visible only on dirty state */}
+      <div
+        className={cn(
+          "flex items-center justify-end gap-2 transition-all duration-200",
+          isDirty ? "opacity-100 translate-y-0" : "opacity-0 pointer-events-none -translate-y-1"
+        )}
       >
-        {isPending ? "..." : "Salva"}
-      </button>
-      {success && (
-        <span className="text-xs text-emerald-600 dark:text-emerald-400">Salvato</span>
-      )}
-      {error && (
-        <span className="text-xs text-[#FF3B30]">{error}</span>
-      )}
+        {success && (
+          <span className="text-xs text-[#34C759]">Salvato</span>
+        )}
+        {error && (
+          <span className="text-xs text-[#FF3B30]">{error}</span>
+        )}
+        <button
+          type="submit"
+          disabled={isPending || !isDirty}
+          className="rounded-xl bg-[#007AFF] px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {isPending ? "Salvataggio..." : "Salva"}
+        </button>
+      </div>
     </form>
   );
 }
