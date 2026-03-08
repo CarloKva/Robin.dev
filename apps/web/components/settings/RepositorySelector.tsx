@@ -31,10 +31,8 @@ function RepoRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-4 rounded-lg border px-4 py-3 transition-colors",
-        repo.is_enabled
-          ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30"
-          : "border-border bg-card hover:bg-muted/30"
+        "flex items-center justify-between gap-4 rounded-xl border border-[#D1D1D6]/60 dark:border-[#38383A] px-4 py-3 transition-colors",
+        "bg-white dark:bg-[#1C1C1E] hover:bg-[#F2F2F7]/50 dark:hover:bg-[#2C2C2E]/50"
       )}
     >
       <div className="min-w-0 flex-1">
@@ -56,24 +54,22 @@ function RepoRow({
         </p>
       </div>
 
-      {/* Toggle */}
+      {/* iOS toggle */}
       <button
         role="switch"
         aria-checked={repo.is_enabled}
         disabled={isPending || !repo.is_available}
         onClick={() => onToggle(repo, !repo.is_enabled)}
         className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 transition-colors",
-          repo.is_enabled
-            ? "border-emerald-500 bg-emerald-500"
-            : "border-zinc-300 bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-700",
+          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200",
+          repo.is_enabled ? "bg-[#34C759]" : "bg-[#D1D1D6] dark:bg-[#38383A]",
           "disabled:cursor-not-allowed disabled:opacity-50"
         )}
       >
         <span
           className={cn(
-            "pointer-events-none block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform",
-            repo.is_enabled ? "translate-x-4" : "translate-x-0.5"
+            "pointer-events-none block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+            repo.is_enabled ? "translate-x-[22px]" : "translate-x-0.5"
           )}
         />
       </button>
@@ -179,7 +175,7 @@ export function RepositorySelector({ initialRepos, compact }: RepositorySelector
         placeholder="Cerca repository..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        className="h-11 w-full rounded-xl border border-[#D1D1D6] bg-white dark:bg-[#1C1C1E] dark:border-[#38383A] px-3.5 text-sm text-[#1C1C1E] dark:text-white placeholder:text-[#8E8E93] outline-none transition-colors focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20"
       />
 
       {/* Repo list */}

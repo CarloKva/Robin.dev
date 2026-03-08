@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface NotificationsFormProps {
   initialEmail: string | null;
@@ -17,6 +18,10 @@ export function NotificationsForm({
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const initialEmailValue = initialEmail ?? "";
+  const initialSlackValue = initialSlackWebhook ?? "";
+  const isDirty = email !== initialEmailValue || slack !== initialSlackValue;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,17 +59,17 @@ export function NotificationsForm({
       {/* Email notification */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <label htmlFor="notify_email" className="text-sm font-medium text-foreground">
+          <label htmlFor="notify_email" className="text-sm font-medium text-[#1C1C1E] dark:text-white">
             Email notifiche
           </label>
           {emailConfigured ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-medium text-[#34C759] border border-[#34C759]/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
               Configurata
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] px-2 py-0.5 text-[10px] font-medium text-[#8E8E93] border border-[#D1D1D6]/60 dark:border-[#38383A]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#8E8E93]" />
               Non impostata
             </span>
           )}
@@ -79,7 +84,7 @@ export function NotificationsForm({
           }}
           placeholder="team@esempio.com"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[#8E8E93]">
           Ricevi notifiche email quando un task viene completato o richiede review.
         </p>
       </div>
@@ -87,17 +92,17 @@ export function NotificationsForm({
       {/* Slack webhook */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <label htmlFor="notify_slack" className="text-sm font-medium text-foreground">
+          <label htmlFor="notify_slack" className="text-sm font-medium text-[#1C1C1E] dark:text-white">
             Slack Webhook
           </label>
           {slackConfigured ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#34C759]/10 px-2 py-0.5 text-[10px] font-medium text-[#34C759] border border-[#34C759]/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
               Configurato
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] px-2 py-0.5 text-[10px] font-medium text-[#8E8E93] border border-[#D1D1D6]/60 dark:border-[#38383A]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#8E8E93]" />
               Non impostato
             </span>
           )}
@@ -112,30 +117,36 @@ export function NotificationsForm({
           }}
           placeholder="https://hooks.slack.com/services/..."
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[#8E8E93]">
           URL webhook Incoming di Slack per ricevere notifiche nel tuo canale.
         </p>
       </div>
 
-      <div className="flex items-center gap-3 pt-1">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-50"
-        >
-          {isPending ? "Salvataggio..." : "Salva notifiche"}
-        </button>
+      {/* Save button — visible only on dirty state */}
+      <div
+        className={cn(
+          "flex items-center justify-end gap-3 transition-all duration-200",
+          isDirty ? "opacity-100 translate-y-0" : "opacity-0 pointer-events-none -translate-y-1"
+        )}
+      >
         {status === "saved" && (
-          <span className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <span className="flex items-center gap-1.5 text-xs text-[#34C759]">
+            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
             </svg>
             Salvato
           </span>
         )}
         {status === "error" && (
-          <span className="text-sm text-destructive">{errorMsg}</span>
+          <span className="text-xs text-[#FF3B30]">{errorMsg}</span>
         )}
+        <button
+          type="submit"
+          disabled={isPending || !isDirty}
+          className="rounded-xl bg-[#007AFF] px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {isPending ? "Salvataggio..." : "Salva notifiche"}
+        </button>
       </div>
     </form>
   );
