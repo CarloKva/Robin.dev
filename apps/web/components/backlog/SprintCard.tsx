@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDrop } from "react-dnd";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SprintTaskRow } from "./SprintTaskRow";
+import { DraggableTaskWrapper, TASK_DND_TYPE } from "./DraggableTaskWrapper";
+import type { TaskDragItem } from "./DraggableTaskWrapper";
 import type { SprintWithTasks, Repository } from "@robin/shared-types";
 
 interface Agent {
@@ -15,11 +18,7 @@ interface SprintCardProps {
   sprint: SprintWithTasks;
   isExpanded: boolean;
   onToggleExpand: () => void;
-  isDragOver: boolean;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
-  draggingTaskId: string | null;
+  onTaskDrop: (taskId: string) => void;
   justDroppedTaskId: string | null;
   isEditingName: boolean;
   editingSprintName: string;
@@ -33,8 +32,6 @@ interface SprintCardProps {
   onStartSprint: () => void;
   onCompleteSprint: () => void;
   onRemoveFromSprint: ((taskId: string) => void) | undefined;
-  onDragStart: (e: React.DragEvent, taskId: string) => void;
-  onDragEnd: () => void;
   openDrawer: () => void;
   repositories: Repository[];
   agents: Agent[];
@@ -81,11 +78,7 @@ export function SprintCard({
   sprint,
   isExpanded,
   onToggleExpand,
-  isDragOver,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  draggingTaskId,
+  onTaskDrop,
   justDroppedTaskId,
   isEditingName,
   editingSprintName,
@@ -99,12 +92,26 @@ export function SprintCard({
   onStartSprint,
   onCompleteSprint,
   onRemoveFromSprint,
-  onDragStart,
-  onDragEnd,
   openDrawer,
   repositories,
   agents,
 }: SprintCardProps) {
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const [{ isOver }, drop] = useDrop<TaskDragItem, unknown, { isOver: boolean }>({
+    accept: TASK_DND_TYPE,
+    drop: (item, monitor) => {
+      if (!monitor.didDrop()) {
+        onTaskDrop(item.taskId);
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver({ shallow: true }),
+    }),
+  });
+
+  drop(dropRef);
+
   const isActive = sprint.status === "active";
   const isPlanning = sprint.status === "planning";
 
@@ -123,13 +130,11 @@ export function SprintCard({
 
   return (
     <div
+      ref={dropRef}
       className={cn(
         "rounded-ios-lg shadow-ios-sm bg-white dark:bg-[#1C1C1E] mb-4 overflow-hidden transition-colors duration-150",
-        isDragOver && "ring-1 ring-[#007AFF] bg-[#007AFF]/5 dark:bg-[#007AFF]/10"
+        isOver && "ring-1 ring-[#007AFF] bg-[#007AFF]/5 dark:bg-[#007AFF]/10"
       )}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
     >
       {/* Header */}
       <div
@@ -198,7 +203,8 @@ export function SprintCard({
             </span>
           )}
           <span className="text-xs text-[#8E8E93]">
-            {sprint.tasks.length} {sprint.tasks.length === 1 ? "task" : "task"} · {completedCount} {completedCount === 1 ? "completata" : "completate"}
+            {sprint.tasks.length} {sprint.tasks.length === 1 ? "task" : "task"} · {completedCount}{" "}
+            {completedCount === 1 ? "completata" : "completate"}
           </span>
 
           {/* Sprint action buttons */}
@@ -245,70 +251,58 @@ export function SprintCard({
         }}
       >
         <div className="overflow-hidden">
-        <div className="border-t border-border/60">
-          {sprint.tasks.length === 0 ? (
-            <div
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 px-4 py-8 text-center transition-colors duration-150",
-                isDragOver && "bg-[#007AFF]/5"
-              )}
-            >
-              <p className="text-sm text-muted-foreground">
-                {isDragOver
-                  ? "Rilascia qui per aggiungere allo sprint"
-                  : "Nessuna task in questo sprint"}
-              </p>
-              {!isDragOver && isPlanning && (
-                <p className="text-xs text-muted-foreground">
-                  Trascina task dal backlog qui sotto per aggiungerle allo sprint.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div>
-              {sprint.tasks.map((task) => {
-                const isDragging = draggingTaskId === task.id;
-                const justLanded = justDroppedTaskId === task.id;
-                return (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => onDragStart(e, task.id)}
-                    onDragEnd={onDragEnd}
-                    className={cn(
-                      "cursor-grab active:cursor-grabbing",
-                      isDragging && "border border-dashed border-border/60 rounded-sm mx-1 my-0.5",
-                      justLanded && "animate-task-landing"
-                    )}
-                  >
-                    <div className={isDragging ? "invisible" : ""}>
-                      <SprintTaskRow
-                        task={task}
-                        repositories={repositories}
-                        agents={agents}
-                        {...(isPlanning && onRemoveFromSprint
-                          ? { onRemove: () => onRemoveFromSprint(task.id) }
-                          : {})}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {isPlanning && (
-            <div className="border-t border-border/60">
-              <button
-                onClick={openDrawer}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+          <div className="border-t border-border/60">
+            {sprint.tasks.length === 0 ? (
+              <div
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 px-4 py-8 text-center transition-colors duration-150",
+                  isOver && "bg-[#007AFF]/5"
+                )}
               >
-                <span>+</span>
-                <span>Crea</span>
-              </button>
-            </div>
-          )}
-        </div>
+                <p className="text-sm text-muted-foreground">
+                  {isOver
+                    ? "Rilascia qui per aggiungere allo sprint"
+                    : "Nessuna task in questo sprint"}
+                </p>
+                {!isOver && isPlanning && (
+                  <p className="text-xs text-muted-foreground">
+                    Trascina task dal backlog qui sotto per aggiungerle allo sprint.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                {sprint.tasks.map((task) => (
+                  <DraggableTaskWrapper
+                    key={task.id}
+                    taskId={task.id}
+                    justLanded={justDroppedTaskId === task.id}
+                  >
+                    <SprintTaskRow
+                      task={task}
+                      repositories={repositories}
+                      agents={agents}
+                      {...(isPlanning && onRemoveFromSprint
+                        ? { onRemove: () => onRemoveFromSprint(task.id) }
+                        : {})}
+                    />
+                  </DraggableTaskWrapper>
+                ))}
+              </div>
+            )}
+
+            {isPlanning && (
+              <div className="border-t border-border/60">
+                <button
+                  onClick={openDrawer}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
+                >
+                  <span>+</span>
+                  <span>Crea</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
