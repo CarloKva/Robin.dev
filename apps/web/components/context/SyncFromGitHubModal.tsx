@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X, Search, FileCode, FileText, Code, Loader2, Github } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Repository } from "@robin/shared-types";
 
 interface SyncFromGitHubModalProps {
@@ -12,11 +13,11 @@ interface SyncFromGitHubModalProps {
 
 function getFileIcon(path: string) {
   const ext = path.split(".").pop()?.toLowerCase();
-  if (ext === "md" || ext === "mdx") return <FileCode className="h-4 w-4 shrink-0 text-[#8E8E93]" />;
+  if (ext === "md" || ext === "mdx") return <FileCode className="h-4 w-4 shrink-0 text-muted-foreground" />;
   if (ext === "ts" || ext === "tsx" || ext === "js" || ext === "jsx") {
-    return <Code className="h-4 w-4 shrink-0 text-[#8E8E93]" />;
+    return <Code className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }
-  return <FileText className="h-4 w-4 shrink-0 text-[#8E8E93]" />;
+  return <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />;
 }
 
 function getFileName(path: string) {
@@ -135,41 +136,43 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
       {/* Modal — bottom drawer on mobile, centered on desktop */}
-      <div className="relative z-10 mx-0 sm:mx-4 w-full sm:max-w-lg max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-[#D1D1D6]/60 dark:border-[#38383A]/60 bg-white dark:bg-[#1C1C1E] shadow-2xl overflow-hidden">
+      <div className="relative z-10 mx-0 sm:mx-4 w-full sm:max-w-lg max-h-[92vh] flex flex-col rounded-t-xl sm:rounded-xl border border-border bg-background shadow-lg overflow-hidden">
         {/* Drag indicator on mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden shrink-0">
-          <div className="w-9 h-1 rounded-full bg-[#D1D1D6] dark:bg-[#48484A]" />
+          <div className="w-9 h-1 rounded-full bg-border" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-[#D1D1D6]/60 dark:border-[#38383A]/60">
+        <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border">
           <div className="flex items-center gap-2">
-            <Github className="h-4 w-4 text-[#8E8E93]" />
-            <h2 className="font-semibold text-base">Importa da GitHub</h2>
+            <Github className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold text-base text-foreground">Importa da GitHub</h2>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-7 h-7"
             onClick={onClose}
-            className="rounded-xl p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
             aria-label="Chiudi"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {/* Repo selector */}
           <div>
-            <label className="block text-xs font-medium text-[#8E8E93] uppercase tracking-wide mb-2">
+            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
               Repository
             </label>
             <select
               value={selectedRepo}
               onChange={(e) => handleRepoChange(e.target.value)}
-              className="w-full h-9 rounded-xl border border-[#D1D1D6] dark:border-[#38383A] bg-gray-50 dark:bg-[#2C2C2E] px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[#007AFF]/40 transition-colors"
+              className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
             >
               {repositories.map((r) => (
                 <option key={r.id} value={r.full_name}>
@@ -180,7 +183,7 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
             {!mdPaths.length && !loadingTree && selectedRepo && (
               <button
                 onClick={() => void loadTree(selectedRepo)}
-                className="mt-2 text-xs text-[#007AFF] hover:underline"
+                className="mt-2 text-xs text-primary hover:underline"
               >
                 Carica file
               </button>
@@ -190,16 +193,14 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
           {/* Loading */}
           {loadingTree && (
             <div className="flex items-center gap-2 py-2">
-              <Loader2 className="h-4 w-4 animate-spin text-[#8E8E93]" />
-              <span className="text-sm text-[#8E8E93]">Caricamento file…</span>
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Caricamento file…</span>
             </div>
           )}
 
           {/* Error */}
           {treeError && (
-            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-xl px-3 py-2">
-              {treeError}
-            </p>
+            <p className="text-sm text-destructive">{treeError}</p>
           )}
 
           {/* File list */}
@@ -207,34 +208,34 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
             <div className="space-y-2">
               {/* File search */}
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8E8E93]" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Cerca file…"
                   value={fileSearch}
                   onChange={(e) => setFileSearch(e.target.value)}
-                  className="h-9 w-full rounded-xl bg-gray-100 dark:bg-[#2C2C2E] pl-8 pr-3 text-sm text-foreground placeholder:text-[#8E8E93] border-none outline-none focus:ring-1 focus:ring-[#007AFF]/40 transition-colors"
+                  className="h-9 w-full rounded-md bg-muted pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground border-none outline-none focus:ring-1 focus:ring-ring transition-colors"
                 />
               </div>
 
               {/* Select all */}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#8E8E93]">
+                <span className="text-xs text-muted-foreground">
                   {filteredPaths.length} file trovati
                   {selectedPaths.size > 0 && ` · ${selectedPaths.size} selezionati`}
                 </span>
                 <button
                   onClick={() => toggleAll(!allVisibleSelected)}
-                  className="text-xs text-[#007AFF] hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   {allVisibleSelected ? "Deseleziona tutti" : "Seleziona tutti"}
                 </button>
               </div>
 
               {/* File items */}
-              <ul className="rounded-xl border border-[#D1D1D6]/60 dark:border-[#38383A]/60 divide-y divide-[#D1D1D6]/40 dark:divide-[#38383A]/40 max-h-52 overflow-y-auto">
+              <ul className="rounded-md border border-border divide-y divide-border max-h-52 overflow-y-auto">
                 {filteredPaths.length === 0 ? (
-                  <li className="px-4 py-3 text-sm text-[#8E8E93] text-center">
+                  <li className="px-4 py-3 text-sm text-muted-foreground text-center">
                     Nessun file trovato
                   </li>
                 ) : (
@@ -245,8 +246,8 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
                         <label
                           className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
                             isSelected
-                              ? "bg-[#007AFF]/5 dark:bg-[#007AFF]/10"
-                              : "hover:bg-gray-50 dark:hover:bg-[#2C2C2E]/50"
+                              ? "bg-primary/5"
+                              : "hover:bg-accent"
                           }`}
                         >
                           {getFileIcon(path)}
@@ -255,7 +256,7 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
                               {getFileName(path)}
                             </p>
                             {getFilePath(path) && (
-                              <p className="text-xs text-[#8E8E93] truncate font-mono">
+                              <p className="text-xs text-muted-foreground truncate font-mono">
                                 {getFilePath(path)}
                               </p>
                             )}
@@ -264,7 +265,7 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => togglePath(path)}
-                            className="h-4 w-4 rounded border-[#D1D1D6] accent-[#007AFF] shrink-0"
+                            className="h-4 w-4 rounded border-border shrink-0"
                           />
                         </label>
                       </li>
@@ -276,31 +277,25 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
           )}
 
           {!loadingTree && mdPaths.length === 0 && !treeError && selectedRepo && (
-            <p className="text-sm text-[#8E8E93] text-center py-4">
+            <p className="text-sm text-muted-foreground text-center py-4">
               Nessun file trovato nella repository.
             </p>
           )}
 
           {syncError && (
-            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-xl px-3 py-2">
-              {syncError}
-            </p>
+            <p className="text-sm text-destructive">{syncError}</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-[#D1D1D6]/60 dark:border-[#38383A]/60 px-5 py-4 shrink-0 flex gap-2 justify-end">
-          <button
-            onClick={onClose}
-            disabled={syncing}
-            className="rounded-xl border border-[#D1D1D6] dark:border-[#38383A] bg-transparent px-4 py-2 text-sm font-medium text-foreground hover:bg-gray-50 dark:hover:bg-[#2C2C2E] transition-colors disabled:opacity-50"
-          >
+        <div className="border-t border-border px-6 py-4 shrink-0 flex gap-2 justify-end">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={syncing}>
             Annulla
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             onClick={() => void handleSync()}
             disabled={syncing || selectedPaths.size === 0}
-            className="flex items-center gap-1.5 rounded-xl bg-[#007AFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#007AFF]/90 transition-colors disabled:opacity-50"
           >
             {syncing ? (
               <>
@@ -310,7 +305,7 @@ export function SyncFromGitHubModal({ repositories, onClose, onSynced }: SyncFro
             ) : (
               `Importa${selectedPaths.size > 0 ? ` (${selectedPaths.size})` : ""}`
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

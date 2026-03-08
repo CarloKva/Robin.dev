@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { Repository, WorkspaceEnvironment } from "@robin/shared-types";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { AppDialog } from "@/components/ui/app-dialog";
 
 interface CreateEnvironmentModalProps {
   repositories: Pick<Repository, "id" | "full_name" | "default_branch">[];
@@ -61,23 +63,11 @@ export function CreateEnvironmentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-base font-semibold text-foreground">Nuovo ambiente</h2>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-            </svg>
-          </button>
-        </div>
+    <AppDialog onClose={onClose} maxWidth="max-w-md">
+      <AppDialog.Header title="Nuovo ambiente" />
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+      <form id="create-env-form" onSubmit={handleSubmit}>
+        <AppDialog.Body className="space-y-4">
           {/* Repository */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">Repository</label>
@@ -180,30 +170,19 @@ export function CreateEnvironmentModal({
           </div>
 
           {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
+            <p className="text-sm text-destructive">{error}</p>
           )}
+        </AppDialog.Body>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              Annulla
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
-            >
-              {saving ? "Creazione..." : "Crea"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <AppDialog.Footer>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Annulla
+          </Button>
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? "Creazione..." : "Crea"}
+          </Button>
+        </AppDialog.Footer>
+      </form>
+    </AppDialog>
   );
 }

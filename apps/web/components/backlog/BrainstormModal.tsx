@@ -911,14 +911,14 @@ export function BrainstormModal({
         aria-hidden="true"
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
+          "fixed inset-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300",
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
       />
 
       <div
         className={cn(
-          "fixed z-40 flex flex-col bg-white dark:bg-[#1C1C1E] shadow-2xl",
+          "fixed z-40 flex flex-col bg-background border border-border shadow-lg",
           isMobile
             ? "inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]"
             : "right-0 top-0 h-screen w-[480px]"
@@ -946,7 +946,7 @@ export function BrainstormModal({
         {/* Handle bar — mobile only */}
         {isMobile && (
           <div className="flex justify-center mt-3 shrink-0">
-            <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
+            <div className="h-1 w-9 rounded-full bg-border" />
           </div>
         )}
       {/* Header */}
@@ -1040,7 +1040,7 @@ export function BrainstormModal({
           )}
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white transition-opacity hover:opacity-70"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label="Chiudi"
           >
             <X className="h-4 w-4" />

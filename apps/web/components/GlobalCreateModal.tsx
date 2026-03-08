@@ -4,10 +4,12 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { createClient } from "@supabase/supabase-js";
+import { X } from "lucide-react";
 import { AgentCreationForm } from "@/components/agents/AgentCreationForm";
 import { ImageUploader } from "@/components/ImageUploader";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Repository, Sprint, TaskAttachment } from "@robin/shared-types";
 
@@ -200,8 +202,8 @@ function TaskCreationTab({
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Title */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-[#1C1C1E] dark:text-white" htmlFor="ct-title">
-          Titolo <span className="text-[#FF3B30]">*</span>
+        <label className="text-sm font-medium text-foreground" htmlFor="ct-title">
+          Titolo <span className="text-destructive">*</span>
         </label>
         <Input
           ref={titleRef}
@@ -216,8 +218,8 @@ function TaskCreationTab({
 
       {/* Description */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-[#1C1C1E] dark:text-white" htmlFor="ct-desc">
-          Descrizione <span className="text-xs font-normal text-[#8E8E93]">(opzionale)</span>
+        <label className="text-sm font-medium text-foreground" htmlFor="ct-desc">
+          Descrizione <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
         </label>
         <Textarea
           id="ct-desc"
@@ -409,46 +411,19 @@ function TaskCreationTab({
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
-      <div className="flex items-center justify-end gap-3 pt-1">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={submitting}
-          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-        >
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
           Annulla
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
+          size="sm"
           disabled={submitting || !form.title.trim() || !form.repositoryId}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Creando…" : "Crea task"}
-        </button>
+        </Button>
       </div>
     </form>
-  );
-}
-
-// ─── Shared close button ────────────────────────────────────────────────────
-
-function CloseButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Chiudi"
-      className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-[#2C2C2E] transition-colors hover:bg-gray-200 dark:hover:bg-[#3A3A3C]"
-    >
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path
-          d="M12 4L4 12M4 4L12 12"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    </button>
   );
 }
 
@@ -565,7 +540,15 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
         ))}
       </div>
       <div className="mb-3">
-        <CloseButton onClick={closeModal} />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-7 h-7"
+          onClick={closeModal}
+          aria-label="Chiudi"
+        >
+          <X className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );
@@ -586,7 +569,7 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
 
   const overlayEl = (
     <div
-      className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      className="absolute inset-0 bg-background/80 backdrop-blur-sm"
       style={{
         opacity: visible ? 1 : 0,
         transition: "opacity 200ms ease",
@@ -601,7 +584,7 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
       <div className="fixed inset-0 z-50">
         {overlayEl}
         <div
-          className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl max-h-[90vh]"
+          className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-xl bg-background border border-border border-b-0 shadow-lg max-h-[90vh]"
           style={{
             transform: visible ? `translateY(${dragY}px)` : "translateY(100%)",
             transition: isDragging
@@ -616,7 +599,7 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
         >
           {/* Handle bar */}
           <div className="flex justify-center mt-3 shrink-0">
-            <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
+            <div className="h-1 w-9 rounded-full bg-border" />
           </div>
           {tabHeader}
           {bodyContent}
@@ -633,7 +616,7 @@ export function GlobalCreateModal({ repositories, hasGitHubConnection }: GlobalC
         onClick={(e) => e.target === e.currentTarget && closeModal()}
       >
         <div
-          className="relative w-full max-w-lg rounded-2xl bg-white dark:bg-[#1C1C1E] shadow-2xl flex flex-col"
+          className="relative w-full max-w-lg rounded-xl bg-background border border-border shadow-lg flex flex-col"
           style={{
             opacity: visible ? 1 : 0,
             transform: visible ? "scale(1)" : "scale(0.95)",
