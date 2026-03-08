@@ -8,7 +8,7 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { Search, X, ChevronRight, ArrowUpDown, Check, Sparkles } from "lucide-react";
+import { Search, X, ChevronRight, ArrowUpDown, Check, MessageSquare } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
@@ -472,7 +472,7 @@ export function BacklogJiraView({
   // Render
 
   return (
-    <div className={cn("space-y-0 transition-all duration-300 ease-in-out", isBrainstormOpen ? "md:mr-[480px]" : "")}>
+    <div className="space-y-0">
       <BrainstormModal
         isOpen={isBrainstormOpen}
         onClose={() => setIsBrainstormOpen(false)}
@@ -481,13 +481,13 @@ export function BacklogJiraView({
         onImported={refresh}
       />
 
-      {/* Floating trigger for brainstorm drawer */}
+      {/* Floating trigger */}
       <button
         onClick={() => setIsBrainstormOpen((prev) => !prev)}
-        className="fixed bottom-4 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-colors hover:bg-foreground/90"
+        className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-zinc-900 text-white shadow-lg flex items-center justify-center hover:bg-zinc-800 transition-colors dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
         aria-label={isBrainstormOpen ? "Chiudi Genera Task" : "Apri Genera Task"}
       >
-        {isBrainstormOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+        {isBrainstormOpen ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
       </button>
 
       <CreateTaskDrawer
