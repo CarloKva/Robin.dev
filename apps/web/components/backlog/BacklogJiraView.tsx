@@ -10,16 +10,15 @@ import {
 } from "react";
 import { Search, X, ChevronRight, ArrowUpDown, Check, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { TaskRow } from "./TaskRow";
+import { SprintTaskRow } from "./SprintTaskRow";
 import { BulkActionBar } from "./BulkActionBar";
 import { CreateTaskDrawer } from "./CreateTaskDrawer";
 import { BrainstormModal } from "./BrainstormModal";
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { useKeyboardShortcut } from "@/lib/hooks/useKeyboardShortcut";
 import type { Task, Repository, Sprint, SprintWithTasks, ContextDocument } from "@robin/shared-types";
-import { PRIORITY_ICONS, STATUS_LABELS, STATUS_COLORS } from "@/lib/task-constants";
 
 const TASK_TYPES = [
   { value: "", label: "Tipo" },
@@ -704,7 +703,7 @@ export function BacklogJiraView({
                           <p className="text-sm text-muted-foreground">
                             {isDragOver
                               ? "Rilascia qui per aggiungere allo sprint"
-                              : "Nessuna task nello sprint."}
+                              : "Nessuna task in questo sprint"}
                           </p>
                           {!isDragOver && isPlanning && (
                             <p className="text-xs text-muted-foreground">
@@ -713,9 +712,8 @@ export function BacklogJiraView({
                           )}
                         </div>
                       ) : (
-                        <div className="divide-y divide-border">
+                        <div>
                           {sprint.tasks.map((task) => {
-                            const priority = PRIORITY_ICONS[task.priority] ?? { icon: "—", className: "text-slate-400" };
                             const isDragging = draggingTaskId === task.id;
                             const justLanded = justDroppedTaskId === task.id;
                             return (
@@ -730,53 +728,15 @@ export function BacklogJiraView({
                                   justLanded && "animate-task-landing"
                                 )}
                               >
-                                <div className={cn(
-                                  "group flex items-center gap-3 px-4 py-2.5 text-sm",
-                                  !isDragging && "hover:bg-accent/40",
-                                  isDragging && "invisible"
-                                )}>
-                                  <span
-                                    className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", STATUS_COLORS[task.status])}
-                                    title={STATUS_LABELS[task.status]}
+                                <div className={isDragging ? "invisible" : ""}>
+                                  <SprintTaskRow
+                                    task={task}
+                                    repositories={repositories}
+                                    agents={agents}
+                                    {...(isPlanning && {
+                                      onRemove: () => void handleRemoveFromSprint(task.id, sprint.id),
+                                    })}
                                   />
-                                  <Link
-                                    href={`/tasks/${task.id}`}
-                                    className="min-w-0 flex-1 font-medium truncate hover:underline"
-                                  >
-                                    {task.title}
-                                  </Link>
-                                  <span
-                                    className={cn(
-                                      "shrink-0 rounded px-1.5 py-0.5 text-xs font-medium",
-                                      task.status === "sprint_ready" && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-                                      task.status === "in_progress" && "bg-blue-600 text-white",
-                                      task.status === "in_review" && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30",
-                                      task.status === "rework" && "bg-orange-100 text-orange-700 dark:bg-orange-900/30",
-                                      task.status === "done" && "bg-green-100 text-green-700 dark:bg-green-900/30",
-                                      task.status === "queued" && "bg-slate-100 text-slate-600 dark:bg-slate-800",
-                                      task.status === "failed" && "bg-red-100 text-red-700 dark:bg-red-900/30",
-                                      task.status === "cancelled" && "bg-slate-100 text-slate-400",
-                                    )}
-                                  >
-                                    {STATUS_LABELS[task.status]}
-                                  </span>
-                                  <span className={cn("shrink-0 w-5 text-center text-sm", priority.className)}>
-                                    {priority.icon}
-                                  </span>
-                                  {task.estimated_effort && (
-                                    <span className="shrink-0 text-xs text-muted-foreground uppercase w-4 text-center">
-                                      {task.estimated_effort}
-                                    </span>
-                                  )}
-                                  {isPlanning && (
-                                    <button
-                                      onClick={() => void handleRemoveFromSprint(task.id, sprint.id)}
-                                      className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                      aria-label="Rimuovi dallo sprint"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
                                 </div>
                               </div>
                             );
