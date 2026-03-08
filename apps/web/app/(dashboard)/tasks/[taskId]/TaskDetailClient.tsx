@@ -3,8 +3,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, AlertCircle, CheckCircle2, X } from "lucide-react";
-import type { Agent, Task, TimelineEntry, TaskProjectedState, TaskIteration } from "@robin/shared-types";
+import {
+  ArrowDown,
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  ExternalLink,
+  Github,
+  Pencil,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
+import type { Agent, Sprint, Task, TimelineEntry, TaskProjectedState, TaskIteration } from "@robin/shared-types";
 import { useTaskEventsFeed } from "@/lib/realtime/useTaskEventsFeed";
 import { projectTaskState } from "@/lib/db/projectTaskState";
 import { Timeline } from "@/components/timeline/Timeline";
@@ -13,7 +23,6 @@ import { TaskExecutionMetrics } from "@/components/tasks/TaskExecutionMetrics";
 import { PRCard } from "@/components/tasks/PRCard";
 import { DeployPreviewCard } from "@/components/tasks/DeployPreviewCard";
 import { IterationsList } from "@/components/tasks/IterationsList";
-import { AgentCard } from "@/components/tasks/AgentCard";
 import { cn } from "@/lib/utils";
 
 interface TaskDetailClientProps {
@@ -22,43 +31,133 @@ interface TaskDetailClientProps {
   initialProjectedState: TaskProjectedState;
   initialIterations: TaskIteration[];
   agent: Agent | null;
+  sprint: Pick<Sprint, "id" | "name" | "status"> | null;
 }
 
-// ── Status label map ──────────────────────────────────────────────────────────
+// ── Status / Priority maps ──────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
   backlog: "Backlog", sprint_ready: "Sprint ready",
   pending: "Pending", queued: "In coda", in_progress: "In corso",
-  in_review: "In review", review_pending: "In review (legacy)",
+  in_review: "In review", review_pending: "In review",
   rework: "Rework",
   approved: "Approvata", rejected: "Rifiutata",
   done: "Done", completed: "Completata", failed: "Fallita", cancelled: "Annullata",
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  backlog: "bg-neutral-100 text-neutral-500",
-  sprint_ready: "bg-sky-100 text-sky-600",
-  pending: "bg-neutral-100 text-neutral-600",
-  queued: "bg-sky-100 text-sky-700",
-  in_progress: "bg-brand-100 text-brand-700",
-  in_review: "bg-amber-100 text-amber-700",
-  review_pending: "bg-amber-100 text-amber-700",
-  rework: "bg-orange-100 text-orange-700",
-  approved: "bg-emerald-100 text-emerald-700",
-  rejected: "bg-red-100 text-red-700",
-  done: "bg-emerald-100 text-emerald-800",
-  completed: "bg-emerald-100 text-emerald-800",
-  failed: "bg-red-100 text-red-800",
-  cancelled: "bg-neutral-100 text-neutral-500",
+  backlog: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
+  sprint_ready: "bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400",
+  pending: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
+  queued: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+  in_progress: "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400",
+  in_review: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  review_pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  rework: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  done: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  completed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  cancelled: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400",
 };
 
 const PRIORITY_LABEL: Record<string, string> = {
-  low: "Low", medium: "Medium", high: "High", urgent: "Urgent",
+  low: "Low", medium: "Medium", high: "High", urgent: "Urgent", critical: "Critical",
 };
 
-const PHASE_LABEL: Record<string, string> = {
-  analysis: "Analysis", design: "Design", write: "Write", proof: "Proof",
+const PRIORITY_BADGE: Record<string, string> = {
+  low: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  urgent: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  critical: "bg-red-100 text-red-800 font-semibold dark:bg-red-900/30 dark:text-red-400",
 };
+
+const TASK_TYPE_LABEL: Record<string, string> = {
+  bug: "Bug", feature: "Feature", docs: "Docs", refactor: "Refactor",
+  chore: "Chore", accessibility: "Accessibility", security: "Security",
+};
+
+// ── StatusBadge ────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2.5 py-0.5 text-xs font-medium",
+        STATUS_BADGE[status] ?? "bg-muted text-muted-foreground"
+      )}
+    >
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
+// ── InlineTitleEditor ──────────────────────────────────────────────────────
+
+function InlineTitleEditor({
+  value,
+  onSave,
+  disabled,
+}: {
+  value: string;
+  onSave: (v: string) => Promise<void>;
+  disabled: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      const len = inputRef.current?.value.length ?? 0;
+      inputRef.current?.setSelectionRange(len, len);
+    }
+  }, [editing]);
+
+  async function save() {
+    if (draft.trim() === value.trim()) { setEditing(false); return; }
+    await onSave(draft.trim());
+    setEditing(false);
+  }
+
+  function cancel() { setDraft(value); setEditing(false); }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); void save(); }
+          if (e.key === "Escape") { e.preventDefault(); cancel(); }
+        }}
+        className="w-full border-0 border-b-2 border-[#007AFF] bg-transparent text-2xl font-bold text-foreground outline-none focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={cn("group flex items-center gap-2", !disabled && "cursor-pointer")}
+      onClick={() => !disabled && setEditing(true)}
+      title={disabled ? "Non modificabile mentre l'agente lavora" : "Click per modificare"}
+    >
+      <span className="text-2xl font-bold text-foreground leading-tight">{value}</span>
+      {!disabled && (
+        <Pencil className="h-4 w-4 shrink-0 text-[#8E8E93] opacity-0 transition-opacity group-hover:opacity-100" />
+      )}
+    </div>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -68,6 +167,7 @@ export function TaskDetailClient({
   initialProjectedState,
   initialIterations,
   agent,
+  sprint,
 }: TaskDetailClientProps) {
   const { events, isConnected } = useTaskEventsFeed({
     taskId: task.id,
@@ -188,9 +288,52 @@ export function TaskDetailClient({
     setPendingCount(0);
   }
 
-  // ── Mobile sidebar toggle ────────────────────────────────────────────────────
+  // ── Mobile bottom drawer ─────────────────────────────────────────────────────
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartYRef = useRef(0);
+  const dragStartTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (drawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen]);
+
+  function handleDrawerTouchStart(e: React.TouchEvent) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    dragStartYRef.current = touch.clientY;
+    dragStartTimeRef.current = Date.now();
+    setIsDragging(true);
+  }
+
+  function handleDrawerTouchMove(e: React.TouchEvent) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const delta = Math.max(0, touch.clientY - dragStartYRef.current);
+    setDragOffset(delta);
+  }
+
+  function handleDrawerTouchEnd() {
+    setIsDragging(false);
+    const elapsed = Date.now() - dragStartTimeRef.current;
+    const velocity = elapsed > 0 ? dragOffset / (elapsed / 1000) : 0;
+    if (dragOffset > 80 || velocity > 500) {
+      setDrawerOpen(false);
+    }
+    setDragOffset(0);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setDragOffset(0);
+  }
 
   // ── Repo URL for commit SHA links ────────────────────────────────────────────
 
@@ -198,19 +341,21 @@ export function TaskDetailClient({
     ? projectedState.prData.pr_url.replace(/\/pull\/\d+.*$/, "")
     : undefined;
 
-  // ── Breadcrumb title ────────────────────────────────────────────────────────
-
-  const crumbTitle =
-    localTitle.length > 40
-      ? localTitle.slice(0, 40) + "…"
-      : localTitle;
-
   // ── Success banner (shown after task creation) ───────────────────────────
 
   const searchParams = useSearchParams();
   const [showCreatedBanner, setShowCreatedBanner] = useState(
     () => searchParams.get("created") === "1"
   );
+
+  // ── Date helpers ─────────────────────────────────────────────────────────────
+
+  const createdDate = new Date(task.created_at).toLocaleDateString("it-IT", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+  const updatedDate = new Date(task.updated_at).toLocaleDateString("it-IT", {
+    day: "numeric", month: "short", year: "numeric",
+  });
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -233,119 +378,79 @@ export function TaskDetailClient({
         </div>
       )}
 
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/tasks" className="hover:text-foreground transition-colors">
-          Tasks
-        </Link>
-        <span>/</span>
-        <span className="text-foreground truncate">{crumbTitle}</span>
-      </nav>
+      {/* 60/40 split layout */}
+      <div className="grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-[3fr_2fr]">
 
-      {/* 2-column layout */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_2fr]">
+        {/* ── LEFT COLUMN: header + description + timeline ── */}
+        <div className="min-w-0 space-y-4">
 
-        {/* ── LEFT COLUMN: metadata + artifacts + actions ── */}
-        <div>
-          {/* Mobile toggle button */}
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((o) => !o)}
-            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground lg:hidden"
-          >
-            Dettagli task
-            <span
-              className={cn(
-                "text-muted-foreground transition-transform",
-                sidebarOpen && "rotate-180"
-              )}
-            >
-              ▾
-            </span>
-          </button>
+          {/* Breadcrumb */}
+          <nav className="flex items-center gap-1 text-xs text-[#8E8E93]">
+            <Link href="/backlog" className="hover:text-foreground transition-colors">
+              Planning
+            </Link>
+            <ChevronRight className="h-3 w-3 shrink-0" />
+            {sprint ? (
+              <>
+                <Link
+                  href={`/backlog?sprint=${sprint.id}`}
+                  className="hover:text-foreground transition-colors max-w-[160px] truncate"
+                >
+                  {sprint.name}
+                </Link>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+              </>
+            ) : (
+              <>
+                <Link href="/tasks" className="hover:text-foreground transition-colors">
+                  Tasks
+                </Link>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+              </>
+            )}
+            <span className="text-foreground">Task</span>
+          </nav>
 
-        <aside className={cn("mt-3 space-y-5 lg:mt-0", !sidebarOpen && "hidden lg:block")}>
-
-          {/* Title + description */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
-                Titolo
-                {!canEdit && (
-                  <span className="ml-1 text-amber-500" title="L'agente sta lavorando">
-                    (in sola lettura)
-                  </span>
-                )}
-              </p>
-              <EditableField
-                value={localTitle}
-                onSave={(v) => saveField("title", v)}
-                disabled={!canEdit}
-                className="text-base font-semibold text-foreground"
-              />
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">Descrizione</p>
-              <EditableField
-                value={localDescription || "Nessuna descrizione."}
-                onSave={(v) => saveField("description", v)}
-                disabled={!canEdit}
-                multiline
-                className="text-sm text-foreground"
-              />
-            </div>
-          </div>
-
-          {/* Metadata grid */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Dettagli
-            </h3>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              <MetaRow
-                label="Stato"
-                value={
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-medium",
-                      STATUS_BADGE[projectedState.status] ?? "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {STATUS_LABEL[projectedState.status] ?? projectedState.status}
-                  </span>
-                }
-              />
-              <MetaRow
-                label="Priorità"
-                value={PRIORITY_LABEL[task.priority] ?? task.priority}
-              />
-              {projectedState.currentPhase && (
-                <MetaRow
-                  label="Fase corrente"
-                  value={
-                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
-                      {PHASE_LABEL[projectedState.currentPhase] ?? projectedState.currentPhase}
-                    </span>
-                  }
+          {/* Title + status pill + metadata row */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <InlineTitleEditor
+                  value={localTitle}
+                  onSave={(v) => saveField("title", v)}
+                  disabled={!canEdit}
                 />
+              </div>
+              <StatusBadge status={projectedState.status} />
+            </div>
+
+            {/* Metadata row */}
+            <div className="flex flex-wrap items-center gap-1 text-xs text-[#8E8E93]">
+              <span>Creata il {createdDate}</span>
+              <span>·</span>
+              <span>Aggiornata il {updatedDate}</span>
+              <span>·</span>
+              <span>{TASK_TYPE_LABEL[task.type] ?? task.type}</span>
+              {!canEdit && (
+                <>
+                  <span>·</span>
+                  <span className="text-amber-500">In sola lettura</span>
+                </>
               )}
-              <MetaRow
-                label="Creata"
-                value={new Date(task.created_at).toLocaleDateString("it-IT", {
-                  day: "numeric", month: "short", year: "numeric",
-                })}
-              />
-              <MetaRow
-                label="Aggiornata"
-                value={new Date(task.updated_at).toLocaleDateString("it-IT", {
-                  day: "numeric", month: "short", year: "numeric",
-                })}
-              />
             </div>
           </div>
 
-          {/* Agent info */}
-          <AgentCard agent={agent} queuedAt={task.queued_at} />
+          {/* Description */}
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Descrizione</p>
+            <EditableField
+              value={localDescription || "Nessuna descrizione."}
+              onSave={(v) => saveField("description", v)}
+              disabled={!canEdit}
+              multiline
+              className="text-sm text-foreground"
+            />
+          </div>
 
           {/* Blocked alert */}
           {projectedState.blockedReason && (
@@ -362,8 +467,124 @@ export function TaskDetailClient({
             </div>
           )}
 
+          {/* Timeline section */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-foreground">
+                Timeline eventi
+              </h2>
+              <div className="flex items-center gap-2">
+                {pendingCount > 0 && (
+                  <button
+                    onClick={scrollToBottom}
+                    className="inline-flex items-center gap-1 rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                    {pendingCount} new
+                  </button>
+                )}
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    isConnected ? "bg-emerald-500" : "bg-neutral-300"
+                  )}
+                  title={isConnected ? "Realtime connesso" : "Realtime offline"}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {events.length} eventi
+                </span>
+              </div>
+            </div>
+            <Timeline entries={events} emptyMessage="Nessun evento registrato." />
+            <div ref={bottomSentinelRef} className="h-px" />
+          </div>
+
+          {/* Iterations history */}
+          <IterationsList iterations={initialIterations} allEvents={events} />
+        </div>
+
+        {/* ── RIGHT COLUMN: metadata panel (hidden on mobile < md) ── */}
+        <div className="hidden md:block lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-[18px] bg-white shadow-sm dark:bg-[#1C1C1E] p-4 space-y-0 border border-border">
+
+            {/* Status */}
+            <MetaPanelRow label="Status">
+              <StatusBadge status={projectedState.status} />
+            </MetaPanelRow>
+
+            <div className="h-px bg-border/60 my-1" />
+
+            {/* Priorità */}
+            <MetaPanelRow label="Priorità">
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                  PRIORITY_BADGE[task.priority] ?? "bg-muted text-muted-foreground"
+                )}
+              >
+                {PRIORITY_LABEL[task.priority] ?? task.priority}
+              </span>
+            </MetaPanelRow>
+
+            <div className="h-px bg-border/60 my-1" />
+
+            {/* Agente assegnato */}
+            <MetaPanelRow label="Agente">
+              {agent ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
+                    {agent.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {agent.name}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">Non assegnato</span>
+              )}
+            </MetaPanelRow>
+
+            {/* Repository */}
+            {projectedState.prData?.pr_url && (
+              <>
+                <div className="h-px bg-border/60 my-1" />
+                <MetaPanelRow label="Repository">
+                  <a
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm text-[#007AFF] hover:underline"
+                  >
+                    <Github className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      {repoUrl?.replace("https://github.com/", "") ?? "GitHub"}
+                    </span>
+                    <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+                  </a>
+                </MetaPanelRow>
+              </>
+            )}
+
+            <div className="h-px bg-border/60 my-1" />
+
+            {/* Creata */}
+            <MetaPanelRow label="Creata">
+              <span className="text-sm text-foreground">{createdDate}</span>
+            </MetaPanelRow>
+
+            <div className="h-px bg-border/60 my-1" />
+
+            {/* Aggiornata */}
+            <MetaPanelRow label="Aggiornata">
+              <span className="text-sm text-foreground">{updatedDate}</span>
+            </MetaPanelRow>
+
+          </div>
+
           {/* Execution metrics */}
-          <TaskExecutionMetrics events={events} createdAt={task.created_at} />
+          <div className="mt-4">
+            <TaskExecutionMetrics events={events} createdAt={task.created_at} />
+          </div>
 
           {/* PR artifact */}
           <PRCard
@@ -374,58 +595,133 @@ export function TaskDetailClient({
 
           {/* Deploy preview */}
           {projectedState.deployData && (
-            <DeployPreviewCard data={projectedState.deployData} />
+            <div className="mt-4">
+              <DeployPreviewCard data={projectedState.deployData} />
+            </div>
           )}
 
-          {/* Iterations history */}
-          <IterationsList iterations={initialIterations} allEvents={events} />
-
           {/* Contextual actions */}
-          <ActionButtons
-            projectedStatus={projectedState.status}
-            blockedReason={projectedState.blockedReason}
-            confirmCancel={confirmCancel}
-            actionLoading={actionLoading}
-            onUnblock={handleUnblock}
-            onCancelRequest={() => setConfirmCancel(true)}
-            onCancelConfirm={handleCancel}
-            onCancelAbort={() => setConfirmCancel(false)}
-          />
-        </aside>
+          <div className="mt-4">
+            <ActionButtons
+              projectedStatus={projectedState.status}
+              blockedReason={projectedState.blockedReason}
+              confirmCancel={confirmCancel}
+              actionLoading={actionLoading}
+              onUnblock={handleUnblock}
+              onCancelRequest={() => setConfirmCancel(true)}
+              onCancelConfirm={handleCancel}
+              onCancelAbort={() => setConfirmCancel(false)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Mobile trigger button (fixed bottom, visible only < md) ── */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 md:hidden">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="flex items-center gap-2 rounded-full bg-[#1C1C1E] dark:bg-white px-5 py-3 shadow-ios-md"
+        >
+          <SlidersHorizontal className="h-4 w-4 text-white dark:text-[#1C1C1E]" />
+          <span className="text-sm font-semibold text-white dark:text-[#1C1C1E]">
+            Dettagli
+          </span>
+        </button>
+      </div>
+
+      {/* ── Bottom drawer overlay (mobile only) ── */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 md:hidden"
+          onClick={closeDrawer}
+          style={{ transition: "opacity 200ms", opacity: 1 }}
+        />
+      )}
+
+      {/* ── Bottom drawer (mobile only) ── */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden max-h-[75vh] overflow-y-auto rounded-t-2xl bg-white dark:bg-[#1C1C1E]"
+        style={{
+          transform: drawerOpen ? `translateY(${dragOffset}px)` : "translateY(100%)",
+          transition: isDragging
+            ? "none"
+            : drawerOpen
+            ? "transform 350ms cubic-bezier(0.32, 0.72, 0, 1)"
+            : "transform 250ms ease-in",
+        }}
+      >
+        {/* Handle bar */}
+        <div
+          className="flex justify-center pt-3 pb-1 touch-none"
+          onTouchStart={handleDrawerTouchStart}
+          onTouchMove={handleDrawerTouchMove}
+          onTouchEnd={handleDrawerTouchEnd}
+        >
+          <div className="h-1 w-9 rounded-full bg-[#D1D1D6]" />
         </div>
 
-        {/* ── RIGHT COLUMN: timeline ── */}
-        <section className="rounded-xl border border-border bg-card p-4">
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-foreground">
-              Timeline eventi
-            </h2>
-            <div className="flex items-center gap-2">
-              {pendingCount > 0 && (
-                <button
-                  onClick={scrollToBottom}
-                  className="inline-flex items-center gap-1 rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-700"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                  {pendingCount} new
-                </button>
-              )}
+        {/* Drawer content */}
+        <div className="px-4 pb-10 space-y-0">
+          <div className="rounded-[18px] bg-white dark:bg-[#1C1C1E] divide-y divide-border/60">
+
+            <MetaPanelRow label="Status">
+              <StatusBadge status={projectedState.status} />
+            </MetaPanelRow>
+
+            <MetaPanelRow label="Priorità">
               <span
                 className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  isConnected ? "bg-emerald-500" : "bg-neutral-300"
+                  "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                  PRIORITY_BADGE[task.priority] ?? "bg-muted text-muted-foreground"
                 )}
-                title={isConnected ? "Realtime connesso" : "Realtime offline"}
-              />
-              <span className="text-xs text-muted-foreground">
-                {events.length} eventi
+              >
+                {PRIORITY_LABEL[task.priority] ?? task.priority}
               </span>
-            </div>
-          </div>
+            </MetaPanelRow>
 
-          <Timeline entries={events} emptyMessage="Nessun evento registrato." />
-          <div ref={bottomSentinelRef} className="h-px" />
-        </section>
+            <MetaPanelRow label="Agente">
+              {agent ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
+                    {agent.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {agent.name}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">Non assegnato</span>
+              )}
+            </MetaPanelRow>
+
+            {projectedState.prData?.pr_url && (
+              <MetaPanelRow label="Repository">
+                <a
+                  href={repoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm text-[#007AFF] hover:underline"
+                >
+                  <Github className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {repoUrl?.replace("https://github.com/", "") ?? "GitHub"}
+                  </span>
+                  <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+                </a>
+              </MetaPanelRow>
+            )}
+
+            <MetaPanelRow label="Creata">
+              <span className="text-sm text-foreground">{createdDate}</span>
+            </MetaPanelRow>
+
+            <MetaPanelRow label="Aggiornata">
+              <span className="text-sm text-foreground">{updatedDate}</span>
+            </MetaPanelRow>
+
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -433,17 +729,17 @@ export function TaskDetailClient({
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function MetaRow({
+function MetaPanelRow({
   label,
-  value,
+  children,
 }: {
   label: string;
-  value: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="mt-0.5 text-sm font-medium text-foreground">{value}</div>
+    <div className="flex items-center justify-between gap-2 py-2.5">
+      <span className="text-xs text-[#8E8E93] shrink-0">{label}</span>
+      <div className="flex items-center justify-end min-w-0">{children}</div>
     </div>
   );
 }
