@@ -75,6 +75,7 @@ interface BacklogJiraViewProps {
   allSprints: Sprint[];
   agents?: Agent[];
   contextDocs?: ContextDocument[];
+  workspaceId: string;
 }
 
 // Inner component that uses react-dnd hooks (must be inside DndProvider)
@@ -85,6 +86,7 @@ function BacklogJiraViewInner({
   allSprints,
   agents = [],
   contextDocs = [],
+  workspaceId,
 }: BacklogJiraViewProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -447,6 +449,7 @@ function BacklogJiraViewInner({
         repositories={repositories}
         contextDocs={contextDocs}
         onImported={refresh}
+        workspaceId={workspaceId}
       />
 
       {/* Floating trigger for brainstorm drawer */}
