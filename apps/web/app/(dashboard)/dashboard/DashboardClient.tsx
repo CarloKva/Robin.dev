@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bot, GitPullRequest, Inbox, PenLine, Plus, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useRelativeTime } from "@/lib/hooks/useRelativeTime";
 import type { DashboardMetrics, FeedEntry, ActiveTaskData, DashboardAgent, RecentTask } from "@/lib/db/dashboard";
 
@@ -68,10 +67,14 @@ export function DashboardClient({
             Panoramica del workspace
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={openCreateModal} className="gap-1.5">
+        <button
+          type="button"
+          onClick={openCreateModal}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
           <Plus className="h-4 w-4" />
           Nuova task
-        </Button>
+        </button>
       </div>
 
       {/* Stat cards */}
