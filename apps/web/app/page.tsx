@@ -1,42 +1,12 @@
-import Link from "next/link";
 import FeaturesGrid from "@/components/marketing/FeaturesGrid";
 import MarketingNav from "@/components/marketing/MarketingNav";
+import HeroSection from "@/components/marketing/HeroSection";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <MarketingNav />
-
-      {/* Hero */}
-      <section className="mx-auto max-w-3xl px-6 pt-14 py-24 text-center">
-        <p className="mb-4 inline-block rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
-          AI-powered development
-        </p>
-        <h1 className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl">
-          Ship faster with{" "}
-          <span className="text-primary">AI agents</span>{" "}
-          on your team
-        </h1>
-        <p className="mb-10 text-lg text-muted-foreground">
-          Robin.dev assigns your development tasks to AI agents, reviews their
-          pull requests, and keeps your backlog moving — so you can focus on
-          what matters.
-        </p>
-        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <Link
-            href="/sign-up"
-            className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
-          >
-            Start for free
-          </Link>
-          <Link
-            href="/sign-in"
-            className="rounded-md border border-border px-6 py-2.5 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
-          >
-            Sign in
-          </Link>
-        </div>
-      </section>
+      <HeroSection />
 
       {/* Features */}
       <section className="mx-auto max-w-5xl px-6 pb-24">
