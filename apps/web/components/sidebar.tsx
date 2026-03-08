@@ -3,33 +3,58 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import {
-  Loader2,
+  LayoutDashboard,
   ListTodo,
-  FileText,
+  BookOpen,
   Bot,
   BarChart2,
   Settings,
   ChevronLeft,
   ChevronRight,
-  Activity,
+  ChevronsUpDown,
 } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+}
+
+const NAV_ITEMS_PRIMARY: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/backlog", label: "Planning", icon: ListTodo },
-  { href: "/context", label: "Contesto", icon: FileText },
+  { href: "/context", label: "Context", icon: BookOpen },
   { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/reports", label: "Report", icon: BarChart2 },
-  { href: "/ops", label: "Ops", icon: Activity },
+];
+
+const NAV_ITEMS_SECONDARY: NavItem[] = [
+  { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const STORAGE_KEY = "sidebar-collapsed";
 
-export function Sidebar() {
+interface SidebarProps {
+  workspaceName: string;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
+export function Sidebar({ workspaceName }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [loadingHref, setLoadingHref] = useState<string | null>(null);
+  const { user } = useUser();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -41,10 +66,6 @@ export function Sidebar() {
     }
   }, []);
 
-  useEffect(() => {
-    setLoadingHref(null);
-  }, [pathname]);
-
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
       const next = !prev;
@@ -53,104 +74,133 @@ export function Sidebar() {
     });
   };
 
-  // Preserve repositoryId filter in backlog link if already in URL
   const repoFromUrl = searchParams.get("repositoryId");
-  const backlogHref = repoFromUrl
-    ? `/backlog?repositoryId=${repoFromUrl}`
-    : "/backlog";
+  const backlogHref = repoFromUrl ? `/backlog?repositoryId=${repoFromUrl}` : "/backlog";
 
   const isCollapsed = mounted && collapsed;
+  const workspaceInitials = getInitials(workspaceName);
 
-  return (
-    <aside
-      className={`hidden flex-col border-r border-border bg-background md:flex overflow-hidden transition-all duration-300 ease-in-out ${
-        isCollapsed ? "w-16" : "w-56"
-      }`}
-    >
-      <div
-        className={`flex h-14 shrink-0 items-center border-b border-border ${
-          isCollapsed ? "justify-center px-0" : "px-4"
+  const userName =
+    user?.fullName ??
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ??
+    user?.username ??
+    "";
+  const userEmail = user?.primaryEmailAddress?.emailAddress ?? "";
+
+  function renderNavItem(item: NavItem) {
+    const href = item.href === "/backlog" ? backlogHref : item.href;
+    const isActive =
+      pathname === item.href ||
+      pathname.startsWith(`${item.href}/`) ||
+      (item.href === "/backlog" && pathname.startsWith("/sprints"));
+    const Icon = item.icon;
+
+    const linkEl = (
+      <Link
+        href={href}
+        className={`flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+          isCollapsed ? "justify-center" : "gap-3"
+        } ${
+          isActive
+            ? "bg-[#007AFF]/10 dark:bg-[#007AFF]/15 text-[#007AFF]"
+            : "text-[#3A3A3C] dark:text-[#EBEBF5] hover:bg-gray-100 dark:hover:bg-[#2C2C2E]"
         }`}
       >
-        {isCollapsed ? (
-          <span className="text-lg font-bold tracking-tight">R</span>
-        ) : (
-          <span className="text-lg font-bold tracking-tight">Robin.dev</span>
-        )}
-      </div>
+        <Icon
+          className={`w-5 h-5 shrink-0 ${isActive ? "text-[#007AFF]" : ""}`}
+          strokeWidth={1.5}
+        />
+        {!isCollapsed && <span>{item.label}</span>}
+      </Link>
+    );
 
-      <nav className="flex flex-1 flex-col gap-1 p-3">
-        {NAV_ITEMS.map((item) => {
-          const href = item.href === "/backlog" ? backlogHref : item.href;
-          const isActive =
-            pathname === item.href ||
-            pathname.startsWith(`${item.href}/`) ||
-            // Mark Backlog active when on sprint detail pages
-            (item.href === "/backlog" && pathname.startsWith("/sprints"));
-          const isLoading = loadingHref === item.href;
-          const Icon = item.icon;
+    if (isCollapsed) {
+      return (
+        <Tooltip key={item.href} content={item.label} side="right">
+          {linkEl}
+        </Tooltip>
+      );
+    }
 
-          return (
-            <div key={item.href} className="relative group/nav">
-              <Link
-                href={href}
-                onClick={() => {
-                  if (!isActive) setLoadingHref(item.href);
-                }}
-                className={`flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isCollapsed ? "justify-center" : "justify-between"
-                } ${
-                  isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                }`}
-              >
-                <div
-                  className={`flex items-center ${isCollapsed ? "" : "gap-2"}`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {!isCollapsed && <span>{item.label}</span>}
-                </div>
-                {isLoading && !isCollapsed && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                )}
-              </Link>
-              {isLoading && isCollapsed && (
-                <span className="pointer-events-none absolute right-1 top-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                </span>
-              )}
-              {isCollapsed && (
-                <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 opacity-0 transition-opacity group-hover/nav:opacity-100">
-                  <div className="rounded bg-foreground px-2 py-1 text-xs whitespace-nowrap text-background shadow-md">
-                    {item.label}
-                  </div>
-                </div>
-              )}
+    return <div key={item.href}>{linkEl}</div>;
+  }
+
+  return (
+    <div className="relative hidden md:flex">
+      <aside
+        className={`flex flex-col border-r border-[#D1D1D6] dark:border-[#38383A] bg-white dark:bg-[#1C1C1E] overflow-hidden transition-all duration-[250ms] ease-in-out ${
+          isCollapsed ? "w-16" : "w-64"
+        }`}
+      >
+        {/* Workspace block */}
+        <div className={`px-3 pt-3 pb-2 ${isCollapsed ? "flex justify-center" : ""}`}>
+          <div
+            className={`flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-[#2C2C2E] cursor-pointer transition-colors duration-150 ${
+              isCollapsed ? "justify-center px-0" : ""
+            }`}
+          >
+            <div className="w-8 h-8 rounded-[10px] bg-[#007AFF] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+              {workspaceInitials}
             </div>
-          );
-        })}
-      </nav>
+            {!isCollapsed && (
+              <>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-sm font-semibold text-[#1C1C1E] dark:text-white truncate">
+                    {workspaceName}
+                  </span>
+                  <span className="text-xs text-[#8E8E93]">Workspace</span>
+                </div>
+                <ChevronsUpDown className="w-4 h-4 text-[#8E8E93] flex-shrink-0" />
+              </>
+            )}
+          </div>
+        </div>
 
-      <div className="shrink-0 border-t border-border p-3">
-        <button
-          onClick={toggleCollapsed}
-          className="flex w-full items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
+        {/* Nav */}
+        <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-2">
+          {NAV_ITEMS_PRIMARY.map(renderNavItem)}
+
+          {/* Separator */}
+          <div className="mx-0 my-1 h-px bg-[#D1D1D6] dark:bg-[#38383A]" />
+
+          {NAV_ITEMS_SECONDARY.map(renderNavItem)}
+        </nav>
+
+        {/* Footer */}
+        <div className="mt-auto border-t border-[#D1D1D6] dark:border-[#38383A] pt-3 px-3 pb-3 flex items-center gap-3">
+          <UserButton afterSignOutUrl="/" />
+          {!isCollapsed && (
+            <>
+              <div className="flex flex-col min-w-0 flex-1">
+                {userName && (
+                  <span className="text-sm font-medium text-[#1C1C1E] dark:text-white truncate">
+                    {userName}
+                  </span>
+                )}
+                {userEmail && (
+                  <span className="text-xs text-[#8E8E93] truncate">{userEmail}</span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] flex-shrink-0">
+                beta
+              </span>
+            </>
           )}
-        </button>
-        {!isCollapsed && (
-          <p className="mt-1 px-3 text-xs text-muted-foreground">
-            <kbd className="rounded border border-border px-1 font-mono">N</kbd>{" "}
-            Task rapida
-          </p>
+        </div>
+      </aside>
+
+      {/* Toggle collapse button — right edge, vertically centered */}
+      <button
+        onClick={toggleCollapsed}
+        className="absolute -right-2.5 top-1/2 -translate-y-1/2 z-10 w-5 h-10 bg-gray-100 dark:bg-[#2C2C2E] rounded-r-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-[#3A3A3C] cursor-pointer transition-colors duration-150 border border-[#D1D1D6] dark:border-[#38383A] border-l-0"
+        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {isCollapsed ? (
+          <ChevronRight className="w-3 h-3 text-[#8E8E93]" />
+        ) : (
+          <ChevronLeft className="w-3 h-3 text-[#8E8E93]" />
         )}
-      </div>
-    </aside>
+      </button>
+    </div>
   );
 }
