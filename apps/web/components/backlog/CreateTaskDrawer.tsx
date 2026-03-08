@@ -3,6 +3,8 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import { createClient } from "@supabase/supabase-js";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,7 +16,10 @@ import {
 import { CustomSelect } from "@/components/ui/CustomSelect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { TaskType, Repository, ContextDocument } from "@robin/shared-types";
+import { Button } from "@/components/ui/button";
+import { ImageUploader } from "@/components/ImageUploader";
+import { cn } from "@/lib/utils";
+import type { TaskType, Repository, ContextDocument, Sprint, TaskAttachment } from "@robin/shared-types";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +135,7 @@ function ContextDocMultiSelect({ docs, selectedIds, onChange, disabled }: Contex
         type="button"
         onClick={() => !disabled && setOpen((p) => !p)}
         disabled={disabled}
-        className="w-full flex items-center justify-between gap-2 rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        className="w-full flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm text-left focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
       >
         <span className="text-muted-foreground truncate">
           {selectedDocs.length === 0
@@ -143,7 +148,7 @@ function ContextDocMultiSelect({ docs, selectedIds, onChange, disabled }: Contex
       </button>
 
       {open && (
-        <ul className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-border bg-white shadow-lg max-h-52 py-1">
+        <ul className="absolute z-50 mt-1 w-full overflow-auto rounded-md border border-border bg-background shadow-lg max-h-52 py-1">
           {docs.map((doc) => {
             const checked = selectedIds.includes(doc.id);
             return (
@@ -209,6 +214,7 @@ interface CreateTaskDrawerProps {
   repositories: Repository[];
   agents?: Agent[];
   contextDocs?: ContextDocument[];
+  sprints?: Sprint[];
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -220,11 +226,38 @@ export function CreateTaskDrawer({
   repositories,
   agents = [],
   contextDocs = [],
+  sprints = [],
 }: CreateTaskDrawerProps) {
   const router = useRouter();
+  const { getToken } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const titleRef = useRef<HTMLInputElement | null>(null);
+
+  // Attachment state
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Destination state
+  const plannable = sprints.filter((s) => s.status === "planning" || s.status === "active");
+  const [destination, setDestination] = useState<"backlog" | "sprint">(
+    plannable.length > 0 ? "sprint" : "backlog"
+  );
+  const [sprintId, setSprintId] = useState<string>(plannable[0]?.id ?? "");
+
+  // Sync destination when sprints prop changes
+  const sprintsLength = sprints.length;
+  useEffect(() => {
+    const p = sprints.filter((s) => s.status === "planning" || s.status === "active");
+    if (p.length > 0) {
+      setDestination("sprint");
+      setSprintId(p[0]!.id);
+    } else {
+      setDestination("backlog");
+      setSprintId("");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sprintsLength]);
 
   const {
     register,
@@ -282,6 +315,8 @@ export function CreateTaskDrawer({
       });
       setSelectedDocIds([]);
       setServerError(null);
+      setFiles([]);
+      setUploadError(null);
     }
   }, [isOpen, reset, repositories]);
 
@@ -293,6 +328,7 @@ export function CreateTaskDrawer({
 
   const onSubmit = async (data: FormValues) => {
     setServerError(null);
+    setUploadError(null);
     try {
       // Build context: merge user text + referenced doc IDs
       let finalContext = data.context ?? "";
@@ -308,7 +344,7 @@ export function CreateTaskDrawer({
           : `--- Documenti di contesto allegati ---\n${docsSection}`;
       }
 
-      const body = {
+      const body: Record<string, unknown> = {
         title: data.title,
         description: data.description,
         type: data.type,
@@ -318,6 +354,10 @@ export function CreateTaskDrawer({
         context: finalContext || undefined,
         ...(data.agent_id ? { preferred_agent_id: data.agent_id } : {}),
       };
+
+      if (destination === "sprint" && sprintId) {
+        body["sprint_id"] = sprintId;
+      }
 
       const res = await fetch("/api/tasks", {
         method: "POST",
@@ -331,6 +371,52 @@ export function CreateTaskDrawer({
           (json as { error?: string }).error ?? "Errore durante la creazione della task."
         );
         return;
+      }
+
+      const { task } = await res.json() as { task: { id: string; workspace_id: string } };
+
+      // Upload files if any
+      if (files.length > 0) {
+        try {
+          const token = await getToken({ template: "supabase" });
+          const supabase = createClient(
+            process.env["NEXT_PUBLIC_SUPABASE_URL"]!,
+            process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"]!,
+            token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : {}
+          );
+
+          const attachments: TaskAttachment[] = [];
+
+          for (const file of files) {
+            const storagePath = `${task.workspace_id}/${task.id}/${file.name}`;
+            const { error: uploadErr } = await supabase.storage
+              .from("task-attachments")
+              .upload(storagePath, file);
+
+            if (uploadErr) {
+              console.error("[CreateTaskDrawer] storage upload error:", uploadErr.message);
+              setUploadError(`Errore caricamento allegati: ${uploadErr.message}`);
+              break;
+            }
+
+            attachments.push({
+              name: file.name,
+              storage_path: storagePath,
+              mime_type: file.type,
+            });
+          }
+
+          if (attachments.length > 0) {
+            await fetch(`/api/tasks/${task.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ attachments }),
+            });
+          }
+        } catch (uploadEx) {
+          console.error("[CreateTaskDrawer] upload exception:", uploadEx);
+          setUploadError("Errore durante il caricamento degli allegati.");
+        }
       }
 
       onCreated();
@@ -383,7 +469,7 @@ export function CreateTaskDrawer({
         aria-hidden="true"
         onClick={handleClose}
         className={[
-          "fixed inset-0 z-40 bg-black/40 transition-opacity duration-300",
+          "fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300",
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
         ].join(" ")}
       />
@@ -394,31 +480,33 @@ export function CreateTaskDrawer({
         aria-modal="true"
         aria-label="Crea nuova task"
         className={[
-          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out sm:w-[520px] sm:border-l sm:border-border",
+          "fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-background shadow-2xl transition-transform duration-300 ease-in-out sm:w-[520px] sm:border-l sm:border-border",
           isOpen ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <div>
             <h2 className="font-semibold text-base text-foreground">Crea task</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               La task verrà aggiunta al backlog.
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
+            className="w-7 h-7"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
             aria-label="Chiudi"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <form
             id="create-task-drawer-form"
             onSubmit={handleSubmit(onSubmit)}
@@ -571,6 +659,122 @@ export function CreateTaskDrawer({
               <FieldError message={errors.description?.message} />
             </div>
 
+            {/* Attachments */}
+            <div>
+              <FieldLabel htmlFor="drawer-task-attachments">
+                Allegati{" "}
+                <span className="text-xs font-normal text-muted-foreground">(opzionale)</span>
+              </FieldLabel>
+              <div className="mt-1">
+                <ImageUploader files={files} onChange={setFiles} disabled={isSubmitting} />
+              </div>
+              {uploadError !== null && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
+              )}
+            </div>
+
+            {/* Destination: backlog or sprint */}
+            <div>
+              <FieldLabel htmlFor="drawer-task-destination">Destinazione</FieldLabel>
+              <div className="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDestination("backlog")}
+                  disabled={isSubmitting}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    destination === "backlog"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Backlog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDestination("sprint");
+                    if (!sprintId && plannable.length > 0) {
+                      setSprintId(plannable[0]!.id);
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    destination === "sprint"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Sprint
+                </button>
+              </div>
+
+              {destination === "sprint" && (
+                <div className="mt-2">
+                  {plannable.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                      Nessun sprint attivo o in pianificazione.{" "}
+                      <button
+                        type="button"
+                        className="underline hover:text-foreground"
+                        onClick={() => setDestination("backlog")}
+                      >
+                        Aggiungi al backlog
+                      </button>
+                    </p>
+                  ) : (
+                    <div className="space-y-1 rounded-lg border border-border p-1.5">
+                      {plannable.map((s) => (
+                        <label
+                          key={s.id}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                            sprintId === s.id
+                              ? "bg-primary/10 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                              sprintId === s.id
+                                ? "border-primary bg-primary"
+                                : "border-border"
+                            )}
+                          >
+                            {sprintId === s.id && (
+                              <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+                            )}
+                          </span>
+                          <input
+                            type="radio"
+                            name="drawer-sprint"
+                            value={s.id}
+                            checked={sprintId === s.id}
+                            onChange={() => setSprintId(s.id)}
+                            disabled={isSubmitting}
+                            className="sr-only"
+                          />
+                          <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                              s.status === "active"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                                : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                            )}
+                          >
+                            {s.status === "active" ? "attivo" : "planning"}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Context */}
             <div>
               <FieldLabel htmlFor="drawer-task-context">Contesto aggiuntivo</FieldLabel>
@@ -614,25 +818,24 @@ export function CreateTaskDrawer({
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-border px-5 py-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              form="create-task-drawer-form"
-              disabled={isSubmitting || repositories.length === 0}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSubmitting ? "Creazione…" : "Crea task"}
-            </button>
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isSubmitting}
-              className="rounded-md px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              Annulla
-            </button>
-          </div>
+        <div className="flex items-center justify-end gap-2 shrink-0 border-t border-border px-6 py-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Annulla
+          </Button>
+          <Button
+            type="submit"
+            form="create-task-drawer-form"
+            size="sm"
+            disabled={isSubmitting || repositories.length === 0}
+          >
+            {isSubmitting ? "Creazione…" : "Crea task"}
+          </Button>
         </div>
       </div>
     </>

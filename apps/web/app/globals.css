@@ -4,62 +4,48 @@
 
 @layer base {
   :root {
-    /* Surfaces */
     --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
-    /* Brand primary: black */
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 100%;
-    /* Secondary surface */
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
-    /* Muted surface */
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 32%;
-    /* Accent: neutral gray for hover states */
-    --accent: 0 0% 94%;
-    --accent-foreground: 0 0% 9%;
-    /* Destructive: red-500 */
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    /* Borders */
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 9%;
-    --radius: 0.5rem;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.375rem;
   }
 
   .dark {
-    /* Surfaces */
-    --background: 0 0% 4%;
+    --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 7%;
+    --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
+    --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    /* Brand primary: white (su sfondo scuro) */
     --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    /* Secondary surface */
-    --secondary: 0 0% 9%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
-    /* Muted surface */
-    --muted: 0 0% 9%;
-    --muted-foreground: 0 0% 64%;
-    /* Accent: neutro scuro per hover */
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 90%;
-    /* Destructive: red scuro */
-    --destructive: 0 63% 31%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    /* Borders */
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
   }
 }
 
@@ -69,6 +55,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
   }
 }
 
@@ -89,7 +77,7 @@
 
 /* ProvisioningTimeline animations */
 @keyframes step-complete {
-  0%   { transform: scale(1);   background-color: #007AFF; }
+  0%   { transform: scale(1);   background-color: hsl(240 5.9% 10%); }
   50%  { transform: scale(1.2); background-color: #1a8f3c; }
   100% { transform: scale(1);   background-color: #34C759; }
 }

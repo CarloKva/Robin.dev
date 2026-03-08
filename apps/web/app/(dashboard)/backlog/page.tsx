@@ -42,6 +42,7 @@ export default async function BacklogPage() {
         allSprints={allSprints}
         agents={agents.map((a) => ({ id: a.id, name: a.name }))}
         contextDocs={contextDocs}
+        workspaceId={workspace.id}
       />
     </div>
   );

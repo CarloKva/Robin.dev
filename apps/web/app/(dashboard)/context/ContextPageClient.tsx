@@ -17,6 +17,9 @@ import {
   Check,
   Github,
   FileInput,
+  CheckSquare,
+  Square,
+  Trash2,
 } from "lucide-react";
 import { SyncFromGitHubModal } from "@/components/context/SyncFromGitHubModal";
 import type { ContextDocument, Repository } from "@robin/shared-types";
@@ -65,6 +68,10 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
   const [searchQuery, setSearchQuery] = useState("");
   // Mobile: 'list' shows left panel, 'editor' shows right panel
   const [mobileView, setMobileView] = useState<"list" | "editor">("list");
+  // Batch selection
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Editor state
   const [editorTitle, setEditorTitle] = useState("");
@@ -178,6 +185,53 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
     }
   }
 
+  function toggleSelection(docId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) next.delete(docId);
+      else next.add(docId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredDocs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredDocs.map((d) => d.id)));
+    }
+  }
+
+  function exitSelectionMode() {
+    setIsSelecting(false);
+    setSelectedIds(new Set());
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Eliminare ${selectedIds.size} document${selectedIds.size === 1 ? "o" : "i"}?`)) return;
+    setIsBulkDeleting(true);
+    try {
+      const res = await fetch("/api/context/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (res.ok) {
+        const deletedIds = new Set(selectedIds);
+        setDocs((prev) => prev.filter((d) => !deletedIds.has(d.id)));
+        if (selectedDocId && selectedDocId !== "new" && deletedIds.has(selectedDocId)) {
+          setSelectedDocId(null);
+          setMobileView("list");
+        }
+        exitSelectionMode();
+        refresh();
+      }
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
+
   function handleSyncDone() {
     setIsSyncModalOpen(false);
     refresh();
@@ -256,22 +310,41 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
         <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-[#D1D1D6]/60 dark:border-[#38383A]/60">
           <h2 className="font-semibold text-base">Context</h2>
           <div className="flex items-center gap-1">
-            {repositories.length > 0 && (
+            {!isSelecting ? (
+              <>
+                {repositories.length > 0 && (
+                  <button
+                    onClick={() => setIsSyncModalOpen(true)}
+                    className="rounded-lg p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                    title="Sincronizza da GitHub"
+                  >
+                    <Github className="h-4 w-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => selectDoc("new")}
+                  className="rounded-lg p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
+                  title="Nuovo documento"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                {docs.length > 0 && (
+                  <button
+                    onClick={() => setIsSelecting(true)}
+                    className="rounded-lg px-2 py-1 text-xs text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
+                  >
+                    Seleziona
+                  </button>
+                )}
+              </>
+            ) : (
               <button
-                onClick={() => setIsSyncModalOpen(true)}
-                className="rounded-lg p-1.5 text-[#8E8E93] hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2C2C2E] transition-colors"
-                title="Sincronizza da GitHub"
+                onClick={exitSelectionMode}
+                className="rounded-lg px-2 py-1 text-xs text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
               >
-                <Github className="h-4 w-4" />
+                Annulla
               </button>
             )}
-            <button
-              onClick={() => selectDoc("new")}
-              className="rounded-lg p-1.5 text-[#007AFF] hover:bg-[#007AFF]/10 transition-colors"
-              title="Nuovo documento"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
@@ -311,24 +384,33 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
           ) : (
             <ul className="divide-y divide-[#D1D1D6]/40 dark:divide-[#38383A]/40">
               {filteredDocs.map((doc) => {
-                const isSelected = selectedDocId === doc.id;
+                const isDocSelected = selectedDocId === doc.id;
+                const isChecked = selectedIds.has(doc.id);
                 const snippet = getContentSnippet(doc.content);
                 return (
                   <li key={doc.id}>
                     <button
-                      onClick={() => selectDoc(doc.id)}
+                      onClick={() => isSelecting ? toggleSelection(doc.id) : selectDoc(doc.id)}
                       className={cn(
                         "w-full text-left px-4 py-3 transition-colors relative",
-                        isSelected
+                        !isSelecting && isDocSelected
                           ? "bg-[#007AFF]/10 dark:bg-[#007AFF]/15"
+                          : isSelecting && isChecked
+                          ? "bg-[#007AFF]/5 dark:bg-[#007AFF]/10"
                           : "hover:bg-gray-50 dark:hover:bg-[#2C2C2E]/50",
                       )}
                     >
-                      {isSelected && (
+                      {!isSelecting && isDocSelected && (
                         <span className="absolute left-0 top-0 h-full w-0.5 bg-[#007AFF] rounded-r" />
                       )}
                       <div className="flex items-start gap-2.5">
-                        {getDocIcon(doc)}
+                        {isSelecting ? (
+                          isChecked
+                            ? <CheckSquare className="h-4 w-4 shrink-0 text-[#007AFF]" />
+                            : <Square className="h-4 w-4 shrink-0 text-[#8E8E93]" />
+                        ) : (
+                          getDocIcon(doc)
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-medium text-sm truncate text-foreground">
@@ -352,6 +434,33 @@ export function ContextPageClient({ initialDocs, repositories }: ContextPageClie
             </ul>
           )}
         </div>
+
+        {/* Bulk action bar */}
+        {isSelecting && (
+          <div className="shrink-0 border-t border-[#D1D1D6]/60 dark:border-[#38383A]/60 px-4 py-3 flex items-center gap-3 bg-background">
+            <button
+              onClick={toggleSelectAll}
+              className="text-xs text-[#007AFF] hover:underline"
+            >
+              {selectedIds.size === filteredDocs.length ? "Deseleziona tutti" : "Seleziona tutti"}
+            </button>
+            <div className="flex-1" />
+            {selectedIds.size > 0 && (
+              <button
+                onClick={() => void handleBulkDelete()}
+                disabled={isBulkDeleting}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {isBulkDeleting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Elimina {selectedIds.size}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── RIGHT PANEL ─────────────────────────────────────────────────── */}
