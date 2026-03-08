@@ -17,6 +17,8 @@ interface ImportPreviewCardProps {
   onImported: (taskIds: string[]) => void;
   /** When set, shows a countdown and auto-triggers import at 0. */
   autoApproveCountdownSeconds?: number;
+  /** Pre-selected repository full_name (e.g. from global repo selector). */
+  initialDefaultRepo?: string;
 }
 
 const TYPE_LABEL: Record<ParsedTask["type"], string> = {
@@ -48,11 +50,12 @@ export function ImportPreviewCard({
   onDismiss,
   onImported,
   autoApproveCountdownSeconds,
+  initialDefaultRepo,
 }: ImportPreviewCardProps) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [defaultRepo, setDefaultRepo] = useState<string>(() => repositories[0]?.full_name ?? "");
+  const [defaultRepo, setDefaultRepo] = useState<string>(() => initialDefaultRepo ?? repositories[0]?.full_name ?? "");
 
   // Auto-approve countdown
   const [countdown, setCountdown] = useState<number | null>(

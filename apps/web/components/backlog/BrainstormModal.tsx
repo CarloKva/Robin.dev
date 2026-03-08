@@ -39,6 +39,7 @@ interface BrainstormDrawerProps {
   repositories: Repository[];
   contextDocs?: ContextDocument[];
   onImported: () => void;
+  workspaceId: string;
 }
 
 type ImportData = {
@@ -396,6 +397,7 @@ export function BrainstormModal({
   repositories,
   contextDocs = [],
   onImported,
+  workspaceId,
 }: BrainstormDrawerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -416,6 +418,15 @@ export function BrainstormModal({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Active repo from global selector ────────────────────────────────────────
+  const activeRepoFullName = (() => {
+    if (typeof window === "undefined") return repositories[0]?.full_name ?? "";
+    const storedId = localStorage.getItem(`robin:activeRepoId:${workspaceId}`);
+    if (!storedId) return repositories[0]?.full_name ?? "";
+    const repo = repositories.find((r) => r.id === storedId);
+    return repo?.full_name ?? repositories[0]?.full_name ?? "";
+  })();
 
   // ── Mobile bottom drawer ────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(false);
@@ -1134,6 +1145,7 @@ export function BrainstormModal({
             truncated={importData.truncated}
             originalCount={importData.originalCount}
             repositories={repositories}
+            initialDefaultRepo={activeRepoFullName}
             onDismiss={() => {
               setImportData(null);
               // User dismissed import without creating tasks: discard pending images

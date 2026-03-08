@@ -71,6 +71,7 @@ interface BacklogJiraViewProps {
   allSprints: Sprint[];
   agents?: Agent[];
   contextDocs?: ContextDocument[];
+  workspaceId: string;
 }
 
 export function BacklogJiraView({
@@ -80,6 +81,7 @@ export function BacklogJiraView({
   allSprints,
   agents = [],
   contextDocs = [],
+  workspaceId,
 }: BacklogJiraViewProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -479,6 +481,7 @@ export function BacklogJiraView({
         repositories={repositories}
         contextDocs={contextDocs}
         onImported={refresh}
+        workspaceId={workspaceId}
       />
 
       {/* Floating trigger for brainstorm drawer */}
