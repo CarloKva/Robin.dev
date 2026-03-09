@@ -50,6 +50,7 @@ export async function getActiveAgentsCount(workspaceId: string): Promise<number>
       .from("agents")
       .select("*", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
+      .neq("provisioning_status", "deprovisioned")
       .gt("last_seen_at", twoMinutesAgo);
     return count ?? 0;
   } catch {

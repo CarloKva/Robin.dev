@@ -394,6 +394,7 @@ export type AgentWithStatus = Agent & {
   raw_status: AgentStatusEnum | null;
   current_task_id: string | null;
   last_heartbeat: string | null;
+  provisioning_status: AgentProvisioningStatus;
 };
 
 // ---------------------------------------------------------------
