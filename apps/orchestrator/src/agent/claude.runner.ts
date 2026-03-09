@@ -80,6 +80,16 @@ export class ClaudeRunner {
         "Repository path not found — cloning"
       );
       await this.cloneRepository(cloneUrl, payload.repositoryPath);
+    } else if (payload.repositoryUrl) {
+      // Repo already cloned — refresh the token in the remote URL to avoid 401 on push.
+      // GitHub App installation tokens expire after 1 hour; repos cloned in a previous task
+      // will have a stale token embedded in .git/config.
+      const freshUrl = await this.buildAuthenticatedCloneUrl(payload.repositoryUrl);
+      await this.updateRemoteUrl(payload.repositoryPath, freshUrl);
+      log.info(
+        { taskId: payload.taskId, repositoryPath: payload.repositoryPath },
+        "Remote origin URL refreshed with fresh GitHub App token"
+      );
     }
 
     // Download attachments (if any) before writing TASK.md
@@ -387,6 +397,29 @@ export class ClaudeRunner {
       git.on("error", (err) => reject(new RepositoryAccessError(
         `Failed to clone ${repositoryUrl}: ${err.message}`
       )));
+    });
+  }
+
+  /** Update the remote origin URL in an existing local clone. */
+  private async updateRemoteUrl(repositoryPath: string, remoteUrl: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const git = spawn(
+        "git",
+        ["remote", "set-url", "origin", remoteUrl],
+        { cwd: repositoryPath, stdio: "pipe" }
+      );
+      const stderr: string[] = [];
+      git.stderr?.on("data", (d: Buffer) => stderr.push(d.toString()));
+      git.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(
+            `git remote set-url failed (exit ${code}): ${stderr.join("").trim()}`
+          ));
+        }
+      });
+      git.on("error", (err) => reject(err));
     });
   }
 
