@@ -38,10 +38,12 @@ export async function DELETE() {
     return NextResponse.json({ error: "Nessuna connessione GitHub attiva" }, { status: 404 });
   }
 
-  // Block disconnection if there are active agents
+  // Block disconnection if there are active (non-deprovisioned) agents
   const agents = await getAgentsForWorkspace(workspace.id);
   const activeAgents = agents.filter(
-    (a) => a.effective_status === "idle" || a.effective_status === "busy"
+    (a) =>
+      a.provisioning_status !== "deprovisioned" &&
+      (a.effective_status === "idle" || a.effective_status === "busy")
   );
   if (activeAgents.length > 0) {
     return NextResponse.json(
