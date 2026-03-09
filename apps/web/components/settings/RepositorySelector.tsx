@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types (inline — mirrors API response) ────────────────────────────────────
@@ -89,6 +90,20 @@ export function RepositorySelector({ initialRepos, compact }: RepositorySelector
   const [repos, setRepos] = useState<RepoRow[]>(initialRepos);
   const [search, setSearch] = useState("");
   const [pendingRepos, startTransition] = useTransition();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  async function handleSync() {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/github/repos");
+      if (res.ok) {
+        const data = (await res.json()) as { repos: RepoRow[] };
+        setRepos(data.repos);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return repos;
@@ -164,9 +179,19 @@ export function RepositorySelector({ initialRepos, compact }: RepositorySelector
             <h2 className="text-base font-semibold">Repository</h2>
           </div>
         )}
-        <p className={cn("text-xs text-muted-foreground", !compact && "mt-0.5")}>
-          {enabledCount} di {repos.length} abilitate
-        </p>
+        <div className="flex items-center gap-2 ml-auto">
+          <p className={cn("text-xs text-muted-foreground", !compact && "mt-0.5")}>
+            {enabledCount} di {repos.length} abilitate
+          </p>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing || pendingRepos}
+            title="Sincronizza repository da GitHub"
+            className="flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-[#F2F2F7] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-[#2C2C2E]"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isSyncing && "animate-spin")} />
+          </button>
+        </div>
       </div>
 
       {/* Search */}

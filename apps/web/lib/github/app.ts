@@ -136,6 +136,7 @@ export async function listInstallationRepos(installationId: number): Promise<Git
     const res = await fetch(
       `${GITHUB_API}/installation/repositories?per_page=100&page=${page}`,
       {
+        cache: "no-store",
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
