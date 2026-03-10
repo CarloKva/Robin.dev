@@ -107,10 +107,30 @@ export type EntitiesResponse = {
 // ---------------------------------------------------------------------------
 
 export type ActionName =
+  // Legacy actions (kept for backward compatibility)
   | "create_project"
   | "get_project_summary"
   | "run_agent"
-  | "get_agent_output";
+  | "get_agent_output"
+  // Task operations
+  | "list_tasks"
+  | "get_task"
+  | "create_task"
+  | "update_task"
+  | "delete_task"
+  // Sprint operations
+  | "list_sprints"
+  | "get_sprint"
+  | "create_sprint"
+  | "start_sprint"
+  | "complete_sprint"
+  // Agent operations
+  | "list_agents"
+  | "get_agent"
+  // Repository operations
+  | "list_repositories"
+  // Task events
+  | "get_task_events";
 
 export type ActionRequest = {
   action: ActionName;
@@ -126,7 +146,8 @@ export type ActionResponse = {
   error: string | undefined;
 };
 
-// Action-specific param types
+// ─── Legacy action param types ───────────────────────────────────────────────
+
 export type CreateProjectParams = {
   title: string;
   description: string | undefined;
@@ -144,6 +165,87 @@ export type RunAgentParams = {
 };
 
 export type GetAgentOutputParams = {
+  task_id: string;
+};
+
+// ─── Task param types ────────────────────────────────────────────────────────
+
+export type ListTasksParams = {
+  status?: string;
+  repository_id?: string;
+  sprint_id?: string;
+  priority?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type GetTaskParams = {
+  task_id: string;
+};
+
+export type CreateTaskParams = {
+  title: string;
+  description?: string;
+  priority?: "low" | "medium" | "high" | "urgent" | "critical";
+  type?: "bug" | "feature" | "docs" | "refactor" | "chore" | "accessibility" | "security";
+  repository_id?: string;
+  sprint_id?: string;
+  estimated_effort?: "xs" | "s" | "m" | "l";
+};
+
+export type UpdateTaskParams = {
+  task_id: string;
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  type?: string;
+  sprint_id?: string | null;
+  estimated_effort?: string;
+};
+
+export type DeleteTaskParams = {
+  task_id: string;
+};
+
+// ─── Sprint param types ──────────────────────────────────────────────────────
+
+export type ListSprintsParams = {
+  status?: "planning" | "active" | "completed" | "cancelled";
+};
+
+export type GetSprintParams = {
+  sprint_id: string;
+};
+
+export type CreateSprintParams = {
+  name: string;
+  goal?: string;
+};
+
+export type StartSprintParams = {
+  sprint_id: string;
+};
+
+export type CompleteSprintParams = {
+  sprint_id: string;
+};
+
+// ─── Agent param types ───────────────────────────────────────────────────────
+
+export type ListAgentsParams = Record<string, never>;
+
+export type GetAgentParams = {
+  agent_id: string;
+};
+
+// ─── Repository param types ──────────────────────────────────────────────────
+
+export type ListRepositoriesParams = Record<string, never>;
+
+// ─── Task events param types ─────────────────────────────────────────────────
+
+export type GetTaskEventsParams = {
   task_id: string;
 };
 
