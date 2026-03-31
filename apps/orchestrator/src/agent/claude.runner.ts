@@ -253,6 +253,7 @@ export class ClaudeRunner {
         "--print",
         "--dangerously-skip-permissions",
         ...(mcpConfigPath ? ["--mcp-config", mcpConfigPath] : []),
+        "--", // terminate flags — prevents --mcp-config (variadic) from eating the prompt
         "Read the instructions in TASK.md and implement them.",
       ];
 
