@@ -303,6 +303,39 @@ export type JobErrorCode =
   | "REPO_ACCESS_ERROR";
 
 // ---------------------------------------------------------------
+// Bugfix pipeline
+// ---------------------------------------------------------------
+
+export type BugfixJobData = {
+  taskId: string;
+  workspaceId: string;
+  agentId: string;
+  repoUrl: string;
+  repoBranch: string;
+  repoPath: string;
+  bugDescription: string;
+  issueNumber?: string;
+  issueUrl?: string;
+  maxTurns?: number;
+  model?: string;
+};
+
+export type BugfixResult = {
+  status: "success" | "failed" | "escalated";
+  branchName?: string;
+  prUrl?: string;
+  prNumber?: number;
+  summary: string;
+  filesChanged: string[];
+  testsRun: boolean;
+  testsPassed: boolean;
+  turnCount: number;
+  costUsd?: number;
+  tokenUsage?: { input: number; output: number };
+  durationMs?: number;
+};
+
+// ---------------------------------------------------------------
 // DB entity shape types (mirrors DB rows — non-exhaustive)
 // ---------------------------------------------------------------
 
