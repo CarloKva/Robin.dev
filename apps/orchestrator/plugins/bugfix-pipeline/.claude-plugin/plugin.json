@@ -1,0 +1,15 @@
+{
+  "name": "robin-bugfix-pipeline",
+  "description": "Autonomous bugfix pipeline for Robin.dev — includes systematic debugging, test-driven fix, and safe commit skills.",
+  "version": "1.0.0",
+  "skills": [
+    "skills/systematic-debugging",
+    "skills/test-driven-fix",
+    "skills/safe-commit",
+    "skills/nextjs-prisma-stack"
+  ],
+  "agents": [
+    "agents/bugfix-specialist.md"
+  ],
+  "hooks": "hooks/hooks.json"
+}

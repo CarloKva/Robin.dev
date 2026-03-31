@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./plugins/bugfix-pipeline/hooks/validate-command.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./plugins/bugfix-pipeline/hooks/post-edit-check.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

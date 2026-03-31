@@ -12,6 +12,7 @@
     "schema": "../../prisma/schema.prisma"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.88",
     "@anthropic-ai/sdk": "^0.39.0",
     "@bull-board/api": "^6.6.2",
     "@bull-board/express": "^6.6.2",

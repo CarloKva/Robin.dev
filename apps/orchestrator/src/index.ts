@@ -5,6 +5,8 @@ import { ExpressAdapter } from "@bull-board/express";
 import { BULL_BOARD_PORT } from "./config/bullmq.config";
 import { taskQueue } from "./queues/task.queue";
 import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
+import { createBugfixWorker } from "./workers/bugfix.worker";
+import { bugfixQueue } from "./queues/bugfix.queue";
 import { createProvisioningWorker, resolveRedisUrlForAgents } from "./workers/agent.provisioning.worker";
 import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
 import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue.worker";
@@ -98,7 +100,8 @@ async function main() {
 
     const worker = createWorker();
     const queueEvents = createQueueEventMonitor(taskQueue);
-    workersToClose.push(worker, queueEvents);
+    const bugfixWorker = createBugfixWorker();
+    workersToClose.push(worker, queueEvents, bugfixWorker);
 
     heartbeat = new HeartbeatService(AGENT_ID, VERSION);
     heartbeat.start();
@@ -121,7 +124,12 @@ async function main() {
   serverAdapter.setBasePath("/admin/queues");
 
   createBullBoard({
-    queues: IS_CONTROL_PLANE ? [] : [new BullMQAdapter(taskQueue.getBullMQQueue())],
+    queues: IS_CONTROL_PLANE
+      ? []
+      : [
+          new BullMQAdapter(taskQueue.getBullMQQueue()),
+          new BullMQAdapter(bugfixQueue.getBullMQQueue()),
+        ],
     serverAdapter,
   });
   app.use("/admin/queues", serverAdapter.getRouter());
@@ -140,6 +148,7 @@ async function main() {
 
       if (!IS_CONTROL_PLANE) {
         payload["queueCounts"] = await taskQueue.getJobCounts();
+        payload["bugfixQueueCounts"] = await bugfixQueue.getJobCounts();
       }
 
       res.json(payload);
@@ -186,6 +195,7 @@ async function main() {
 
     if (!IS_CONTROL_PLANE) {
       await taskQueue.close();
+      await bugfixQueue.close();
     } else {
       await closeAllRepoWorkers();
     }
