@@ -106,16 +106,16 @@ export async function POST(
       return NextResponse.json({ error: "Finding non trovata" }, { status: 404 });
     }
 
-    // Approval of a spec finding enqueues spec_impl. bug_impl will plug in
-    // here when Phase 3 step D lands — for now, bug approvals just flip the
-    // triage state.
+    // Approval of either a spec or bug finding enqueues the matching impl
+    // capability (spec_impl / bug_impl). No-op if no impl capability is
+    // configured or no runner is online — the finding still flips to approved.
     let impl: {
       enqueued: boolean;
       reason?: string;
       agent_run_id?: string;
       task_id?: string;
     } | null = null;
-    if (parsed.data.action === "approve" && type === "spec") {
+    if (parsed.data.action === "approve") {
       impl = await enqueueImpl({
         type: type as FindingType,
         findingId: id,

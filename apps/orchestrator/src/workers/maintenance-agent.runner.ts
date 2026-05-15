@@ -30,6 +30,11 @@ import {
   type SpecImplPlan,
 } from "../services/spec-impl.validator";
 import {
+  validateBugImplRepro,
+  validateBugImplFix,
+  type BugImplRepro,
+} from "../services/bug-impl.validator";
+import {
   findMatchingIssue,
   listOpenIssues,
   type OpenIssue,
@@ -101,12 +106,12 @@ export async function runMaintenanceAgent(
     findingId: payload.findingId ?? null,
   };
 
-  // bug_impl ships in Phase 3 step D. For now only the three implemented
-  // capabilities pass the whitelist.
+  // All four capabilities are now wired in. Anything else stays guarded.
   if (
     payload.capabilityDefinitionId !== "spec_discovery" &&
     payload.capabilityDefinitionId !== "bug_discovery" &&
-    payload.capabilityDefinitionId !== "spec_impl"
+    payload.capabilityDefinitionId !== "spec_impl" &&
+    payload.capabilityDefinitionId !== "bug_impl"
   ) {
     const reason = `Capability ${payload.capabilityDefinitionId} not implemented yet`;
     await markRun(ctx, "skipped", { errorMessage: reason });
@@ -173,6 +178,9 @@ export async function runMaintenanceAgent(
   try {
     if (ctx.capabilityDefinitionId === "spec_impl") {
       return await runSpecImpl(ctx, config);
+    }
+    if (ctx.capabilityDefinitionId === "bug_impl") {
+      return await runBugImpl(ctx, config);
     }
     if (ctx.capabilityDefinitionId === "bug_discovery") {
       return await runBugDiscovery(ctx, config);
@@ -923,6 +931,440 @@ function buildSpecImplImplementationPrompt(args: {
   lines.push("");
   lines.push(
     "Implement, commit, push, and open a PR. Emit one JSON object with `phase: \"impl\"`."
+  );
+  return lines.join("\n");
+}
+
+// ─── Bug implementation ────────────────────────────────────────────────────
+
+type LoadedBugFinding = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  title: string;
+  description: string;
+  severity: string;
+  hypothesis: string;
+  repro_steps: string | null;
+  evidence: Record<string, unknown>;
+  affected_paths: string[];
+  triage_state: string;
+  task_id: string | null;
+  confidence: number;
+};
+
+async function runBugImpl(
+  ctx: RunContext,
+  config: LoadedConfig
+): Promise<MaintenanceRunOutcome> {
+  if (!ctx.findingId) {
+    const reason = "bug_impl run requires findingId in payload";
+    await markRun(ctx, "validation_failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "validation_failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+
+  const finding = await loadBugFinding(ctx.findingId, ctx.workspaceId);
+  if (!finding) {
+    const reason = "bug_finding not found for workspace";
+    await markRun(ctx, "failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+  if (finding.triage_state !== "approved") {
+    const reason = `finding is not approved (state=${finding.triage_state})`;
+    await markRun(ctx, "validation_failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "validation_failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+
+  const locked = await withRepoImplLock(ctx.repositoryId, async () => {
+    return runBugImplLocked(ctx, config, finding);
+  });
+  if (!locked.acquired) {
+    const reason = "repository impl lock is held by another job";
+    await markRun(ctx, "failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+  return locked.value;
+}
+
+async function runBugImplLocked(
+  ctx: RunContext,
+  config: LoadedConfig,
+  finding: LoadedBugFinding
+): Promise<MaintenanceRunOutcome> {
+  const task = await ensureBugImplTask(ctx, finding);
+
+  const repoUrl = `https://github.com/${config.repository.full_name}.git`;
+  const { repoPath } = await setupRepoForRead({
+    repositoryId: config.repository.id,
+    repoUrl,
+    defaultBranch: config.repository.default_branch,
+  });
+  const branchName = `fix/bug-${finding.id.slice(0, 8)}-${slugify(finding.title).slice(0, 40)}`;
+  prepareImplBranch(repoPath, config.repository.default_branch, branchName);
+
+  const profile = loadProfileBundle("bug_impl", "apps/orchestrator/profiles/bug-impl");
+
+  // Phase 1 — Reproduction.
+  const reproPrompt = buildBugImplReproPrompt({
+    finding,
+    branch: branchName,
+    protectedPaths: config.config.protected_paths,
+  });
+  const reproOutput = await invokeClaude({
+    cwd: repoPath,
+    systemPrompt: profile.systemPrompt,
+    prompt: `## Phase 1 — Reproduction\n\n${reproPrompt}`,
+    allowedTools: ["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
+  });
+
+  if (!reproOutput.parsed) {
+    return abortRun(ctx, "validation_failed", "repro output not parseable", reproOutput);
+  }
+
+  let repro: BugImplRepro;
+  try {
+    repro = validateBugImplRepro(reproOutput.parsed, {
+      protectedPaths: config.config.protected_paths,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return abortRun(ctx, "validation_failed", message, reproOutput);
+  }
+
+  if (repro.outcome === "cannot_reproduce") {
+    const note = "cannot_reproduce";
+    await unapproveBugFinding(finding.id, note);
+    const tokens = (repro.tokens_used || reproOutput.tokensUsed);
+    const cost = (repro.cost_usd || reproOutput.costUsd);
+    await markRun(ctx, "validation_failed", {
+      completedAt: new Date().toISOString(),
+      errorMessage: note,
+      tokensUsed: tokens,
+      costUsd: cost,
+    });
+    await insertEvent(ctx, "agent.run.failed", { reason: note });
+    return {
+      status: "validation_failed",
+      findingsCreated: 0,
+      tokensUsed: tokens,
+      costUsd: cost,
+      errorMessage: note,
+    };
+  }
+
+  if (!repro.regression_test_path || !fileExists(path.join(repoPath, repro.regression_test_path))) {
+    return abortRun(
+      ctx,
+      "validation_failed",
+      "regression test file not present on disk after repro phase",
+      reproOutput
+    );
+  }
+  const reproSnapshot = fs.readFileSync(path.join(repoPath, repro.regression_test_path), "utf-8");
+  const reproAssertionCount = countAssertions(reproSnapshot);
+
+  // Phase 2 — Fix.
+  const fixPrompt = buildBugImplFixPrompt({
+    finding,
+    branch: branchName,
+    protectedPaths: config.config.protected_paths,
+    defaultBranch: config.repository.default_branch,
+    repoFullName: config.repository.full_name,
+    regressionTestPath: repro.regression_test_path,
+  });
+  const fixOutput = await invokeClaude({
+    cwd: repoPath,
+    systemPrompt: profile.systemPrompt,
+    prompt: `## Phase 2 — Fix\n\n${fixPrompt}`,
+    allowedTools: ["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
+  });
+
+  if (!fixOutput.parsed) {
+    return abortRun(ctx, "validation_failed", "fix output not parseable", fixOutput, reproOutput);
+  }
+
+  let fixValidated;
+  try {
+    fixValidated = validateBugImplFix(fixOutput.parsed, {
+      protectedPaths: config.config.protected_paths,
+      expectedBranch: branchName,
+      reproRegressionTestPath: repro.regression_test_path,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return abortRun(ctx, "validation_failed", message, fixOutput, reproOutput);
+  }
+
+  const totalTokens =
+    (repro.tokens_used || reproOutput.tokensUsed) +
+    (fixValidated.result.tokens_used || fixOutput.tokensUsed);
+  const totalCost =
+    (repro.cost_usd || reproOutput.costUsd) +
+    (fixValidated.result.cost_usd || fixOutput.costUsd);
+
+  if (fixValidated.result.outcome !== "success") {
+    const reason = fixValidated.result.reason ?? fixValidated.result.outcome;
+    await unapproveBugFinding(finding.id, fixValidated.result.outcome + ": " + reason);
+    await markRun(ctx, "failed", {
+      completedAt: new Date().toISOString(),
+      errorMessage: reason,
+      tokensUsed: totalTokens,
+      costUsd: totalCost,
+    });
+    await insertEvent(ctx, "agent.run.failed", {
+      reason: fixValidated.result.outcome,
+      detail: reason,
+    });
+    return {
+      status: "failed",
+      findingsCreated: 0,
+      tokensUsed: totalTokens,
+      costUsd: totalCost,
+      errorMessage: reason,
+    };
+  }
+
+  // Regression test integrity check — file must still exist + assertion
+  // count must not have decreased.
+  const regressionPath = fixValidated.result.regression_test_path ?? repro.regression_test_path;
+  if (!regressionPath || !fileExists(path.join(repoPath, regressionPath))) {
+    return abortRun(
+      ctx,
+      "validation_failed",
+      "regression test file deleted by fix pass",
+      fixOutput,
+      reproOutput
+    );
+  }
+  const fixSnapshot = fs.readFileSync(path.join(repoPath, regressionPath), "utf-8");
+  const fixAssertionCount = countAssertions(fixSnapshot);
+  if (fixAssertionCount < reproAssertionCount) {
+    return abortRun(
+      ctx,
+      "validation_failed",
+      `regression test assertion count went from ${reproAssertionCount} to ${fixAssertionCount}`,
+      fixOutput,
+      reproOutput
+    );
+  }
+
+  if (fixValidated.result.pr_url) {
+    await addTaskArtifact(task.id, ctx.workspaceId, {
+      type: "pr",
+      url: fixValidated.result.pr_url,
+      title: `bug_impl: ${finding.title.slice(0, 80)}`,
+    });
+  }
+  await markTaskInReview(task.id, ctx.workspaceId);
+  await markBugFindingImplemented(finding.id, task.id);
+
+  await markRun(ctx, "completed", {
+    completedAt: new Date().toISOString(),
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
+    findingsCreated: 0,
+  });
+  await insertEvent(ctx, "agent.run.completed", {
+    finding_id: finding.id,
+    task_id: task.id,
+    pr_url: fixValidated.result.pr_url,
+    files_changed: fixValidated.result.files_changed.length,
+    tokens_used: totalTokens,
+    cost_usd: totalCost,
+    warnings: fixValidated.warnings,
+  });
+
+  return {
+    status: "completed",
+    findingsCreated: 0,
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
+  };
+}
+
+// ─── Bug impl helpers ───────────────────────────────────────────────────────
+
+async function loadBugFinding(
+  findingId: string,
+  workspaceId: string
+): Promise<LoadedBugFinding | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("bug_findings")
+    .select(
+      "id, workspace_id, repository_id, title, description, severity, hypothesis, repro_steps, evidence, affected_paths, triage_state, task_id, confidence"
+    )
+    .eq("id", findingId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) {
+    log.warn({ findingId, error: error.message }, "bug_impl: loadBugFinding failed");
+    return null;
+  }
+  return (data as LoadedBugFinding | null) ?? null;
+}
+
+async function ensureBugImplTask(
+  ctx: RunContext,
+  finding: LoadedBugFinding
+): Promise<{ id: string }> {
+  if (finding.task_id) return { id: finding.task_id };
+  const supabase = getSupabaseClient();
+  const priority = severityToPriority(finding.severity);
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      repository_id: ctx.repositoryId,
+      title: `[bug] ${finding.title.slice(0, 200)}`,
+      description: finding.description,
+      type: "bug",
+      priority,
+      status: "in_progress",
+      source_finding_type: "bug",
+      source_finding_id: finding.id,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw new Error(`bug_impl: could not create task — ${error?.message ?? "no row"}`);
+  }
+  const taskId = (data as { id: string }).id;
+  await supabase.from("bug_findings").update({ task_id: taskId }).eq("id", finding.id);
+  return { id: taskId };
+}
+
+async function markBugFindingImplemented(findingId: string, taskId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("bug_findings")
+    .update({
+      triage_state: "implemented",
+      task_id: taskId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", findingId);
+  if (error) log.warn({ findingId, error: error.message }, "bug_impl: markBugFindingImplemented failed");
+}
+
+async function unapproveBugFinding(findingId: string, note: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("bug_findings")
+    .update({
+      triage_state: "pending",
+      triage_note: note.slice(0, 1500),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", findingId);
+  if (error) log.warn({ findingId, error: error.message }, "bug_impl: unapproveBugFinding failed");
+}
+
+function severityToPriority(severity: string): string {
+  switch (severity) {
+    case "P0":
+      return "critical";
+    case "P1":
+      return "high";
+    case "P2":
+      return "medium";
+    case "P3":
+    default:
+      return "low";
+  }
+}
+
+function fileExists(p: string): boolean {
+  try {
+    return fs.existsSync(p) && fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Count plausible assertion sites in a test file: `expect(`, `assert(`,
+ *  `assert.`, plus common test runner specifics. Not a parser — a stable
+ *  enough heuristic for the regression-test-not-weakened check. */
+function countAssertions(source: string): number {
+  let count = 0;
+  for (const pattern of [
+    /\bexpect\s*\(/g,
+    /\bassert\s*\(/g,
+    /\bassert\.[A-Za-z]+\s*\(/g,
+    /\btoBe\s*\(/g,
+    /\btoEqual\s*\(/g,
+    /\btoMatch\s*\(/g,
+    /\btoThrow\s*\(/g,
+  ]) {
+    const matches = source.match(pattern);
+    if (matches) count += matches.length;
+  }
+  return count;
+}
+
+function buildBugImplReproPrompt(args: {
+  finding: LoadedBugFinding;
+  branch: string;
+  protectedPaths: string[];
+}): string {
+  const lines: string[] = [];
+  lines.push("# Approved bug finding to reproduce");
+  lines.push(`Branch: \`${args.branch}\` (checked out already; do not change it).`);
+  lines.push("");
+  lines.push("## Finding");
+  lines.push(`- title: ${args.finding.title}`);
+  lines.push(`- severity: ${args.finding.severity}`);
+  lines.push(`- description: ${args.finding.description}`);
+  lines.push(`- hypothesis: ${args.finding.hypothesis}`);
+  if (args.finding.repro_steps) {
+    lines.push(`- repro_steps: ${args.finding.repro_steps}`);
+  }
+  if (args.finding.affected_paths.length > 0) {
+    lines.push(`- affected_paths: ${args.finding.affected_paths.join(", ")}`);
+  }
+  const evidenceJson = JSON.stringify(args.finding.evidence ?? {}, null, 2);
+  if (evidenceJson && evidenceJson !== "{}") {
+    lines.push("- evidence:");
+    lines.push("```json");
+    lines.push(evidenceJson.slice(0, 3000));
+    lines.push("```");
+  }
+  lines.push("");
+  lines.push("## protected_paths (never write to these)");
+  for (const p of args.protectedPaths) lines.push(`- ${p}`);
+  lines.push("");
+  lines.push(
+    "Write a single failing regression test that demonstrates the bug. Run it. Emit JSON with `phase: \"repro\"`."
+  );
+  return lines.join("\n");
+}
+
+function buildBugImplFixPrompt(args: {
+  finding: LoadedBugFinding;
+  branch: string;
+  protectedPaths: string[];
+  defaultBranch: string;
+  repoFullName: string;
+  regressionTestPath: string;
+}): string {
+  const lines: string[] = [];
+  lines.push("# Fix the bug — regression test in place");
+  lines.push("");
+  lines.push("## Branch");
+  lines.push(`\`${args.branch}\` targeting \`${args.defaultBranch}\` on \`${args.repoFullName}\`.`);
+  lines.push("");
+  lines.push("## Regression test (must keep passing, do not weaken)");
+  lines.push(`- ${args.regressionTestPath}`);
+  lines.push("");
+  lines.push("## Protected (must NOT be written)");
+  for (const p of args.protectedPaths) lines.push(`- ${p}`);
+  lines.push("");
+  lines.push(
+    "Implement the smallest safe fix. Max 3 non-test files changed. Run tests, commit, push, open a PR. Emit JSON with `phase: \"fix\"`."
   );
   return lines.join("\n");
 }
