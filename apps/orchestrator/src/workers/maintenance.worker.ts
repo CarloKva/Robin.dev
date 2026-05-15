@@ -22,20 +22,9 @@ async function processMaintenanceJob(
     "Maintenance worker received job"
   );
 
-  if (payload.runnerAgentId !== AGENT_ID) {
-    log.warn(
-      { jobId: job.id, runnerAgentId: payload.runnerAgentId, AGENT_ID },
-      "Maintenance job routed to wrong agent; skipping"
-    );
-    return {
-      status: "skipped",
-      findingsCreated: 0,
-      tokensUsed: 0,
-      costUsd: 0,
-      errorMessage: "runner_mismatch",
-    };
-  }
-
+  // Routing safety check. The same check runs again inside runMaintenanceAgent
+  // and updates agent_runs/maintenance_events there. We delegate so a single
+  // code path owns the orphan-prevention logic.
   return runMaintenanceAgent(payload);
 }
 

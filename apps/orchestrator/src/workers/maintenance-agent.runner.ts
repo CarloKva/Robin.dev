@@ -93,6 +93,11 @@ export async function runMaintenanceAgent(
   if (payload.runnerAgentId !== AGENT_ID) {
     const reason = `Runner mismatch: payload=${payload.runnerAgentId} self=${AGENT_ID}`;
     log.warn({ ...payload }, reason);
+    await markRun(ctx, "skipped", {
+      errorMessage: reason,
+      completedAt: new Date().toISOString(),
+    });
+    await insertEvent(ctx, "agent.run.failed", { reason });
     return {
       status: "skipped",
       findingsCreated: 0,
@@ -503,10 +508,7 @@ async function invokeClaude(args: {
       allowDangerouslySkipPermissions: true,
       allowedTools: args.allowedTools,
       settingSources: ["project"],
-      env: {
-        ...(process.env as Record<string, string>),
-        ANTHROPIC_API_KEY: process.env["ANTHROPIC_API_KEY"] ?? "",
-      },
+      env: buildClaudeEnv(),
     },
   });
 
@@ -629,6 +631,48 @@ function filterExistingPaths(repoPath: string, paths: string[]): string[] {
       return false;
     }
   });
+}
+
+/**
+ * Build the env handed to the Claude Agent SDK subprocess.
+ *
+ * The runner intentionally does NOT spread `process.env`. That would forward
+ * the Supabase service-role key, GitHub App private key, Redis URL, etc. into
+ * the model subprocess. Today the spec-discovery profile only allows read-only
+ * tools so leakage is gated by the tool allowlist — but any future tool
+ * addition or prompt-injection path through the spec files would surface those
+ * secrets. We only pass what Claude actually needs.
+ */
+export function buildClaudeEnv(
+  source: NodeJS.ProcessEnv = process.env
+): Record<string, string> {
+  const ALLOWED_KEYS = new Set([
+    "ANTHROPIC_API_KEY",
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "NODE_OPTIONS",
+  ]);
+  const ALLOWED_PREFIXES = ["CLAUDE_", "ANTHROPIC_"];
+
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue;
+    const allowed =
+      ALLOWED_KEYS.has(key) ||
+      ALLOWED_PREFIXES.some((prefix) => key.startsWith(prefix));
+    if (allowed) env[key] = value;
+  }
+  // Make sure ANTHROPIC_API_KEY is always set (empty string surfaces a clearer
+  // error from the SDK than a missing key).
+  if (env["ANTHROPIC_API_KEY"] === undefined) env["ANTHROPIC_API_KEY"] = "";
+  return env;
 }
 
 function unwrapRelated<T>(value: unknown): T | null {
