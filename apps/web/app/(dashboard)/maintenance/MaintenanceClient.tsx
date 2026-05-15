@@ -11,7 +11,10 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Power,
+  AlertTriangle,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatShortDate, formatTokens } from "@/lib/format";
 import type {
@@ -24,6 +27,12 @@ type Repo = { id: string; full_name: string; default_branch: string };
 
 type Props = {
   isOwner: boolean;
+  maintenanceEnabled: boolean;
+  disabledCapabilities: Array<{
+    id: string;
+    globally_disabled_reason: string | null;
+    globally_disabled_at: string | null;
+  }>;
   repositories: Repo[];
   selectedRepoId: string | null;
   configs: CapabilityConfigWithRelations[];
@@ -66,14 +75,30 @@ export function MaintenanceClient(props: Props) {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Maintenance</h1>
-        <p className="text-sm text-muted-foreground">
-          Capabilities di manutenzione (spec coverage, bug discovery, fix automation) eseguite
-          dai tuoi agenti. La discovery è on di default, le implementation sono off finché non
-          approvate.
-        </p>
+      <header className="space-y-2 flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold">Maintenance</h1>
+          <p className="text-sm text-muted-foreground">
+            Capabilities di manutenzione (spec coverage, bug discovery, fix automation) eseguite
+            dai tuoi agenti. La discovery è on di default, le implementation sono off finché non
+            approvate.
+          </p>
+        </div>
+        <Link
+          href="/maintenance/metrics"
+          className="shrink-0 text-xs underline text-muted-foreground hover:text-foreground"
+        >
+          Metriche →
+        </Link>
       </header>
+
+      {!props.maintenanceEnabled && (
+        <OnboardingPanel isOwner={props.isOwner} />
+      )}
+
+      {props.disabledCapabilities.length > 0 && (
+        <GloballyDisabledBanner disabled={props.disabledCapabilities} />
+      )}
 
       {props.repositories.length === 0 ? (
         <EmptyState
@@ -109,6 +134,95 @@ export function MaintenanceClient(props: Props) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Onboarding + globally-disabled UI ──────────────────────────────────────
+
+function OnboardingPanel({ isOwner }: { isOwner: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enableMaintenance() {
+    if (!isOwner) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/maintenance/onboarding", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body?.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 space-y-3 dark:bg-amber-950/50 dark:border-amber-900">
+      <div className="flex items-start gap-3">
+        <Power className="h-5 w-5 text-amber-700 dark:text-amber-400 mt-0.5" />
+        <div className="flex-1 space-y-1">
+          <h2 className="font-semibold text-amber-900 dark:text-amber-100">
+            Maintenance non è ancora attiva su questo workspace
+          </h2>
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Per iniziare a far girare gli agenti di manutenzione (spec coverage, bug
+            discovery, e — quando approvati — le implementation), il proprietario del
+            workspace deve attivare il feature flag.
+          </p>
+        </div>
+      </div>
+      <ol className="text-xs text-amber-800 dark:text-amber-200 list-decimal pl-9 space-y-0.5">
+        <li>Verifica di avere almeno un repository abilitato (Settings → GitHub).</li>
+        <li>Conferma che un agente sia online e assegnato al repo (pagina Agents).</li>
+        <li>Attiva sotto. Da questo momento lo scheduler inizierà a leggere i config.</li>
+      </ol>
+      <div className="flex items-center gap-3">
+        <Button
+          size="sm"
+          onClick={enableMaintenance}
+          disabled={!isOwner || busy}
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+          Attiva maintenance
+        </Button>
+        {!isOwner && (
+          <span className="text-xs text-amber-800 dark:text-amber-200 italic">
+            Solo il proprietario del workspace può attivare.
+          </span>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function GloballyDisabledBanner({
+  disabled,
+}: {
+  disabled: Array<{ id: string; globally_disabled_reason: string | null; globally_disabled_at: string | null }>;
+}) {
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-2 dark:bg-red-950/40 dark:border-red-900">
+      <div className="flex items-start gap-2 text-red-900 dark:text-red-200">
+        <AlertTriangle className="h-4 w-4 mt-0.5" />
+        <p className="text-sm font-medium">
+          Una o più capability sono state disattivate globalmente dal kill switch
+        </p>
+      </div>
+      <ul className="text-xs text-red-800 dark:text-red-300 pl-6 list-disc space-y-0.5">
+        {disabled.map((d) => (
+          <li key={d.id}>
+            <span className="font-mono">{d.id}</span>
+            {d.globally_disabled_reason ? ` — ${d.globally_disabled_reason}` : ""}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
