@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["findings", "summary", "tokens_used", "cost_usd"],
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "severity",
+          "hypothesis",
+          "evidence",
+          "affected_paths",
+          "confidence",
+          "source"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["P0", "P1", "P2", "P3"] },
+          "hypothesis": { "type": "string" },
+          "repro_steps": { "type": ["string", "null"] },
+          "evidence": { "type": "object" },
+          "affected_paths": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "suggested_fix_outline": { "type": ["string", "null"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "source": {
+            "type": "string",
+            "enum": ["sentry", "static_analysis", "commit_correlation"]
+          },
+          "source_ref": { "type": ["string", "null"] },
+          "external_issue_url": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "summary": { "type": "string" },
+    "tokens_used": { "type": "integer", "minimum": 0 },
+    "cost_usd": { "type": "number", "minimum": 0 }
+  }
+}

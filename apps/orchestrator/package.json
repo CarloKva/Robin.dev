@@ -6,13 +6,14 @@
     "dev": "ts-node --project tsconfig.json src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "prisma": {
     "schema": "../../prisma/schema.prisma"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.88",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.141",
     "@anthropic-ai/sdk": "^0.39.0",
     "@bull-board/api": "^6.6.2",
     "@bull-board/express": "^6.6.2",
@@ -27,6 +28,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "ts-node": "^10.9.2",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^4.0.18"
   }
 }

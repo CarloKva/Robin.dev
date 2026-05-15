@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["findings", "summary", "tokens_used", "cost_usd"],
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": [
+          "requirement_text",
+          "requirement_source_path",
+          "status",
+          "evidence_paths",
+          "confidence"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "requirement_text": { "type": "string" },
+          "requirement_source_path": { "type": "string" },
+          "requirement_source_line": { "type": ["integer", "null"] },
+          "requirement_source_end_line": { "type": ["integer", "null"] },
+          "status": {
+            "type": "string",
+            "enum": ["implemented", "partial", "missing", "drifted"]
+          },
+          "evidence_paths": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "suggested_action": { "type": ["string", "null"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "summary": { "type": "string" },
+    "tokens_used": { "type": "integer", "minimum": 0 },
+    "cost_usd": { "type": "number", "minimum": 0 }
+  }
+}
