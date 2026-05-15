@@ -9,6 +9,7 @@ import {
   ListTodo,
   BookOpen,
   Bot,
+  Wrench,
   BarChart2,
   Settings,
   PanelLeftClose,
@@ -29,6 +30,7 @@ const NAV_ITEMS_PRIMARY: NavItem[] = [
   { href: "/backlog", label: "Planning", icon: ListTodo },
   { href: "/context", label: "Context", icon: BookOpen },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/maintenance", label: "Maintenance", icon: Wrench },
 ];
 
 const NAV_ITEMS_SECONDARY: NavItem[] = [
