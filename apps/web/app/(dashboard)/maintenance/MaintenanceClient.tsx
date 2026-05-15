@@ -186,7 +186,9 @@ function CapabilityCard(props: {
     router.refresh();
   }
 
-  const isImplemented = config.capability_definition_id === "spec_discovery";
+  const isImplemented =
+    config.capability_definition_id === "spec_discovery" ||
+    config.capability_definition_id === "bug_discovery";
 
   return (
     <div className="rounded-lg border border-border bg-card p-5 space-y-4">

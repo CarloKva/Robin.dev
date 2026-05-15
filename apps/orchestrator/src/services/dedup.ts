@@ -31,3 +31,28 @@ export function computeSpecFindingDedupHash(key: SpecFindingDedupKey): string {
   ];
   return createHash("sha256").update(parts.join("|"), "utf-8").digest("hex");
 }
+
+export type BugFindingDedupKey = {
+  repositoryId: string;
+  title: string;
+  source: string;
+  sourceRef: string | null | undefined;
+  severity: string;
+};
+
+/**
+ * Bug findings dedupe on: repo + normalized title + source + source_ref +
+ * severity. Two crash reports for the same Sentry fingerprint always collapse
+ * because `source_ref` is identical; an arbitrary new static-analysis finding
+ * collapses if its title normalizes to the same string at the same severity.
+ */
+export function computeBugFindingDedupHash(key: BugFindingDedupKey): string {
+  const parts = [
+    key.repositoryId,
+    normalizeRequirement(key.title),
+    key.source,
+    key.sourceRef ?? "",
+    key.severity,
+  ];
+  return createHash("sha256").update(parts.join("|"), "utf-8").digest("hex");
+}

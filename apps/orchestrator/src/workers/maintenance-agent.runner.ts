@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type {
   MaintenanceCapabilityId,
@@ -8,6 +9,7 @@ import { log } from "../utils/logger";
 import { setupRepoForRead } from "../services/repo-setup";
 import { loadProfileBundle } from "../services/profile-loader";
 import {
+  computeBugFindingDedupHash,
   computeSpecFindingDedupHash,
 } from "../services/dedup";
 import {
@@ -15,6 +17,17 @@ import {
   type SpecDiscoveryRawOutput,
   type ValidatedSpecFinding,
 } from "../services/spec-discovery.validator";
+import {
+  validateBugDiscoveryOutput,
+  type BugDiscoveryRawOutput,
+  type ValidatedBugFinding,
+} from "../services/bug-discovery.validator";
+import {
+  findMatchingIssue,
+  listOpenIssues,
+  type OpenIssue,
+} from "../services/github-issues.service";
+import { getInstallationToken } from "../services/github.service";
 
 const AGENT_ID = process.env["AGENT_ID"] ?? "b0000000-0000-0000-0000-000000000001";
 const DEFAULT_MODEL = process.env["MAINTENANCE_MODEL"] ?? "claude-sonnet-4-6";
@@ -51,6 +64,7 @@ type LoadedConfig = {
   workspace: {
     id: string;
     timezone: string | null;
+    mcp_config: { mcpServers?: Record<string, unknown> } | null;
   };
   capability: {
     id: MaintenanceCapabilityId;
@@ -60,6 +74,8 @@ type LoadedConfig = {
   config: {
     spec_paths: string[];
     protected_paths: string[];
+    bug_noise_allowlist: string[];
+    bug_source_config: Record<string, unknown>;
     per_run_token_cap: number;
   };
 };
@@ -75,10 +91,12 @@ export async function runMaintenanceAgent(
     workspaceCapabilityConfigId: payload.workspaceCapabilityConfigId,
   };
 
-  // Phase 1 only ships spec_discovery. Anything else is rejected explicitly so
-  // a misconfigured config doesn't silently no-op against a real workspace.
-  if (payload.capabilityDefinitionId !== "spec_discovery") {
-    const reason = `Capability ${payload.capabilityDefinitionId} not implemented in Phase 1`;
+  // Implementation capabilities (spec_impl, bug_impl) land in Phase 3.
+  if (
+    payload.capabilityDefinitionId !== "spec_discovery" &&
+    payload.capabilityDefinitionId !== "bug_discovery"
+  ) {
+    const reason = `Capability ${payload.capabilityDefinitionId} not implemented yet`;
     await markRun(ctx, "skipped", { errorMessage: reason });
     await insertEvent(ctx, "agent.run.failed", { reason });
     return {
@@ -141,6 +159,9 @@ export async function runMaintenanceAgent(
   });
 
   try {
+    if (ctx.capabilityDefinitionId === "bug_discovery") {
+      return await runBugDiscovery(ctx, config);
+    }
     return await runSpecDiscovery(ctx, config);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -296,6 +317,146 @@ async function runSpecDiscovery(
   };
 }
 
+// ─── Bug discovery ──────────────────────────────────────────────────────────
+
+async function runBugDiscovery(
+  ctx: RunContext,
+  config: LoadedConfig
+): Promise<MaintenanceRunOutcome> {
+  // 1. Resolve repo on disk + capture recent commits as commit-correlation context.
+  const repoUrl = `https://github.com/${config.repository.full_name}.git`;
+  const { repoPath } = await setupRepoForRead({
+    repositoryId: config.repository.id,
+    repoUrl,
+    defaultBranch: config.repository.default_branch,
+  });
+
+  const recentCommits = collectRecentCommits(repoPath, 30);
+
+  // 2. Open GitHub issues for dedup if the installation has issues:read.
+  const openIssues = await loadOpenIssuesIfPermitted(config.repository.full_name);
+
+  // 3. Existing bug_findings hashes (so the model self-dedups upstream).
+  const existingHashes = await loadExistingBugDedupHashes(ctx.repositoryId);
+
+  // 4. Profile + MCP resolution (Sentry comes from workspace.mcp_config or
+  // bug_source_config.mcpServers).
+  const profile = loadProfileBundle("bug_discovery", "apps/orchestrator/profiles/bug-discovery");
+  const mcpServers = resolveBugDiscoveryMcpServers(config);
+
+  // 5. Build prompt + invoke Claude.
+  const prompt = buildBugDiscoveryPrompt({
+    protectedPaths: config.config.protected_paths,
+    noiseAllowlist: config.config.bug_noise_allowlist,
+    existingHashes,
+    openIssues: openIssues ?? [],
+    recentCommits,
+    sentryConfigured: Object.keys(mcpServers).length > 0,
+  });
+
+  const claudeOutput = await invokeClaude({
+    cwd: repoPath,
+    systemPrompt: profile.systemPrompt,
+    prompt,
+    allowedTools: profile.allowedTools,
+    ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
+  });
+
+  if (!claudeOutput.parsed) {
+    const reason = "Claude output did not contain a valid JSON object";
+    await markRun(ctx, "validation_failed", {
+      errorMessage: reason,
+      tokensUsed: claudeOutput.tokensUsed,
+      costUsd: claudeOutput.costUsd,
+      completedAt: new Date().toISOString(),
+    });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return {
+      status: "validation_failed",
+      findingsCreated: 0,
+      tokensUsed: claudeOutput.tokensUsed,
+      costUsd: claudeOutput.costUsd,
+      errorMessage: reason,
+    };
+  }
+
+  // 6. Validate.
+  let validation;
+  try {
+    validation = validateBugDiscoveryOutput(claudeOutput.parsed as BugDiscoveryRawOutput, {
+      protectedPaths: config.config.protected_paths,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await markRun(ctx, "validation_failed", {
+      errorMessage: message,
+      tokensUsed: claudeOutput.tokensUsed,
+      costUsd: claudeOutput.costUsd,
+      completedAt: new Date().toISOString(),
+    });
+    await insertEvent(ctx, "agent.run.failed", { reason: message });
+    return {
+      status: "validation_failed",
+      findingsCreated: 0,
+      tokensUsed: claudeOutput.tokensUsed,
+      costUsd: claudeOutput.costUsd,
+      errorMessage: message,
+    };
+  }
+
+  // 7. Server-side noise filter (bug_noise_allowlist) + GitHub issue dedup.
+  const filtered = validation.output.findings.filter((finding) => {
+    if (config.config.bug_noise_allowlist.includes(finding.source_ref ?? "")) return false;
+    if (
+      openIssues &&
+      findMatchingIssue({
+        finding: { title: finding.title, source_ref: finding.source_ref },
+        issues: openIssues,
+      })
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  // 8. Insert into bug_findings (unique on repository_id + dedup_hash).
+  const inserted = await insertBugFindings({ ctx, findings: filtered });
+
+  const tokensUsed = validation.output.tokens_used || claudeOutput.tokensUsed;
+  const costUsd = validation.output.cost_usd || claudeOutput.costUsd;
+
+  await markRun(ctx, "completed", {
+    completedAt: new Date().toISOString(),
+    tokensUsed,
+    costUsd,
+    findingsCreated: inserted.length,
+  });
+  await insertEvent(ctx, "agent.run.completed", {
+    findings_created: inserted.length,
+    tokens_used: tokensUsed,
+    cost_usd: costUsd,
+    dropped: validation.dropped.length,
+    summary: validation.output.summary,
+    github_issue_dedup_skipped: openIssues === null,
+  });
+  for (const finding of inserted) {
+    await insertEvent(ctx, "finding.created", {
+      finding_id: finding.id,
+      type: "bug",
+      repository_id: ctx.repositoryId,
+      severity: finding.severity,
+      confidence: finding.confidence,
+    });
+  }
+
+  return {
+    status: "completed",
+    findingsCreated: inserted.length,
+    tokensUsed,
+    costUsd,
+  };
+}
+
 // ─── DB access ──────────────────────────────────────────────────────────────
 
 async function loadConfig(ctx: RunContext): Promise<LoadedConfig | null> {
@@ -305,8 +466,10 @@ async function loadConfig(ctx: RunContext): Promise<LoadedConfig | null> {
     .select(`
       spec_paths,
       protected_paths,
+      bug_noise_allowlist,
+      bug_source_config,
       per_run_token_cap,
-      workspaces:workspace_id(id, timezone),
+      workspaces:workspace_id(id, timezone, mcp_config),
       repositories:repository_id(id, full_name, default_branch, is_enabled),
       capability_definitions:capability_definition_id(id, profile_path, per_run_token_cap_default)
     `)
@@ -318,7 +481,11 @@ async function loadConfig(ctx: RunContext): Promise<LoadedConfig | null> {
     return null;
   }
 
-  const workspace = unwrapRelated<{ id: string; timezone: string | null }>(data["workspaces"]);
+  const workspace = unwrapRelated<{
+    id: string;
+    timezone: string | null;
+    mcp_config: { mcpServers?: Record<string, unknown> } | null;
+  }>(data["workspaces"]);
   const repository = unwrapRelated<{
     id: string;
     full_name: string;
@@ -347,6 +514,9 @@ async function loadConfig(ctx: RunContext): Promise<LoadedConfig | null> {
     config: {
       spec_paths: (data["spec_paths"] as string[] | null) ?? [],
       protected_paths: (data["protected_paths"] as string[] | null) ?? [],
+      bug_noise_allowlist: (data["bug_noise_allowlist"] as string[] | null) ?? [],
+      bug_source_config:
+        (data["bug_source_config"] as Record<string, unknown> | null) ?? {},
       per_run_token_cap: (data["per_run_token_cap"] as number | null) ?? capability.per_run_token_cap_default,
     },
   };
@@ -367,6 +537,209 @@ async function loadExistingDedupHashes(repositoryId: string): Promise<string[]> 
   }
 
   return (data ?? []).map((row: { dedup_hash: string }) => row.dedup_hash);
+}
+
+async function loadExistingBugDedupHashes(repositoryId: string): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("bug_findings")
+    .select("dedup_hash")
+    .eq("repository_id", repositoryId)
+    .in("triage_state", ["pending", "approved", "implemented", "snoozed"])
+    .limit(2000);
+
+  if (error) {
+    log.warn({ repositoryId, error: error.message }, "maintenance-agent: bug dedup hash lookup failed");
+    return [];
+  }
+  return (data ?? []).map((row: { dedup_hash: string }) => row.dedup_hash);
+}
+
+async function insertBugFindings(args: {
+  ctx: RunContext;
+  findings: ValidatedBugFinding[];
+}): Promise<Array<{ id: string; severity: string; confidence: number }>> {
+  if (args.findings.length === 0) return [];
+  const supabase = getSupabaseClient();
+  const inserted: Array<{ id: string; severity: string; confidence: number }> = [];
+
+  for (const finding of args.findings) {
+    const dedupHash = computeBugFindingDedupHash({
+      repositoryId: args.ctx.repositoryId,
+      title: finding.title,
+      source: finding.source,
+      sourceRef: finding.source_ref,
+      severity: finding.severity,
+    });
+
+    const { data, error } = await supabase
+      .from("bug_findings")
+      .insert({
+        workspace_id: args.ctx.workspaceId,
+        repository_id: args.ctx.repositoryId,
+        agent_run_id: args.ctx.agentRunId,
+        title: finding.title,
+        description: finding.description,
+        severity: finding.severity,
+        hypothesis: finding.hypothesis,
+        repro_steps: finding.repro_steps,
+        evidence: finding.evidence,
+        affected_paths: finding.affected_paths,
+        suggested_fix_outline: finding.suggested_fix_outline,
+        confidence: finding.confidence,
+        source: finding.source,
+        source_ref: finding.source_ref,
+        external_issue_url: finding.external_issue_url,
+        dedup_hash: dedupHash,
+      })
+      .select("id, severity, confidence")
+      .single();
+
+    if (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "23505") continue;
+      log.warn(
+        { agentRunId: args.ctx.agentRunId, error: error.message },
+        "maintenance-agent: bug_findings insert failed"
+      );
+      continue;
+    }
+
+    if (data) inserted.push(data as { id: string; severity: string; confidence: number });
+  }
+
+  return inserted;
+}
+
+function collectRecentCommits(
+  repoPath: string,
+  count: number
+): Array<{ sha: string; subject: string; date: string; files: string[] }> {
+  try {
+    const log = execFileSync(
+      "git",
+      [
+        "log",
+        `-n${count}`,
+        "--no-merges",
+        "--pretty=format:%H%x09%cI%x09%s",
+        "--name-only",
+      ],
+      { cwd: repoPath, encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+    const blocks = log.split(/\n(?=[0-9a-f]{40}\t)/);
+    return blocks
+      .map((block) => {
+        const [header, ...fileLines] = block.split("\n");
+        if (!header) return null;
+        const [sha, date, subject] = header.split("\t");
+        if (!sha || !date || !subject) return null;
+        return {
+          sha,
+          date,
+          subject,
+          files: fileLines.filter((line) => line.trim().length > 0),
+        };
+      })
+      .filter((c): c is { sha: string; subject: string; date: string; files: string[] } => c !== null);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.warn({ repoPath, error: message }, "maintenance-agent: collectRecentCommits failed");
+    return [];
+  }
+}
+
+async function loadOpenIssuesIfPermitted(fullName: string): Promise<OpenIssue[] | null> {
+  const appId = process.env["GITHUB_APP_ID"];
+  const privateKeyB64 = process.env["GITHUB_APP_PRIVATE_KEY_B64"];
+  const installationIdStr = process.env["GITHUB_INSTALLATION_ID"];
+  if (!appId || !privateKeyB64 || !installationIdStr) {
+    log.warn({ fullName }, "maintenance-agent: GitHub credentials missing, skipping issue dedup");
+    return null;
+  }
+  try {
+    const token = await getInstallationToken(
+      appId,
+      privateKeyB64,
+      parseInt(installationIdStr, 10)
+    );
+    return listOpenIssues({ token, fullName });
+  } catch (err) {
+    log.warn(
+      { fullName, error: err instanceof Error ? err.message : String(err) },
+      "maintenance-agent: installation token / issue list failed"
+    );
+    return null;
+  }
+}
+
+function resolveBugDiscoveryMcpServers(config: LoadedConfig): Record<string, unknown> {
+  // bug_source_config.mcpServers wins when present (capability-scoped), else
+  // fall back to workspaces.mcp_config.mcpServers. Sentry is the typical case.
+  const fromConfig = (config.config.bug_source_config?.["mcpServers"] ?? null) as
+    | Record<string, unknown>
+    | null;
+  if (fromConfig && typeof fromConfig === "object") return fromConfig;
+
+  const workspaceServers = config.workspace.mcp_config?.mcpServers;
+  if (workspaceServers && typeof workspaceServers === "object") return workspaceServers;
+  return {};
+}
+
+function buildBugDiscoveryPrompt(args: {
+  protectedPaths: string[];
+  noiseAllowlist: string[];
+  existingHashes: string[];
+  openIssues: OpenIssue[];
+  recentCommits: Array<{ sha: string; subject: string; date: string; files: string[] }>;
+  sentryConfigured: boolean;
+}): string {
+  const lines: string[] = [];
+  lines.push("# Bug Discovery Run");
+  lines.push("");
+  if (args.sentryConfigured) {
+    lines.push(
+      "A Sentry MCP server is configured. Prefer Sentry evidence when classifying severity P0/P1."
+    );
+  } else {
+    lines.push(
+      "No Sentry MCP server is configured. Static analysis findings only — cap severity at P2 and require confidence ≥ 0.75."
+    );
+  }
+  lines.push("");
+  lines.push("## protected_paths (do not cite as affected_paths)");
+  for (const p of args.protectedPaths) lines.push(`- ${p}`);
+  lines.push("");
+  if (args.noiseAllowlist.length > 0) {
+    lines.push("## bug_noise_allowlist (Sentry source_refs to ignore)");
+    for (const ref of args.noiseAllowlist) lines.push(`- ${ref}`);
+    lines.push("");
+  }
+  if (args.openIssues.length > 0) {
+    lines.push("## open_github_issues (do not re-emit duplicates)");
+    for (const issue of args.openIssues.slice(0, 50)) {
+      lines.push(`- #${issue.number} — ${issue.title}`);
+    }
+    lines.push("");
+  }
+  if (args.recentCommits.length > 0) {
+    lines.push("## recent_commits (last 30)");
+    for (const commit of args.recentCommits) {
+      lines.push(
+        `- ${commit.sha.slice(0, 7)} ${commit.date} ${commit.subject} (files: ${commit.files.slice(0, 5).join(", ")}${commit.files.length > 5 ? `, +${commit.files.length - 5}` : ""})`
+      );
+    }
+    lines.push("");
+  }
+  if (args.existingHashes.length > 0) {
+    lines.push("## existing_dedup_hashes");
+    lines.push("```");
+    for (const h of args.existingHashes.slice(0, 200)) lines.push(h);
+    lines.push("```");
+    lines.push("");
+  }
+  lines.push("Return exactly one JSON object matching the output contract.");
+  return lines.join("\n");
 }
 
 async function insertSpecFindings(args: {
@@ -490,6 +863,7 @@ async function invokeClaude(args: {
   systemPrompt: string;
   prompt: string;
   allowedTools: string[];
+  mcpServers?: Record<string, unknown>;
 }): Promise<{
   parsed: unknown;
   tokensUsed: number;
@@ -498,18 +872,23 @@ async function invokeClaude(args: {
 }> {
   const fullPrompt = `${args.systemPrompt}\n\n---\n\n${args.prompt}`;
 
+  const options: Record<string, unknown> = {
+    cwd: args.cwd,
+    model: DEFAULT_MODEL,
+    maxTurns: DEFAULT_MAX_TURNS,
+    permissionMode: "bypassPermissions",
+    allowDangerouslySkipPermissions: true,
+    allowedTools: args.allowedTools,
+    settingSources: ["project"],
+    env: buildClaudeEnv(),
+  };
+  if (args.mcpServers && Object.keys(args.mcpServers).length > 0) {
+    options["mcpServers"] = args.mcpServers;
+  }
+
   const agentQuery = query({
     prompt: fullPrompt,
-    options: {
-      cwd: args.cwd,
-      model: DEFAULT_MODEL,
-      maxTurns: DEFAULT_MAX_TURNS,
-      permissionMode: "bypassPermissions",
-      allowDangerouslySkipPermissions: true,
-      allowedTools: args.allowedTools,
-      settingSources: ["project"],
-      env: buildClaudeEnv(),
-    },
+    options: options as NonNullable<Parameters<typeof query>[0]["options"]>,
   });
 
   const collected: string[] = [];
