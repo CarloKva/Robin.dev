@@ -445,6 +445,145 @@ export async function insertMaintenanceEvent(args: {
   if (error) console.error("[insertMaintenanceEvent]", error.message);
 }
 
+// ─── Approve → impl job plumbing ────────────────────────────────────────────
+
+export type ApprovedFindingForImpl = {
+  finding_id: string;
+  workspace_id: string;
+  repository_id: string;
+  task_id: string;
+  capability_definition_id: MaintenanceCapabilityId;
+  workspace_capability_config_id: string;
+};
+
+/**
+ * Look up the implementation capability config (spec_impl for spec findings,
+ * bug_impl for bug findings) and create or link a task to the finding so the
+ * runner has a target. Returns null when no impl capability is configured for
+ * the workspace+repo (in which case the caller skips the impl enqueue but
+ * leaves the finding approved).
+ */
+export async function prepareFindingForImplementation(args: {
+  workspaceId: string;
+  type: FindingType;
+  findingId: string;
+}): Promise<ApprovedFindingForImpl | null> {
+  const supabase = createSupabaseAdminClient();
+  const implCapability: MaintenanceCapabilityId =
+    args.type === "spec" ? "spec_impl" : "bug_impl";
+
+  // Two separate selects so the supabase-js type parser can infer field names
+  // from a literal string per branch.
+  let row: Record<string, unknown> | null = null;
+  if (args.type === "spec") {
+    const { data, error } = await supabase
+      .from("spec_findings")
+      .select(
+        "id, workspace_id, repository_id, task_id, requirement_text, requirement_source_path, requirement_source_line, status"
+      )
+      .eq("id", args.findingId)
+      .eq("workspace_id", args.workspaceId)
+      .maybeSingle();
+    if (error) {
+      console.error("[prepareFindingForImplementation finding]", error.message);
+      return null;
+    }
+    row = (data as Record<string, unknown> | null) ?? null;
+  } else {
+    const { data, error } = await supabase
+      .from("bug_findings")
+      .select("id, workspace_id, repository_id, task_id, title, description, severity")
+      .eq("id", args.findingId)
+      .eq("workspace_id", args.workspaceId)
+      .maybeSingle();
+    if (error) {
+      console.error("[prepareFindingForImplementation finding]", error.message);
+      return null;
+    }
+    row = (data as Record<string, unknown> | null) ?? null;
+  }
+
+  if (!row) return null;
+  const repositoryId = row["repository_id"] as string;
+
+  const { data: config } = await supabase
+    .from("workspace_capability_configs")
+    .select("id")
+    .eq("workspace_id", args.workspaceId)
+    .eq("repository_id", repositoryId)
+    .eq("capability_definition_id", implCapability)
+    .maybeSingle();
+  if (!config) return null;
+
+  let taskId = (row["task_id"] as string | null) ?? null;
+  if (!taskId) {
+    const taskPayload =
+      args.type === "spec"
+        ? {
+            workspace_id: args.workspaceId,
+            repository_id: repositoryId,
+            title: `[spec] ${(row["requirement_text"] as string).slice(0, 200)}`,
+            description: `Source: ${row["requirement_source_path"]}${
+              row["requirement_source_line"] ? `:${row["requirement_source_line"]}` : ""
+            }`,
+            type: "feature",
+            priority: "medium",
+            status: "in_progress",
+            source_finding_type: "spec",
+            source_finding_id: args.findingId,
+          }
+        : {
+            workspace_id: args.workspaceId,
+            repository_id: repositoryId,
+            title: `[bug] ${(row["title"] as string).slice(0, 200)}`,
+            description: (row["description"] as string) ?? "",
+            type: "bug",
+            priority: severityToPriority(row["severity"] as string),
+            status: "in_progress",
+            source_finding_type: "bug",
+            source_finding_id: args.findingId,
+          };
+    const { data: createdTask, error: taskError } = await supabase
+      .from("tasks")
+      .insert(taskPayload)
+      .select("id")
+      .single();
+    if (taskError || !createdTask) {
+      console.error("[prepareFindingForImplementation task]", taskError?.message);
+      return null;
+    }
+    taskId = (createdTask as { id: string }).id;
+    if (args.type === "spec") {
+      await supabase.from("spec_findings").update({ task_id: taskId }).eq("id", args.findingId);
+    } else {
+      await supabase.from("bug_findings").update({ task_id: taskId }).eq("id", args.findingId);
+    }
+  }
+
+  return {
+    finding_id: args.findingId,
+    workspace_id: args.workspaceId,
+    repository_id: repositoryId,
+    task_id: taskId,
+    capability_definition_id: implCapability,
+    workspace_capability_config_id: (config as { id: string }).id,
+  };
+}
+
+function severityToPriority(severity: string): string {
+  switch (severity) {
+    case "P0":
+      return "critical";
+    case "P1":
+      return "high";
+    case "P2":
+      return "medium";
+    case "P3":
+    default:
+      return "low";
+  }
+}
+
 // ─── Triage ─────────────────────────────────────────────────────────────────
 
 /**

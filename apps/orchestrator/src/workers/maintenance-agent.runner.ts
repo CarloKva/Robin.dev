@@ -1,4 +1,6 @@
 import { execFileSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type {
   MaintenanceCapabilityId,
@@ -6,7 +8,7 @@ import type {
 } from "@robin/shared-types";
 import { getSupabaseClient } from "../db/supabase.client";
 import { log } from "../utils/logger";
-import { setupRepoForRead } from "../services/repo-setup";
+import { setupRepoForRead, buildAuthenticatedCloneUrl } from "../services/repo-setup";
 import { loadProfileBundle } from "../services/profile-loader";
 import {
   computeBugFindingDedupHash,
@@ -23,11 +25,17 @@ import {
   type ValidatedBugFinding,
 } from "../services/bug-discovery.validator";
 import {
+  validateSpecImplPlan,
+  validateSpecImplResult,
+  type SpecImplPlan,
+} from "../services/spec-impl.validator";
+import {
   findMatchingIssue,
   listOpenIssues,
   type OpenIssue,
 } from "../services/github-issues.service";
 import { getInstallationToken } from "../services/github.service";
+import { withRepoImplLock } from "../services/repo-lock";
 
 const AGENT_ID = process.env["AGENT_ID"] ?? "b0000000-0000-0000-0000-000000000001";
 const DEFAULT_MODEL = process.env["MAINTENANCE_MODEL"] ?? "claude-sonnet-4-6";
@@ -52,6 +60,7 @@ type RunContext = {
   repositoryId: string;
   capabilityDefinitionId: MaintenanceCapabilityId;
   workspaceCapabilityConfigId: string;
+  findingId: string | null;
 };
 
 type LoadedConfig = {
@@ -89,12 +98,15 @@ export async function runMaintenanceAgent(
     repositoryId: payload.repositoryId,
     capabilityDefinitionId: payload.capabilityDefinitionId,
     workspaceCapabilityConfigId: payload.workspaceCapabilityConfigId,
+    findingId: payload.findingId ?? null,
   };
 
-  // Implementation capabilities (spec_impl, bug_impl) land in Phase 3.
+  // bug_impl ships in Phase 3 step D. For now only the three implemented
+  // capabilities pass the whitelist.
   if (
     payload.capabilityDefinitionId !== "spec_discovery" &&
-    payload.capabilityDefinitionId !== "bug_discovery"
+    payload.capabilityDefinitionId !== "bug_discovery" &&
+    payload.capabilityDefinitionId !== "spec_impl"
   ) {
     const reason = `Capability ${payload.capabilityDefinitionId} not implemented yet`;
     await markRun(ctx, "skipped", { errorMessage: reason });
@@ -159,6 +171,9 @@ export async function runMaintenanceAgent(
   });
 
   try {
+    if (ctx.capabilityDefinitionId === "spec_impl") {
+      return await runSpecImpl(ctx, config);
+    }
     if (ctx.capabilityDefinitionId === "bug_discovery") {
       return await runBugDiscovery(ctx, config);
     }
@@ -455,6 +470,461 @@ async function runBugDiscovery(
     tokensUsed,
     costUsd,
   };
+}
+
+// ─── Spec implementation ───────────────────────────────────────────────────
+
+async function runSpecImpl(
+  ctx: RunContext,
+  config: LoadedConfig
+): Promise<MaintenanceRunOutcome> {
+  if (!ctx.findingId) {
+    const reason = "spec_impl run requires findingId in payload";
+    await markRun(ctx, "validation_failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "validation_failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+
+  // 1. Load the approved finding + linked task (or create one).
+  const finding = await loadSpecFinding(ctx.findingId, ctx.workspaceId);
+  if (!finding) {
+    const reason = "spec_finding not found for workspace";
+    await markRun(ctx, "failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+  if (finding.triage_state !== "approved") {
+    const reason = `finding is not approved (state=${finding.triage_state})`;
+    await markRun(ctx, "validation_failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "validation_failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+
+  // 2. Acquire per-repository implementation lock — serializes against task,
+  // sprint, and other impl runs touching the same working tree.
+  const locked = await withRepoImplLock(ctx.repositoryId, async () => {
+    return runSpecImplLocked(ctx, config, finding);
+  });
+
+  if (!locked.acquired) {
+    const reason = "repository impl lock is held by another job";
+    await markRun(ctx, "failed", { errorMessage: reason });
+    await insertEvent(ctx, "agent.run.failed", { reason });
+    return { status: "failed", findingsCreated: 0, tokensUsed: 0, costUsd: 0, errorMessage: reason };
+  }
+
+  return locked.value;
+}
+
+async function runSpecImplLocked(
+  ctx: RunContext,
+  config: LoadedConfig,
+  finding: LoadedSpecFinding
+): Promise<MaintenanceRunOutcome> {
+  // 3. Resolve task (create if missing) — wires findings into the task flow.
+  const task = await ensureSpecImplTask(ctx, finding);
+
+  // 4. Setup repo at default branch, then create the impl branch.
+  const repoUrl = `https://github.com/${config.repository.full_name}.git`;
+  const { repoPath } = await setupRepoForRead({
+    repositoryId: config.repository.id,
+    repoUrl,
+    defaultBranch: config.repository.default_branch,
+  });
+  const branchName = `feat/spec-${finding.id.slice(0, 8)}-${slugify(finding.requirement_text).slice(0, 40)}`;
+  prepareImplBranch(repoPath, config.repository.default_branch, branchName);
+
+  // 5. Load profile + run planning pass (read-only).
+  const profile = loadProfileBundle("spec_impl", "apps/orchestrator/profiles/spec-impl");
+  const planPrompt = buildSpecImplPlanPrompt({
+    finding,
+    branch: branchName,
+    protectedPaths: config.config.protected_paths,
+  });
+  const planOutput = await invokeClaude({
+    cwd: repoPath,
+    systemPrompt: profile.systemPrompt,
+    prompt: `## Phase 1 — Planning (read-only)\n\n${planPrompt}`,
+    allowedTools: ["Read", "Grep", "Glob"],
+  });
+
+  if (!planOutput.parsed) {
+    return abortRun(ctx, "validation_failed", "plan output not parseable", planOutput);
+  }
+
+  let plan: SpecImplPlan;
+  try {
+    plan = validateSpecImplPlan(planOutput.parsed, {
+      protectedPaths: config.config.protected_paths,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return abortRun(ctx, "validation_failed", message, planOutput);
+  }
+
+  if (plan.needs_decomposition) {
+    await unapproveFinding(finding.id, "needs_decomposition: " + (plan.decomposition_reason ?? ""));
+    return abortRun(ctx, "validation_failed", "needs_decomposition", planOutput);
+  }
+
+  // 6. Persist plan to tasks.plan_json for audit.
+  await persistPlan(task.id, plan);
+
+  // 7. Implementation pass with write tools.
+  const implPrompt = buildSpecImplImplementationPrompt({
+    finding,
+    branch: branchName,
+    plan,
+    protectedPaths: config.config.protected_paths,
+    defaultBranch: config.repository.default_branch,
+    repoFullName: config.repository.full_name,
+  });
+  const implOutput = await invokeClaude({
+    cwd: repoPath,
+    systemPrompt: profile.systemPrompt,
+    prompt: `## Phase 2 — Implementation\n\n${implPrompt}`,
+    allowedTools: ["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
+  });
+
+  if (!implOutput.parsed) {
+    return abortRun(ctx, "validation_failed", "impl output not parseable", implOutput, planOutput);
+  }
+
+  let validated;
+  try {
+    validated = validateSpecImplResult(implOutput.parsed, {
+      protectedPaths: config.config.protected_paths,
+      allowlist: plan.file_allowlist,
+      expectedBranch: branchName,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return abortRun(ctx, "validation_failed", message, implOutput, planOutput);
+  }
+
+  const totalTokens =
+    (plan.tokens_used || planOutput.tokensUsed) +
+    (validated.result.tokens_used || implOutput.tokensUsed);
+  const totalCost =
+    (plan.cost_usd || planOutput.costUsd) +
+    (validated.result.cost_usd || implOutput.costUsd);
+
+  if (validated.result.outcome === "abandoned") {
+    await unapproveFinding(finding.id, "agent_abandoned: " + (validated.result.reason ?? ""));
+    await markRun(ctx, "failed", {
+      completedAt: new Date().toISOString(),
+      errorMessage: validated.result.reason ?? "abandoned",
+      tokensUsed: totalTokens,
+      costUsd: totalCost,
+    });
+    await insertEvent(ctx, "agent.run.failed", {
+      reason: "abandoned",
+      detail: validated.result.reason,
+    });
+    return {
+      status: "failed",
+      findingsCreated: 0,
+      tokensUsed: totalTokens,
+      costUsd: totalCost,
+      errorMessage: validated.result.reason ?? "abandoned",
+    };
+  }
+
+  // 8. Wire the PR + close the task loop.
+  if (validated.result.pr_url) {
+    await addTaskArtifact(task.id, ctx.workspaceId, {
+      type: "pr",
+      url: validated.result.pr_url,
+      title: `spec_impl: ${finding.requirement_text.slice(0, 80)}`,
+    });
+  }
+  await markTaskInReview(task.id, ctx.workspaceId);
+  await markFindingImplemented(finding.id, task.id);
+
+  await markRun(ctx, "completed", {
+    completedAt: new Date().toISOString(),
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
+    findingsCreated: 0,
+  });
+  await insertEvent(ctx, "agent.run.completed", {
+    finding_id: finding.id,
+    task_id: task.id,
+    pr_url: validated.result.pr_url,
+    files_changed: validated.result.files_changed.length,
+    tests_added: validated.result.tests_added.length,
+    tokens_used: totalTokens,
+    cost_usd: totalCost,
+    warnings: validated.warnings,
+  });
+
+  return {
+    status: "completed",
+    findingsCreated: 0,
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
+  };
+}
+
+// ─── Spec impl helpers ──────────────────────────────────────────────────────
+
+type LoadedSpecFinding = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  requirement_text: string;
+  requirement_source_path: string;
+  requirement_source_line: number | null;
+  status: string;
+  triage_state: string;
+  task_id: string | null;
+  suggested_action: string | null;
+  confidence: number;
+};
+
+async function loadSpecFinding(
+  findingId: string,
+  workspaceId: string
+): Promise<LoadedSpecFinding | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("spec_findings")
+    .select(
+      "id, workspace_id, repository_id, requirement_text, requirement_source_path, requirement_source_line, status, triage_state, task_id, suggested_action, confidence"
+    )
+    .eq("id", findingId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) {
+    log.warn({ findingId, error: error.message }, "spec_impl: loadSpecFinding failed");
+    return null;
+  }
+  return (data as LoadedSpecFinding | null) ?? null;
+}
+
+async function ensureSpecImplTask(
+  ctx: RunContext,
+  finding: LoadedSpecFinding
+): Promise<{ id: string }> {
+  const supabase = getSupabaseClient();
+  if (finding.task_id) return { id: finding.task_id };
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      repository_id: ctx.repositoryId,
+      title: `[spec] ${finding.requirement_text.slice(0, 200)}`,
+      description:
+        (finding.suggested_action ?? "") +
+        `\n\nSource: ${finding.requirement_source_path}${
+          finding.requirement_source_line ? `:${finding.requirement_source_line}` : ""
+        }`,
+      type: "feature",
+      priority: "medium",
+      status: "in_progress",
+      source_finding_type: "spec",
+      source_finding_id: finding.id,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw new Error(`spec_impl: could not create task — ${error?.message ?? "no row"}`);
+  }
+  await supabase
+    .from("spec_findings")
+    .update({ task_id: (data as { id: string }).id })
+    .eq("id", finding.id);
+  return data as { id: string };
+}
+
+async function persistPlan(taskId: string, plan: SpecImplPlan): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      plan_json: plan as unknown as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", taskId);
+  if (error) {
+    log.warn({ taskId, error: error.message }, "spec_impl: plan persist failed");
+  }
+}
+
+async function markTaskInReview(taskId: string, workspaceId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status: "in_review", updated_at: new Date().toISOString() })
+    .eq("id", taskId)
+    .eq("workspace_id", workspaceId);
+  if (error) log.warn({ taskId, error: error.message }, "spec_impl: markTaskInReview failed");
+}
+
+async function markFindingImplemented(findingId: string, taskId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("spec_findings")
+    .update({
+      triage_state: "implemented",
+      task_id: taskId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", findingId);
+  if (error) log.warn({ findingId, error: error.message }, "spec_impl: markFindingImplemented failed");
+}
+
+async function unapproveFinding(findingId: string, note: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("spec_findings")
+    .update({
+      triage_state: "pending",
+      triage_note: note.slice(0, 1500),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", findingId);
+  if (error) log.warn({ findingId, error: error.message }, "spec_impl: unapproveFinding failed");
+}
+
+async function addTaskArtifact(
+  taskId: string,
+  workspaceId: string,
+  artifact: { type: string; url: string; title?: string }
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from("task_artifacts").insert({
+    task_id: taskId,
+    workspace_id: workspaceId,
+    type: artifact.type,
+    url: artifact.url,
+    title: artifact.title ?? null,
+  });
+  if (error) log.warn({ taskId, error: error.message }, "spec_impl: addTaskArtifact failed");
+}
+
+async function abortRun(
+  ctx: RunContext,
+  status: "validation_failed" | "failed",
+  reason: string,
+  output: { tokensUsed: number; costUsd: number },
+  planOutput?: { tokensUsed: number; costUsd: number }
+): Promise<MaintenanceRunOutcome> {
+  const totalTokens = (planOutput?.tokensUsed ?? 0) + output.tokensUsed;
+  const totalCost = (planOutput?.costUsd ?? 0) + output.costUsd;
+  await markRun(ctx, status, {
+    errorMessage: reason,
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
+    completedAt: new Date().toISOString(),
+  });
+  await insertEvent(ctx, "agent.run.failed", { reason });
+  return {
+    status,
+    findingsCreated: 0,
+    tokensUsed: totalTokens,
+    costUsd: totalCost,
+    errorMessage: reason,
+  };
+}
+
+function prepareImplBranch(
+  repoPath: string,
+  defaultBranch: string,
+  branchName: string
+): void {
+  // Branch must be safe per git check-ref-format. assertSafeBranch already
+  // validated defaultBranch via setupRepoForRead. Validate the derived branch.
+  if (!/^[A-Za-z0-9._/\-]{1,200}$/.test(branchName) || branchName.startsWith("-")) {
+    throw new Error(`spec_impl: unsafe branch name ${JSON.stringify(branchName)}`);
+  }
+  // Try to checkout existing branch (rebase across retries); fall back to new.
+  try {
+    execFileSync("git", ["checkout", branchName], {
+      cwd: repoPath,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    execFileSync("git", ["reset", "--hard", `origin/${defaultBranch}`], {
+      cwd: repoPath,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    execFileSync("git", ["checkout", "-b", branchName, `origin/${defaultBranch}`], {
+      cwd: repoPath,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  }
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+function buildSpecImplPlanPrompt(args: {
+  finding: LoadedSpecFinding;
+  branch: string;
+  protectedPaths: string[];
+}): string {
+  const lines: string[] = [];
+  lines.push("# Approved spec finding to implement");
+  lines.push(`Branch: \`${args.branch}\` (checked out already; do not change it).`);
+  lines.push("");
+  lines.push("## Finding");
+  lines.push(`- requirement: ${args.finding.requirement_text}`);
+  lines.push(
+    `- source: ${args.finding.requirement_source_path}${
+      args.finding.requirement_source_line ? `:${args.finding.requirement_source_line}` : ""
+    }`
+  );
+  lines.push(`- status: ${args.finding.status}`);
+  if (args.finding.suggested_action) {
+    lines.push(`- suggested_action: ${args.finding.suggested_action}`);
+  }
+  lines.push("");
+  lines.push("## protected_paths (never include in file_allowlist)");
+  for (const p of args.protectedPaths) lines.push(`- ${p}`);
+  lines.push("");
+  lines.push(
+    "Return exactly one JSON object with `phase: \"plan\"` matching the spec-impl output contract."
+  );
+  return lines.join("\n");
+}
+
+function buildSpecImplImplementationPrompt(args: {
+  finding: LoadedSpecFinding;
+  branch: string;
+  plan: SpecImplPlan;
+  protectedPaths: string[];
+  defaultBranch: string;
+  repoFullName: string;
+}): string {
+  const lines: string[] = [];
+  lines.push("# Approved plan — implement now");
+  lines.push("");
+  lines.push("## Branch");
+  lines.push(`\`${args.branch}\` targeting \`${args.defaultBranch}\` on \`${args.repoFullName}\`.`);
+  lines.push("");
+  lines.push("## Allowlist (only these files may be written)");
+  for (const f of args.plan.file_allowlist) lines.push(`- ${f}`);
+  lines.push("");
+  lines.push("## Test strategy (must execute)");
+  lines.push(args.plan.test_strategy);
+  lines.push("");
+  lines.push("## Protected (must NOT be written)");
+  for (const p of args.protectedPaths) lines.push(`- ${p}`);
+  lines.push("");
+  lines.push(
+    "Implement, commit, push, and open a PR. Emit one JSON object with `phase: \"impl\"`."
+  );
+  return lines.join("\n");
 }
 
 // ─── DB access ──────────────────────────────────────────────────────────────
