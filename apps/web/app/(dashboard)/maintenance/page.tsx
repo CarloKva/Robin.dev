@@ -33,7 +33,6 @@ export default async function MaintenancePage({
 
   return (
     <MaintenanceClient
-      workspaceId={workspace.id}
       isOwner={role === "owner"}
       repositories={enabledRepos.map((r) => ({
         id: r.id,

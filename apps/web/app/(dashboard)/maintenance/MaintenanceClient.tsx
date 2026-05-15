@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatShortDate, formatTokens } from "@/lib/format";
 import type {
   CapabilityConfigWithRelations,
 } from "@/lib/db/maintenance";
@@ -22,7 +23,6 @@ import { cn } from "@/lib/utils";
 type Repo = { id: string; full_name: string; default_branch: string };
 
 type Props = {
-  workspaceId: string;
   isOwner: boolean;
   repositories: Repo[];
   selectedRepoId: string | null;
@@ -36,12 +36,15 @@ const CAPABILITY_ICONS: Record<MaintenanceCapabilityId, React.ElementType> = {
   bug_impl: Wrench,
 };
 
-const CAPABILITY_ORDER: MaintenanceCapabilityId[] = [
-  "spec_discovery",
-  "spec_impl",
-  "bug_discovery",
-  "bug_impl",
-];
+// Typed map — adding a new capability to MaintenanceCapabilityId without
+// extending this record will fail typecheck instead of silently sorting to
+// the top of the list.
+const CAPABILITY_ORDER: Record<MaintenanceCapabilityId, number> = {
+  spec_discovery: 0,
+  spec_impl: 1,
+  bug_discovery: 2,
+  bug_impl: 3,
+};
 
 export function MaintenanceClient(props: Props) {
   const router = useRouter();
@@ -49,8 +52,8 @@ export function MaintenanceClient(props: Props) {
 
   const sortedConfigs = [...configs].sort(
     (a, b) =>
-      CAPABILITY_ORDER.indexOf(a.capability_definition_id) -
-      CAPABILITY_ORDER.indexOf(b.capability_definition_id)
+      CAPABILITY_ORDER[a.capability_definition_id] -
+      CAPABILITY_ORDER[b.capability_definition_id]
   );
 
   function handleRepoChange(repoId: string) {
@@ -164,6 +167,8 @@ function CapabilityCard(props: {
     });
   }
 
+  const router = useRouter();
+
   async function runNow() {
     setRunState({ kind: "running" });
     const res = await fetch(`/api/maintenance/configs/${config.id}/run-now`, {
@@ -176,6 +181,9 @@ function CapabilityCard(props: {
     }
     const body = (await res.json()) as { agent_run_id: string };
     setRunState({ kind: "ok", runId: body.agent_run_id });
+    // Re-fetch the page so last_run_at + next_run_at update and the new run
+    // shows up on /maintenance/runs if the user navigates there.
+    router.refresh();
   }
 
   const isImplemented = config.capability_definition_id === "spec_discovery";
@@ -205,8 +213,8 @@ function CapabilityCard(props: {
           label="Daily budget"
           value={`${formatTokens(config.daily_token_budget)} tok`}
         />
-        <FieldRow label="Last run" value={formatTime(config.last_run_at)} />
-        <FieldRow label="Next run" value={formatTime(config.next_run_at)} />
+        <FieldRow label="Last run" value={formatShortDate(config.last_run_at)} />
+        <FieldRow label="Next run" value={formatShortDate(config.next_run_at)} />
       </dl>
 
       <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
@@ -303,23 +311,3 @@ function describeSchedule(schedule: MaintenanceSchedule): string {
   return `${schedule.windows.length} window${schedule.windows.length === 1 ? "" : "s"} · every ${schedule.interval_minutes}min`;
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
-}
-
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    const date = new Date(iso);
-    return date.toLocaleString("it-IT", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}

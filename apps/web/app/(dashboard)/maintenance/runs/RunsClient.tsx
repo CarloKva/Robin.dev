@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { History } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRelativeIt, formatTokens } from "@/lib/format";
 import type { AgentRunWithRelations } from "@/lib/db/maintenance";
 import type { MaintenanceCapabilityId, AgentRunStatus } from "@robin/shared-types";
 
@@ -115,7 +116,7 @@ export function RunsClient(props: Props) {
               {props.runs.map((run) => (
                 <tr key={run.id} className="hover:bg-muted/50">
                   <td className="px-3 py-2 text-xs text-muted-foreground" title={run.created_at}>
-                    {formatRelative(run.created_at)}
+                    {formatRelativeIt(run.created_at)}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">
                     {run.repository?.full_name ?? "—"}
@@ -167,25 +168,3 @@ function StatusPill({ status }: { status: AgentRunStatus }) {
   );
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
-}
-
-function formatRelative(iso: string): string {
-  try {
-    const now = Date.now();
-    const then = new Date(iso).getTime();
-    const diffSec = Math.max(0, Math.round((now - then) / 1000));
-    if (diffSec < 60) return `${diffSec}s ago`;
-    const min = Math.round(diffSec / 60);
-    if (min < 60) return `${min}m ago`;
-    const h = Math.round(min / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.round(h / 24);
-    return `${d}d ago`;
-  } catch {
-    return iso;
-  }
-}

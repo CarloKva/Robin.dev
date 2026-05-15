@@ -31,11 +31,19 @@ export default async function MaintenanceInboxPage({
 
   const enabledRepos = repositories.filter((r) => r.is_enabled && r.is_available);
 
+  const VALID_STATES = new Set([
+    "pending",
+    "approved",
+    "rejected",
+    "snoozed",
+    "implemented",
+  ]);
   const type =
     params.type === "spec" || params.type === "bug"
       ? (params.type as "spec" | "bug")
       : undefined;
-  const state = params.state ?? "pending";
+  const state =
+    params.state && VALID_STATES.has(params.state) ? params.state : "pending";
 
   const findings = await listInboxFindings(workspace.id, {
     ...(params.repository_id ? { repositoryId: params.repository_id } : {}),

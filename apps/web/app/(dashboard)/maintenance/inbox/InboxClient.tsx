@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { Bug, FileSearch, Inbox as InboxIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRelativeIt } from "@/lib/format";
 import type { InboxFinding } from "@/lib/db/maintenance";
+import type { SpecFindingStatus, BugFindingSeverity } from "@robin/shared-types";
 
 type Repo = { id: string; full_name: string };
 
@@ -23,7 +25,7 @@ const STATES = [
   { value: "snoozed", label: "Snoozed" },
 ];
 
-const STATUS_COLOR: Record<string, string> = {
+const STATUS_COLOR: Record<SpecFindingStatus, string> = {
   missing: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400",
   partial: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400",
   drifted: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-400",
@@ -31,7 +33,7 @@ const STATUS_COLOR: Record<string, string> = {
     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400",
 };
 
-const SEVERITY_COLOR: Record<string, string> = {
+const SEVERITY_COLOR: Record<BugFindingSeverity, string> = {
   P0: "bg-red-100 text-red-800 border-red-300",
   P1: "bg-orange-100 text-orange-800 border-orange-300",
   P2: "bg-amber-100 text-amber-800 border-amber-300",
@@ -151,7 +153,7 @@ function FindingCard({ finding }: { finding: InboxFinding }) {
               </>
             )}
             <span aria-hidden>·</span>
-            <span title={finding.created_at}>{formatRelative(finding.created_at)}</span>
+            <span title={finding.created_at}>{formatRelativeIt(finding.created_at)}</span>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">
@@ -160,7 +162,7 @@ function FindingCard({ finding }: { finding: InboxFinding }) {
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-xs font-medium border",
-                STATUS_COLOR[finding.status] ??
+                STATUS_COLOR[finding.status as SpecFindingStatus] ??
                   "bg-zinc-100 text-zinc-700 border-zinc-300"
               )}
             >
@@ -171,7 +173,7 @@ function FindingCard({ finding }: { finding: InboxFinding }) {
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-xs font-medium border",
-                SEVERITY_COLOR[finding.severity] ??
+                SEVERITY_COLOR[finding.severity as BugFindingSeverity] ??
                   "bg-zinc-100 text-zinc-700 border-zinc-300"
               )}
             >
@@ -209,19 +211,3 @@ function ConfidencePill({ confidence }: { confidence: number }) {
   );
 }
 
-function formatRelative(iso: string): string {
-  try {
-    const now = Date.now();
-    const then = new Date(iso).getTime();
-    const diffSec = Math.max(0, Math.round((now - then) / 1000));
-    if (diffSec < 60) return `${diffSec}s fa`;
-    const min = Math.round(diffSec / 60);
-    if (min < 60) return `${min}m fa`;
-    const h = Math.round(min / 60);
-    if (h < 24) return `${h}h fa`;
-    const d = Math.round(h / 24);
-    return `${d}g fa`;
-  } catch {
-    return iso;
-  }
-}
