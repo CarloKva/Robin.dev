@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "Robin",
+  "version": "0.0.1",
+  "identifier": "dev.robin.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "popover",
+        "title": "Robin",
+        "width": 380,
+        "height": 680,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "visible": false,
+        "url": "/popover/inbox"
+      },
+      {
+        "label": "expanded",
+        "title": "Robin",
+        "width": 1100,
+        "height": 680,
+        "minWidth": 960,
+        "minHeight": 560,
+        "resizable": true,
+        "visible": false,
+        "url": "/expanded/agents/-"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://app.robin.dev http://localhost:3000; img-src 'self' data: https:"
+    },
+    "macOSPrivateApi": true,
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/tray.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "entitlements": "entitlements.plist",
+      "exceptionDomain": "",
+      "signingIdentity": null
+    },
+    "category": "DeveloperTool",
+    "shortDescription": "Robin.dev menu-bar client",
+    "longDescription": "Watch your AI engineers ship, review their work, and chat with them from your menu bar."
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["robin"]
+      }
+    },
+    "updater": {
+      "active": false,
+      "endpoints": ["https://downloads.robin.dev/desktop/manifest.json"],
+      "pubkey": ""
+    }
+  }
+}

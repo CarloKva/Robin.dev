@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Robin.dev — your virtual engineering team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #ece7d8; font-family: 'Geist', sans-serif; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="theme.jsx"></script>
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="popover-chrome.jsx"></script>
+  <script type="text/babel" src="avatar.jsx"></script>
+  <script type="text/babel" src="chat.jsx"></script>
+  <script type="text/babel" src="view-expanded.jsx"></script>
+  <script type="text/babel" src="view-inbox.jsx"></script>
+  <script type="text/babel" src="view-sprint.jsx"></script>
+  <script type="text/babel" src="view-task-detail.jsx"></script>
+  <script type="text/babel" src="view-activity.jsx"></script>
+  <script type="text/babel" src="view-new-task.jsx"></script>
+  <script type="text/babel" src="view-settings-agents.jsx"></script>
+  <script type="text/babel" src="view-settings-models.jsx"></script>
+  <script type="text/babel" src="view-avatar-workshop.jsx"></script>
+  <script type="text/babel" src="view-capabilities.jsx"></script>
+  <script type="text/babel" src="view-settings-github.jsx"></script>
+  <script type="text/babel" src="view-settings-panel.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard, DCPostIt, TweaksPanel, useTweaks, TweakRadio, TweakSection } = window;
+
+    /*EDITMODE-BEGIN*/
+    const TWEAK_DEFAULTS = {
+      "theme": "light"
+    };
+    /*EDITMODE-END*/
+
+    function ThemeApplier({ mode }) {
+      React.useEffect(() => { window.setTheme(mode); }, [mode]);
+      return null;
+    }
+
+    function App() {
+      const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+      return (
+        <>
+          <ThemeApplier mode={tweaks.theme} />
+
+          <DesignCanvas>
+            {/* ── INTRO ─────────────────────────────────────────── */}
+            <DCSection
+              id="intro"
+              title="Robin.dev — your virtual engineering team"
+              subtitle="A real-feeling company with AI engineers. You're the orchestrator."
+            >
+              <DCArtboard id="readme" label="The premise" width={440} height={620}>
+                <ReadMe />
+              </DCArtboard>
+
+              <DCArtboard id="team" label="Meet the team" width={520} height={620}>
+                <TeamPoster />
+              </DCArtboard>
+
+              <DCPostIt x={20} y={660} width={300}>
+                <b>v4 model:</b> agents talk to you, you talk to them.
+                Inbox = email-style summaries from each engineer. Talk to
+                Robin in NL to assign work. Open the expanded view to chat
+                with a specific engineer's Claude Code instance.
+              </DCPostIt>
+
+              <DCPostIt x={340} y={660} width={300}>
+                <b>What's read-only vs interactive:</b> Inbox & Task detail
+                are read-only (Copy button per item for brainstorming).
+                Robin chat and Agent chat are the only two places you type.
+              </DCPostIt>
+            </DCSection>
+
+            {/* ── POPOVER STATES ─────────────────────────────────── */}
+            <DCSection
+              id="popover"
+              title="Menu-bar popover · five states"
+              subtitle="380×680. Read-only summary tabs + two chat surfaces."
+            >
+              <DCArtboard id="inbox" label="01 · Inbox (default)" width={420} height={720}>
+                <InboxView />
+              </DCArtboard>
+
+              <DCArtboard id="wip" label="02 · In progress" width={420} height={720}>
+                <InProgressView />
+              </DCArtboard>
+
+              <DCArtboard id="task" label="03 · Task detail (read-only)" width={420} height={720}>
+                <TaskDetailView />
+              </DCArtboard>
+
+              <DCArtboard id="robin-chat" label="04 · Chat with Robin.dev" width={420} height={720}>
+                <RobinChatView />
+              </DCArtboard>
+
+              <DCArtboard id="history" label="05 · History" width={420} height={720}>
+                <HistoryView />
+              </DCArtboard>
+
+              <DCArtboard id="settings-panel" label="06 · Settings (popover)" width={420} height={720}>
+                <SettingsPanelView />
+              </DCArtboard>
+
+              <DCPostIt x={20} y={760} width={300}>
+                <b>Inbox</b> is the new home — each card is a short letter
+                from an engineer summarizing what they shipped, what's
+                waiting for review, or what failed. <b>Copy</b> button on
+                every card so you can paste into another LLM to brainstorm
+                a follow-up.
+              </DCPostIt>
+              <DCPostIt x={340} y={760} width={300}>
+                <b>Chat with Robin.dev</b> replaces "Assign work". You describe
+                what you need in plain English; Robin.dev routes to whoever's
+                free. Composer matches the Robin.dev product chat — +,
+                settings, mic on the left, primary Send on the right.
+              </DCPostIt>
+              <DCPostIt x={660} y={760} width={300}>
+                <b>History</b> is git log with personality — each commit
+                threaded onto the engineer's colored lane, merges hoisted
+                with a halo. Useful for end-of-week reviews and Loom
+                recordings.
+              </DCPostIt>
+            </DCSection>
+
+            {/* ── EXPANDED WINDOW ────────────────────────────────── */}
+            <DCSection
+              id="expanded"
+              title="Expanded window — talk to an engineer"
+              subtitle="Direct chat with their Claude Code instance + leaderboard."
+            >
+              <DCArtboard id="window" label="Expanded · 1100×680" width={1140} height={720}>
+                <ExpandedWindow />
+              </DCArtboard>
+
+              <DCPostIt x={20} y={740} width={340}>
+                The middle column is a <b>real chat thread</b> with the
+                engineer — bubbles in their hue, your bubbles in dark.
+                You're talking directly to the Claude Code instance on
+                their workstation; the composer sits at the bottom and
+                ships off as message-style events.
+              </DCPostIt>
+              <DCPostIt x={380} y={740} width={300}>
+                <b>Top of pane</b>: their open PRs as inline pills (current
+                one highlighted green). <b>Tabs</b> let you switch between
+                Chat, raw Activity stream, and Logs.
+              </DCPostIt>
+              <DCPostIt x={700} y={740} width={300}>
+                <b>Leaderboard</b> replaces the sprint sidebar. Top 6
+                engineers this week with score bars colored by their hue,
+                plus rolling totals (commits, PRs, lines). Friendly
+                competition for AI engineers.
+              </DCPostIt>
+            </DCSection>
+
+            {/* ── SETTINGS ───────────────────────────────────────── */}
+            <DCSection
+              id="settings"
+              title="Settings — manage your team"
+              subtitle="Team directory + Brain (LLM) picker."
+            >
+              <DCArtboard id="settings-team" label="06 · Settings · Team" width={1140} height={720}>
+                <SettingsTeamView />
+              </DCArtboard>
+
+              <DCArtboard id="settings-brains" label="07 · Settings · Brains" width={1140} height={720}>
+                <SettingsBrainsView />
+              </DCArtboard>
+
+              <DCArtboard id="avatar-workshop" label="08 · Avatar Workshop" width={1140} height={720}>
+                <AvatarWorkshopView />
+              </DCArtboard>
+
+              <DCArtboard id="capabilities" label="09 · Capabilities library" width={1140} height={720}>
+                <CapabilitiesView />
+              </DCArtboard>
+
+              <DCArtboard id="settings-github" label="10 · Settings · GitHub" width={1140} height={720}>
+                <SettingsGitHubView />
+              </DCArtboard>
+
+              <DCPostIt x={20} y={740} width={320}>
+                <b>Team</b> · directory of profile cards. XL avatar, bio in
+                their voice, specialty tags, workstation, brain, repos.
+              </DCPostIt>
+              <DCPostIt x={360} y={740} width={320}>
+                <b>Brains</b> · pick the Claude model per engineer.
+                Workspace default, override matrix with avatar chips,
+                monthly cap, rate-limit fallback, daily token mix chart.
+              </DCPostIt>
+            </DCSection>
+
+          </DesignCanvas>
+
+          <TweaksPanel>
+            <TweakSection label="Appearance">
+              <TweakRadio
+                label="Theme"
+                value={tweaks.theme}
+                onChange={(v) => setTweak('theme', v)}
+                options={[
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                ]}
+              />
+            </TweakSection>
+          </TweaksPanel>
+        </>
+      );
+    }
+
+    function ReadMe() {
+      return (
+        <div style={{
+          width: "100%", height: "100%",
+          background: "#fcfaf5", padding: 28,
+          fontFamily: "'Geist', sans-serif", color: "#1a1612",
+          fontSize: 13, lineHeight: 1.55,
+          overflow: "auto", boxSizing: "border-box",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: "linear-gradient(135deg, #ff7e58, #d63916)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(120,40,10,0.18)",
+            }}>
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+                <path d="M4 13 V3 H9 a3 3 0 0 1 0 6 H4.5 M8 9 L12.5 13"
+                  stroke="#fff7f3" strokeWidth="2"
+                  strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.3 }}>Robin.dev</div>
+              <div style={{ fontSize: 12, color: "#7a7263" }}>your virtual engineering team</div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 14.5, lineHeight: 1.55, marginBottom: 22, color: "#1a1612" }}>
+            Robin runs an engineering org for you — six AI engineers each with
+            their own workstation, specialty, and brain. <b>You're the
+            orchestrator.</b> Read what they shipped in your Inbox, assign new
+            work by talking to Robin.dev, talk directly to any engineer when you
+            want to dig in.
+          </div>
+
+          <h3 style={{ fontSize: 11, color: "#7a7263", fontWeight: 600, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            The five places you live
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "8px 12px", fontSize: 12.5, marginBottom: 22 }}>
+            <span style={{ color: "#7a7263" }}>Inbox</span>
+            <span>email-style notifications · each engineer writes you when they finish, fail, or open a PR</span>
+            <span style={{ color: "#7a7263" }}>In progress</span>
+            <span>live snapshot of who's coding what, right now</span>
+            <span style={{ color: "#7a7263" }}>History</span>
+            <span>git log for the whole team — for week-in-reviews</span>
+            <span style={{ color: "#7a7263" }}>Chat Robin</span>
+            <span>plain-English assignment · Robin picks who fits</span>
+            <span style={{ color: "#7a7263" }}>Chat engineer</span>
+            <span>direct line to one engineer's Claude Code instance (expanded view)</span>
+          </div>
+
+          <h3 style={{ fontSize: 11, color: "#7a7263", fontWeight: 600, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            What you can't do here
+          </h3>
+          <div style={{ fontSize: 12.5, color: "#4d463c", lineHeight: 1.6 }}>
+            The Inbox is read-only on purpose. To approve or comment on a PR,
+            click through to GitHub; to reply on a thread, open the engineer's
+            chat. Nothing here is a bottleneck.
+          </div>
+        </div>
+      );
+    }
+
+    function TeamPoster() {
+      const t = window.__robinTheme;
+      return (
+        <div style={{
+          width: "100%", height: "100%",
+          background: t.popover, padding: 28,
+          fontFamily: "'Geist', sans-serif", color: t.ink,
+          overflow: "auto", boxSizing: "border-box",
+        }}>
+          <div style={{ fontSize: 13, color: t.ink3, fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Meet the team
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+            {MOCK_AGENTS.map(a => (
+              <div key={a.id} style={{
+                display: "flex", alignItems: "center", gap: 11,
+                padding: "10px 12px",
+                background: t.panel, borderRadius: 10,
+              }}>
+                <Avatar agent={a} size="md" />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: t.ink, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {a.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: t.ink3, marginTop: 2 }}>{a.role}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 20, padding: "14px 16px", background: t.panel, borderRadius: 12 }}>
+            <div style={{ fontSize: 11.5, color: t.ink3, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Avatars
+            </div>
+            <div style={{ fontSize: 12.5, color: t.ink2, lineHeight: 1.55 }}>
+              Stable per-engineer hue → gradient + initials in white. The
+              corner dot encodes presence (working pulses; available is
+              hollow; off has a slash).
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, padding: "14px 16px", background: t.panel, borderRadius: 12 }}>
+            <div style={{ fontSize: 11.5, color: t.ink3, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              How "talking" works
+            </div>
+            <div style={{ fontSize: 12.5, color: t.ink2, lineHeight: 1.55 }}>
+              The expanded window's middle column is a direct chat with one
+              engineer's Claude Code instance on their workstation. Same wire
+              format as <code style={{ fontFamily: "'Geist Mono', monospace" }}>human.commented</code> events
+              on the task, just rendered as a thread.
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

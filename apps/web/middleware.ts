@@ -9,6 +9,10 @@ const isPublicRoute = createRouteMatcher([
   // KVA Room connector — uses own Bearer auth (not Clerk)
   "/api/connector/(.*)",
   "/api/auth/session",
+  // Desktop client OAuth handshake — verified inside the handler via PKCE,
+  // not via Clerk session cookie. See apps/desktop/src-tauri/src/auth.rs.
+  "/api/auth/desktop-session",
+  "/api/auth/desktop-session/refresh",
 ]);
 
 export default clerkMiddleware(async (auth, request: NextRequest) => {

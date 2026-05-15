@@ -1,0 +1,174 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0)'
+        required: true
+
+jobs:
+  build-macos:
+    name: Build, sign, notarize macOS app
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    permissions:
+      contents: write
+
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.DESKTOP_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.DESKTOP_SUPABASE_ANON_KEY }}
+      VITE_API_BASE_URL: ${{ vars.DESKTOP_API_BASE_URL || 'https://app.robin.dev' }}
+      VITE_SIGN_IN_URL: ${{ vars.DESKTOP_SIGN_IN_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Import Apple Developer certificate
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          if [ -z "${APPLE_CERTIFICATE_BASE64}" ]; then
+            echo "::error::APPLE_CERTIFICATE_BASE64 secret missing"; exit 1;
+          fi
+          echo "${APPLE_CERTIFICATE_BASE64}" | base64 --decode > /tmp/cert.p12
+          KEYCHAIN=build.keychain
+          security create-keychain -p "ci-temp" "${KEYCHAIN}"
+          security default-keychain -s "${KEYCHAIN}"
+          security unlock-keychain -p "ci-temp" "${KEYCHAIN}"
+          security import /tmp/cert.p12 -k "${KEYCHAIN}" -P "${APPLE_CERT_PASSWORD}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "ci-temp" "${KEYCHAIN}"
+          rm /tmp/cert.p12
+
+      - name: Build + sign + notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          cd apps/desktop
+          npm run build
+          npx --yes @tauri-apps/cli build --target universal-apple-darwin
+
+      - name: Collect artefacts
+        id: artefacts
+        run: |
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          if [ -z "${VERSION}" ] || [ "${VERSION}" = "${GITHUB_REF_NAME}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          cp apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "dist/Robin-${VERSION}.dmg"
+          cp apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz "dist/Robin-${VERSION}.app.tar.gz" || true
+          cp apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig "dist/Robin-${VERSION}.app.tar.gz.sig" || true
+          ls -la dist
+
+      - name: Build update manifest
+        run: |
+          cd dist
+          VERSION="${{ steps.artefacts.outputs.version }}"
+          NOTES="${{ github.event.head_commit.message }}"
+          SIG=$(cat "Robin-${VERSION}.app.tar.gz.sig" || echo "")
+          cat > manifest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": "${NOTES}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${SIG}",
+                "url": "https://downloads.robin.dev/desktop/Robin-${VERSION}.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "${SIG}",
+                "url": "https://downloads.robin.dev/desktop/Robin-${VERSION}.app.tar.gz"
+              }
+            }
+          }
+          EOF
+          cat manifest.json
+
+      - name: Upload to Cloudflare R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'robin-downloads' }}
+        run: |
+          if [ -z "${R2_ACCESS_KEY_ID}" ]; then
+            echo "::warning::R2 secrets missing — skipping upload. DMG is still attached to the release."
+            exit 0
+          fi
+          npm install --no-save @aws-sdk/client-s3
+          node <<'NODE'
+          import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+          import { readFileSync, readdirSync } from 'node:fs';
+          import { extname, join } from 'node:path';
+
+          const client = new S3Client({
+            region: 'auto',
+            endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+            credentials: {
+              accessKeyId: process.env.R2_ACCESS_KEY_ID,
+              secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+            },
+          });
+          const Bucket = process.env.R2_BUCKET;
+          const types = {
+            '.dmg': 'application/x-apple-diskimage',
+            '.gz': 'application/gzip',
+            '.sig': 'text/plain',
+            '.json': 'application/json',
+          };
+          for (const file of readdirSync('dist')) {
+            const path = join('dist', file);
+            const Key = `desktop/${file}`;
+            await client.send(new PutObjectCommand({
+              Bucket,
+              Key,
+              Body: readFileSync(path),
+              ContentType: types[extname(file)] || 'application/octet-stream',
+              CacheControl: file === 'manifest.json' ? 'no-cache' : 'public, max-age=31536000, immutable',
+            }));
+            console.log('uploaded', Key);
+          }
+          NODE
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,99 @@
+/*
+ * Robin.dev design tokens — light is canonical, dark is opt-in.
+ * Source: apps/desktop/design/Robin.dev/theme.jsx
+ *
+ * Token names map 1:1 to the design's LIGHT/DARK objects (camelCase → kebab-case).
+ */
+
+:root,
+:root[data-theme='light'] {
+  --bg: #f4f1e9;
+  --popover: #fcfaf5;
+  --popover-edge: #ffffff;
+  --panel: #f3efe5;
+  --hover: #ece7d8;
+  --inset: #ebe6d6;
+
+  --divider: #e6e0cd;
+  --border: #d8d1ba;
+  --border-strong: #c5bda1;
+  --shadow: rgba(85, 65, 30, 0.1);
+  --shadow-strong: rgba(60, 40, 10, 0.2);
+
+  --ink: #1a1612;
+  --ink2: #4d463c;
+  --ink3: #7a7263;
+  --ink4: #a59c89;
+  --mono-color: #5a5346;
+
+  --accent: #d63916;
+  --accent-hover: #bd2f10;
+  --accent-ink: #fff7f3;
+  --accent-soft: #fbe2d6;
+  --accent-border: #f0b699;
+
+  --success: #15803d;
+  --success-soft: #d8f0dc;
+  --success-border: #a3d4a8;
+
+  --warning: #a16207;
+  --warning-soft: #fbecc4;
+  --warning-border: #e6c870;
+
+  --danger: #b91c1c;
+  --danger-soft: #fbdada;
+  --danger-border: #e5a5a5;
+
+  --info: #6d28d9;
+  --info-soft: #ebe2fb;
+  --info-border: #c8b6ed;
+
+  --neutral: #7a7263;
+  --neutral-soft: #ece6d4;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0d0c0a;
+  --popover: #171612;
+  --popover-edge: #22201b;
+  --panel: #1e1c17;
+  --hover: #27241e;
+  --inset: #1a1814;
+
+  --divider: #26231d;
+  --border: #312d24;
+  --border-strong: #403b30;
+  --shadow: rgba(0, 0, 0, 0.55);
+  --shadow-strong: rgba(0, 0, 0, 0.7);
+
+  --ink: #f4f1e9;
+  --ink2: #bdb5a1;
+  --ink3: #857c69;
+  --ink4: #5d5749;
+  --mono-color: #bdb5a1;
+
+  --accent: #ff7d4d;
+  --accent-hover: #ff9466;
+  --accent-ink: #1a0a05;
+  --accent-soft: rgba(255, 125, 77, 0.14);
+  --accent-border: rgba(255, 125, 77, 0.32);
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.1);
+  --success-border: rgba(74, 222, 128, 0.25);
+
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
+  --warning-border: rgba(251, 191, 36, 0.28);
+
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.1);
+  --danger-border: rgba(248, 113, 113, 0.25);
+
+  --info: #a78bfa;
+  --info-soft: rgba(167, 139, 250, 0.1);
+  --info-border: rgba(167, 139, 250, 0.28);
+
+  --neutral: #857c69;
+  --neutral-soft: rgba(133, 124, 105, 0.1);
+}
