@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getWorkspaceForUser } from "@/lib/db/workspace";
+import { getWorkspaceForUser, getWorkspaceMemberRole } from "@/lib/db/workspace";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
 import { listInboxFindings } from "@/lib/db/maintenance";
 import { InboxClient } from "./InboxClient";
@@ -24,8 +24,9 @@ export default async function MaintenanceInboxPage({
   const workspace = await getWorkspaceForUser(userId);
   if (!workspace) redirect("/onboarding/workspace");
 
-  const [repositories, params] = await Promise.all([
+  const [repositories, role, params] = await Promise.all([
     getRepositoriesForWorkspace(workspace.id),
+    getWorkspaceMemberRole(userId),
     searchParams,
   ]);
 
@@ -54,6 +55,7 @@ export default async function MaintenanceInboxPage({
 
   return (
     <InboxClient
+      isOwner={role === "owner"}
       repositories={enabledRepos.map((r) => ({ id: r.id, full_name: r.full_name }))}
       selectedRepositoryId={params.repository_id ?? null}
       selectedType={type ?? null}

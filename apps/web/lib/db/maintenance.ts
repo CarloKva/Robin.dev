@@ -4,9 +4,43 @@ import type {
   AgentRun,
   AgentRunTrigger,
   CapabilityDefinition,
+  FindingTriageState,
   MaintenanceCapabilityId,
   WorkspaceCapabilityConfig,
 } from "@robin/shared-types";
+
+export type FindingType = "spec" | "bug";
+
+export type TriageAction =
+  | "approve"
+  | "reject"
+  | "snooze"
+  | "mark_implemented";
+
+export const TRIAGE_ACTION_TO_STATE: Record<TriageAction, FindingTriageState> = {
+  approve: "approved",
+  reject: "rejected",
+  snooze: "snoozed",
+  mark_implemented: "implemented",
+};
+
+export type TriagePatch = {
+  action: TriageAction;
+  note?: string | null;
+  snoozedUntil?: string | null;
+};
+
+export type TriagedFinding = {
+  id: string;
+  type: FindingType;
+  workspace_id: string;
+  repository_id: string;
+  triage_state: FindingTriageState;
+  triaged_by: string | null;
+  triaged_at: string | null;
+  triage_note: string | null;
+  snoozed_until: string | null;
+};
 
 // ─── Capability definitions ─────────────────────────────────────────────────
 
@@ -392,7 +426,7 @@ export async function createQueuedAgentRun(args: {
 export async function insertMaintenanceEvent(args: {
   workspaceId: string;
   repositoryId: string;
-  agentRunId: string;
+  agentRunId: string | null;
   eventType: string;
   actorType: "agent" | "human" | "system";
   actorId: string;
@@ -409,6 +443,107 @@ export async function insertMaintenanceEvent(args: {
     payload: args.payload ?? {},
   });
   if (error) console.error("[insertMaintenanceEvent]", error.message);
+}
+
+// ─── Triage ─────────────────────────────────────────────────────────────────
+
+/**
+ * Apply a triage action to a finding row.
+ *
+ * Returns null if the finding does not exist or is not in the caller's
+ * workspace. Throws on persistence errors (caller should 500). Emits a
+ * `finding.triaged` maintenance event with the actor and the previous state
+ * so the audit trail captures who flipped what.
+ *
+ * The helper writes via the admin client because maintenance_events is
+ * written by trusted server code only; the user-scoped supabase client
+ * would fail the insert RLS check anyway because the actor is system-ish.
+ */
+export async function triageFinding(args: {
+  workspaceId: string;
+  type: FindingType;
+  findingId: string;
+  patch: TriagePatch;
+  triagedBy: string;
+}): Promise<TriagedFinding | null> {
+  const tableName = args.type === "spec" ? "spec_findings" : "bug_findings";
+  const newState = TRIAGE_ACTION_TO_STATE[args.patch.action];
+
+  const supabase = createSupabaseAdminClient();
+
+  // Load the row first so we can scope to workspace and capture prior state.
+  const { data: existing, error: loadError } = await supabase
+    .from(tableName)
+    .select("id, workspace_id, repository_id, agent_run_id, triage_state")
+    .eq("id", args.findingId)
+    .eq("workspace_id", args.workspaceId)
+    .maybeSingle();
+
+  if (loadError) {
+    console.error("[triageFinding load]", loadError.message);
+    throw new Error(loadError.message);
+  }
+  if (!existing) return null;
+
+  const update: Record<string, unknown> = {
+    triage_state: newState,
+    triaged_by: args.triagedBy,
+    triaged_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Note column is overwritten only when the caller passes a string, including
+  // an empty string to explicitly clear it.
+  if (args.patch.note !== undefined) {
+    update["triage_note"] = args.patch.note;
+  }
+
+  if (args.patch.action === "snooze") {
+    if (!args.patch.snoozedUntil) {
+      throw new Error("snooze action requires snoozedUntil");
+    }
+    update["snoozed_until"] = args.patch.snoozedUntil;
+  } else {
+    // Any non-snooze action clears a stale snoozed_until.
+    update["snoozed_until"] = null;
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from(tableName)
+    .update(update)
+    .eq("id", args.findingId)
+    .eq("workspace_id", args.workspaceId)
+    .select(
+      "id, workspace_id, repository_id, triage_state, triaged_by, triaged_at, triage_note, snoozed_until"
+    )
+    .maybeSingle();
+
+  if (updateError || !updated) {
+    console.error("[triageFinding update]", updateError?.message);
+    throw new Error(updateError?.message ?? "triageFinding: update returned no row");
+  }
+
+  const row = updated as Omit<TriagedFinding, "type">;
+
+  await insertMaintenanceEvent({
+    workspaceId: row.workspace_id,
+    repositoryId: row.repository_id,
+    agentRunId: (existing as { agent_run_id: string | null }).agent_run_id,
+    eventType: "finding.triaged",
+    actorType: "human",
+    actorId: args.triagedBy,
+    payload: {
+      finding_id: row.id,
+      type: args.type,
+      action: args.patch.action,
+      new_state: newState,
+      previous_state: (existing as { triage_state: string }).triage_state,
+      ...(args.patch.note ? { note: args.patch.note } : {}),
+      ...(args.patch.snoozedUntil ? { snoozed_until: args.patch.snoozedUntil } : {}),
+    },
+  });
+
+  return { ...row, type: args.type };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
