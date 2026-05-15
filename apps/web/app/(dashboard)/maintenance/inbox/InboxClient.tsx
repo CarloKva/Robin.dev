@@ -1,15 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bug, FileSearch, Inbox as InboxIcon } from "lucide-react";
+import {
+  Bug,
+  Check,
+  Clock,
+  FileSearch,
+  Inbox as InboxIcon,
+  Loader2,
+  PackageCheck,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeIt } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 import type { InboxFinding } from "@/lib/db/maintenance";
 import type { SpecFindingStatus, BugFindingSeverity } from "@robin/shared-types";
 
 type Repo = { id: string; full_name: string };
 
 type Props = {
+  isOwner: boolean;
   repositories: Repo[];
   selectedRepositoryId: string | null;
   selectedType: "spec" | "bug" | null;
@@ -40,6 +52,12 @@ const SEVERITY_COLOR: Record<BugFindingSeverity, string> = {
   P3: "bg-zinc-100 text-zinc-700 border-zinc-300",
 };
 
+const SNOOZE_PRESETS = [
+  { label: "1 giorno", days: 1 },
+  { label: "7 giorni", days: 7 },
+  { label: "30 giorni", days: 30 },
+];
+
 export function InboxClient(props: Props) {
   const router = useRouter();
 
@@ -58,8 +76,9 @@ export function InboxClient(props: Props) {
           Inbox
         </h1>
         <p className="text-sm text-muted-foreground">
-          Findings da spec_discovery e bug_discovery. Phase 1 è read-only — le azioni di
-          triage (approve / reject / snooze) arrivano in Phase 2.
+          Findings da spec_discovery e bug_discovery. Phase 2 abilita le azioni di triage —
+          approve/reject/snooze/mark-implemented (solo owner del workspace). L&apos;esecuzione
+          dell&apos;implementation agent dopo approve arriva in Phase 3.
         </p>
       </header>
 
@@ -120,7 +139,7 @@ export function InboxClient(props: Props) {
         <ul className="space-y-3">
           {props.findings.map((finding) => (
             <li key={`${finding.type}-${finding.id}`}>
-              <FindingCard finding={finding} />
+              <FindingCard finding={finding} isOwner={props.isOwner} />
             </li>
           ))}
         </ul>
@@ -129,7 +148,7 @@ export function InboxClient(props: Props) {
   );
 }
 
-function FindingCard({ finding }: { finding: InboxFinding }) {
+function FindingCard({ finding, isOwner }: { finding: InboxFinding; isOwner: boolean }) {
   const TypeIcon = finding.type === "bug" ? Bug : FileSearch;
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-3">
@@ -186,6 +205,143 @@ function FindingCard({ finding }: { finding: InboxFinding }) {
       {finding.description && (
         <p className="text-sm text-muted-foreground line-clamp-3 ml-9">{finding.description}</p>
       )}
+
+      <TriageBar finding={finding} isOwner={isOwner} />
+    </div>
+  );
+}
+
+function TriageBar({ finding, isOwner }: { finding: InboxFinding; isOwner: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<"approve" | "reject" | "snooze" | "mark_implemented" | null>(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+
+  async function callTriage(
+    action: "approve" | "reject" | "snooze" | "mark_implemented",
+    extra: { snoozed_until?: string } = {}
+  ) {
+    setBusy(action);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/maintenance/findings/${finding.type}/${finding.id}/triage`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action, ...extra }),
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body?.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+      setSnoozeOpen(false);
+    }
+  }
+
+  function snooze(days: number) {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + days);
+    void callTriage("snooze", { snoozed_until: date.toISOString() });
+  }
+
+  if (!isOwner) {
+    return (
+      <p className="text-xs text-muted-foreground ml-9 italic">
+        Triage disponibile solo per il proprietario del workspace.
+      </p>
+    );
+  }
+
+  return (
+    <div className="ml-9 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={finding.triage_state === "approved" ? "default" : "outline"}
+          onClick={() => callTriage("approve")}
+          disabled={busy !== null || finding.triage_state === "approved"}
+        >
+          {busy === "approve" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          Approve
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => callTriage("reject")}
+          disabled={busy !== null || finding.triage_state === "rejected"}
+        >
+          {busy === "reject" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <X className="h-3.5 w-3.5" />
+          )}
+          Reject
+        </Button>
+        <div className="relative">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSnoozeOpen((v) => !v)}
+            disabled={busy !== null}
+          >
+            {busy === "snooze" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            Snooze
+          </Button>
+          {snoozeOpen && (
+            <div
+              className="absolute z-10 mt-1 w-40 rounded-md border border-border bg-popover p-1 shadow-md"
+              role="menu"
+            >
+              {SNOOZE_PRESETS.map((preset) => (
+                <button
+                  key={preset.days}
+                  type="button"
+                  className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted"
+                  onClick={() => snooze(preset.days)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => callTriage("mark_implemented")}
+          disabled={busy !== null || finding.triage_state === "implemented"}
+          title="Marca come implementato (utile quando il fix è stato spedito a mano)"
+        >
+          {busy === "mark_implemented" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <PackageCheck className="h-3.5 w-3.5" />
+          )}
+          Mark implemented
+        </Button>
+        <span className="ml-auto text-xs text-muted-foreground">
+          state: <span className="font-mono">{finding.triage_state}</span>
+        </span>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -210,4 +366,3 @@ function ConfidencePill({ confidence }: { confidence: number }) {
     </span>
   );
 }
-
