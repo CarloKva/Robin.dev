@@ -7,6 +7,9 @@ import { taskQueue } from "./queues/task.queue";
 import { createWorker, createQueueEventMonitor } from "./workers/task.worker";
 import { createBugfixWorker } from "./workers/bugfix.worker";
 import { bugfixQueue } from "./queues/bugfix.queue";
+import { maintenanceQueue } from "./queues/maintenance.queue";
+import { maintenanceScheduler } from "./scheduler/maintenance-scheduler";
+import { createMaintenanceWorker } from "./workers/maintenance.worker";
 import { createProvisioningWorker, resolveRedisUrlForAgents } from "./workers/agent.provisioning.worker";
 import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
 import { reconstructRepoQueues, closeAllRepoWorkers } from "./workers/repo-queue.worker";
@@ -79,9 +82,13 @@ async function main() {
     const opsExecuteWorker = createOpsExecuteWorker();
     workersToClose.push(opsDiagnosticsWorker, opsExecuteWorker);
 
+    // Maintenance capabilities scheduler. Phase 0 defaults to dry-run mode unless
+    // MAINTENANCE_SCHEDULER_DRY_RUN=false is explicitly set.
+    maintenanceScheduler.start();
+
     log.info(
       {},
-      "Control-plane workers started (provisioning + deprovisioning + repo-queues + sprint-control + watchdog + github-events + ops-diagnostics)"
+      "Control-plane workers started (provisioning + deprovisioning + repo-queues + sprint-control + watchdog + github-events + ops-diagnostics + maintenance-scheduler)"
     );
 
     // Recover agents stuck in "pending" with no BullMQ job (fire-and-forget)
@@ -101,7 +108,8 @@ async function main() {
     const worker = createWorker();
     const queueEvents = createQueueEventMonitor(taskQueue);
     const bugfixWorker = createBugfixWorker();
-    workersToClose.push(worker, queueEvents, bugfixWorker);
+    const maintenanceWorker = createMaintenanceWorker();
+    workersToClose.push(worker, queueEvents, bugfixWorker, maintenanceWorker);
 
     heartbeat = new HeartbeatService(AGENT_ID, VERSION);
     heartbeat.start();
@@ -111,7 +119,7 @@ async function main() {
     taskRecovery = new TaskRecoveryService(AGENT_ID);
     taskRecovery.start();
 
-    log.info({}, "Agent workers started (task execution + heartbeat + poller + recovery)");
+    log.info({}, "Agent workers started (task execution + bugfix + maintenance + heartbeat + poller + recovery)");
   }
 
   // ─── Self-update: listen for remote restart commands via Redis pub/sub ────
@@ -125,10 +133,11 @@ async function main() {
 
   createBullBoard({
     queues: IS_CONTROL_PLANE
-      ? []
+      ? [new BullMQAdapter(maintenanceQueue.getBullMQQueue())]
       : [
           new BullMQAdapter(taskQueue.getBullMQQueue()),
           new BullMQAdapter(bugfixQueue.getBullMQQueue()),
+          new BullMQAdapter(maintenanceQueue.getBullMQQueue()),
         ],
     serverAdapter,
   });
@@ -150,6 +159,7 @@ async function main() {
         payload["queueCounts"] = await taskQueue.getJobCounts();
         payload["bugfixQueueCounts"] = await bugfixQueue.getJobCounts();
       }
+      payload["maintenanceQueueCounts"] = await maintenanceQueue.getJobCounts();
 
       res.json(payload);
     } catch (err) {
@@ -186,7 +196,10 @@ async function main() {
     taskRecovery?.stop();
     await selfUpdate.stop();
     if (!IS_CONTROL_PLANE) taskPoller.stop();
-    if (IS_CONTROL_PLANE) repoWatchdog.stop();
+    if (IS_CONTROL_PLANE) {
+      repoWatchdog.stop();
+      maintenanceScheduler.stop();
+    }
 
     // Give active jobs 30s to complete before forcing exit
     for (const w of workersToClose) {
@@ -196,8 +209,10 @@ async function main() {
     if (!IS_CONTROL_PLANE) {
       await taskQueue.close();
       await bugfixQueue.close();
+      await maintenanceQueue.close();
     } else {
       await closeAllRepoWorkers();
+      await maintenanceQueue.close();
     }
 
     await closeRedis();

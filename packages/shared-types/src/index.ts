@@ -347,6 +347,7 @@ export type Workspace = {
   id: string;
   name: string;
   slug: string;
+  timezone?: string;
   mcp_config?: {
     mcpServers: Record<string, MCPServerConfig>;
   } | null;
@@ -387,6 +388,11 @@ export type Task = {
   context: string | null;
   estimated_effort: "xs" | "s" | "m" | "l" | null;
   attachments: TaskAttachment[] | null;
+  source_finding_type?: "spec" | "bug" | null;
+  source_finding_id?: string | null;
+  plan_json?: Record<string, unknown> | null;
+  tokens_used?: number;
+  cost_usd?: number;
   created_by_user_id: string;
   queued_at: string | null;
   created_at: string;
@@ -568,6 +574,192 @@ export type SprintControlJobPayload = {
   repositoryIds: string[];
   sprintId: string;
   workspaceId: string;
+};
+
+// ---------------------------------------------------------------
+// Maintenance capabilities
+// ---------------------------------------------------------------
+
+export type MaintenanceCapabilityId =
+  | "spec_discovery"
+  | "spec_impl"
+  | "bug_discovery"
+  | "bug_impl";
+
+export type CapabilityKind = "discovery" | "implementation";
+
+export type MaintenanceSchedule =
+  | { mode: "always_on"; interval_minutes: number }
+  | {
+      mode: "windows";
+      interval_minutes: number;
+      windows: Array<{
+        weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+        start: string;
+        end: string;
+      }>;
+    }
+  | { mode: "disabled" };
+
+export type CapabilityDefinition = {
+  id: MaintenanceCapabilityId;
+  display_name: string;
+  description: string;
+  kind: CapabilityKind;
+  default_enabled: boolean;
+  default_schedule: MaintenanceSchedule;
+  daily_token_budget_default: number;
+  per_run_token_cap_default: number;
+  profile_path: string;
+  created_at: string;
+};
+
+export type WorkspaceCapabilityConfig = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  capability_definition_id: MaintenanceCapabilityId;
+  enabled: boolean;
+  schedule: MaintenanceSchedule;
+  daily_token_budget: number;
+  per_run_token_cap: number;
+  auto_implement: boolean;
+  auto_implement_min_confidence: number | null;
+  protected_paths: string[];
+  spec_paths: string[];
+  bug_noise_allowlist: string[];
+  bug_source_config: Record<string, unknown>;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentRunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "budget_exceeded"
+  | "no_agent"
+  | "validation_failed"
+  | "skipped";
+
+export type AgentRunTrigger = "schedule" | "manual" | "webhook" | "auto";
+
+export type AgentRun = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  workspace_capability_config_id: string | null;
+  capability_definition_id: MaintenanceCapabilityId;
+  runner_agent_id: string | null;
+  status: AgentRunStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  tokens_used: number;
+  cost_usd: number;
+  findings_created: number;
+  error_message: string | null;
+  trigger: AgentRunTrigger;
+  triggered_by: string | null;
+  created_at: string;
+};
+
+export type MaintenanceEventType =
+  | "agent.run.scheduled"
+  | "agent.run.started"
+  | "agent.run.completed"
+  | "agent.run.failed"
+  | "agent.run.budget_exceeded"
+  | "finding.created"
+  | "finding.triaged"
+  | "finding.auto_implemented";
+
+export type MaintenanceActorType = ActorType | "system";
+
+export type MaintenanceEvent = {
+  id: string;
+  workspace_id: string;
+  repository_id: string | null;
+  agent_run_id: string | null;
+  event_type: MaintenanceEventType;
+  actor_type: MaintenanceActorType;
+  actor_id: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type FindingTriageState = "pending" | "approved" | "rejected" | "snoozed" | "implemented";
+
+export type SpecFindingStatus = "implemented" | "partial" | "missing" | "drifted";
+
+export type SpecFinding = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  agent_run_id: string;
+  requirement_text: string;
+  requirement_source_path: string;
+  requirement_source_line: number | null;
+  requirement_source_end_line: number | null;
+  status: SpecFindingStatus;
+  evidence_paths: string[];
+  suggested_action: string | null;
+  confidence: number;
+  triage_state: FindingTriageState;
+  triaged_by: string | null;
+  triaged_at: string | null;
+  triage_note: string | null;
+  snoozed_until: string | null;
+  dedup_hash: string;
+  task_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BugFindingSeverity = "P0" | "P1" | "P2" | "P3";
+
+export type BugFindingSource = "sentry" | "static_analysis" | "commit_correlation";
+
+export type BugFinding = {
+  id: string;
+  workspace_id: string;
+  repository_id: string;
+  agent_run_id: string;
+  title: string;
+  description: string;
+  severity: BugFindingSeverity;
+  hypothesis: string;
+  repro_steps: string | null;
+  evidence: Record<string, unknown>;
+  affected_paths: string[];
+  suggested_fix_outline: string | null;
+  confidence: number;
+  source: BugFindingSource;
+  source_ref: string | null;
+  external_issue_url: string | null;
+  triage_state: FindingTriageState;
+  triaged_by: string | null;
+  triaged_at: string | null;
+  triage_note: string | null;
+  snoozed_until: string | null;
+  dedup_hash: string;
+  task_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MaintenanceJobPayload = {
+  agentRunId: string;
+  workspaceId: string;
+  repositoryId: string;
+  runnerAgentId: string;
+  capabilityDefinitionId: MaintenanceCapabilityId;
+  workspaceCapabilityConfigId: string;
+  trigger: AgentRunTrigger;
+  findingId?: string;
 };
 
 // ---------------------------------------------------------------
