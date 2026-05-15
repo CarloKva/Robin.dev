@@ -34,6 +34,7 @@ import {
   validateBugImplFix,
   type BugImplRepro,
 } from "../services/bug-impl.validator";
+import { maybeAutoImplement } from "../services/auto-implement.service";
 import {
   findMatchingIssue,
   listOpenIssues,
@@ -332,6 +333,17 @@ async function runSpecDiscovery(
     });
   }
 
+  // Auto-implement promotes newly inserted findings into spec_impl jobs when
+  // the workspace_capability_configs(spec_impl) row has auto_implement=true
+  // and the per-finding rules from sec 4.2 are satisfied.
+  await maybeAutoImplement({
+    workspaceId: ctx.workspaceId,
+    repositoryId: ctx.repositoryId,
+    agentRunId: ctx.agentRunId,
+    type: "spec",
+    findings: inserted.map((f) => ({ id: f.id, confidence: f.confidence, status: f.status })),
+  });
+
   return {
     status: "completed",
     findingsCreated: inserted.length,
@@ -471,6 +483,17 @@ async function runBugDiscovery(
       confidence: finding.confidence,
     });
   }
+
+  // Auto-implement promotes P2/P3 bug findings when the
+  // workspace_capability_configs(bug_impl) row opts in. P0/P1 always require
+  // a human approval (sec 4.4).
+  await maybeAutoImplement({
+    workspaceId: ctx.workspaceId,
+    repositoryId: ctx.repositoryId,
+    agentRunId: ctx.agentRunId,
+    type: "bug",
+    findings: inserted.map((f) => ({ id: f.id, confidence: f.confidence, status: f.severity })),
+  });
 
   return {
     status: "completed",
