@@ -584,6 +584,103 @@ function severityToPriority(severity: string): string {
   }
 }
 
+// ─── Phase 4: maintenance metrics + workspace flag ──────────────────────────
+
+export type MaintenanceMetricsRow = {
+  capability_definition_id: MaintenanceCapabilityId;
+  repository_id: string;
+  total_findings: number;
+  rejected_findings: number;
+  approved_findings: number;
+  implemented_findings: number;
+  total_runs: number;
+  completed_runs: number;
+  failed_runs: number;
+  tokens_used: number;
+  cost_usd: number;
+  false_positive_rate: number | null;
+};
+
+export async function listMaintenanceMetrics(
+  workspaceId: string
+): Promise<MaintenanceMetricsRow[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("maintenance_capability_metrics")
+    .select(
+      "capability_definition_id, repository_id, total_findings, rejected_findings, approved_findings, implemented_findings, total_runs, completed_runs, failed_runs, tokens_used, cost_usd, false_positive_rate"
+    )
+    .eq("workspace_id", workspaceId);
+  if (error) {
+    console.error("[listMaintenanceMetrics]", error.message);
+    return [];
+  }
+  return (data ?? []) as MaintenanceMetricsRow[];
+}
+
+export type CapabilityHealthReview = {
+  capability_definition_id: MaintenanceCapabilityId;
+  week_starting: string;
+  total_findings: number;
+  rejected_findings: number;
+  prs_opened: number;
+  prs_merged: number;
+  total_cost_usd: number;
+  false_positive_rate: number | null;
+  pr_merge_rate: number | null;
+  cost_per_merged_pr_usd: number | null;
+  any_breach: boolean;
+};
+
+export async function listRecentHealthReviews(): Promise<CapabilityHealthReview[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("capability_health_reviews")
+    .select(
+      "capability_definition_id, week_starting, total_findings, rejected_findings, prs_opened, prs_merged, total_cost_usd, false_positive_rate, pr_merge_rate, cost_per_merged_pr_usd, any_breach"
+    )
+    .order("week_starting", { ascending: false })
+    .limit(40);
+  if (error) {
+    console.error("[listRecentHealthReviews]", error.message);
+    return [];
+  }
+  return (data ?? []) as CapabilityHealthReview[];
+}
+
+export async function isMaintenanceEnabled(workspaceId: string): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("maintenance_enabled")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  if (error) {
+    console.error("[isMaintenanceEnabled]", error.message);
+    return false;
+  }
+  return Boolean((data as { maintenance_enabled?: boolean } | null)?.maintenance_enabled);
+}
+
+export async function listGloballyDisabledCapabilities(): Promise<
+  Array<{ id: string; globally_disabled_reason: string | null; globally_disabled_at: string | null }>
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("capability_definitions")
+    .select("id, globally_disabled_reason, globally_disabled_at")
+    .eq("is_globally_disabled", true);
+  if (error) {
+    console.error("[listGloballyDisabledCapabilities]", error.message);
+    return [];
+  }
+  return (data ?? []) as Array<{
+    id: string;
+    globally_disabled_reason: string | null;
+    globally_disabled_at: string | null;
+  }>;
+}
+
 // ─── Triage ─────────────────────────────────────────────────────────────────
 
 /**

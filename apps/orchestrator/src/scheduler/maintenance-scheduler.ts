@@ -21,14 +21,22 @@ type DueConfigRow = {
   schedule: MaintenanceSchedule;
   daily_token_budget: number;
   next_run_at: string | null;
-  workspaces?: { timezone?: string | null } | Array<{ timezone?: string | null }> | null;
+  workspaces?:
+    | { timezone?: string | null; maintenance_enabled?: boolean | null }
+    | Array<{ timezone?: string | null; maintenance_enabled?: boolean | null }>
+    | null;
   repositories?:
     | { id?: string; full_name?: string; is_enabled?: boolean }
     | Array<{ id?: string; full_name?: string; is_enabled?: boolean }>
     | null;
   capability_definitions?:
-    | { id?: string; display_name?: string; kind?: string }
-    | Array<{ id?: string; display_name?: string; kind?: string }>
+    | { id?: string; display_name?: string; kind?: string; is_globally_disabled?: boolean }
+    | Array<{
+        id?: string;
+        display_name?: string;
+        kind?: string;
+        is_globally_disabled?: boolean;
+      }>
     | null;
 };
 
@@ -87,9 +95,9 @@ export class MaintenanceScheduler {
         schedule,
         daily_token_budget,
         next_run_at,
-        workspaces(timezone),
+        workspaces(timezone, maintenance_enabled),
         repositories(id, full_name, is_enabled),
-        capability_definitions(id, display_name, kind)
+        capability_definitions(id, display_name, kind, is_globally_disabled)
       `)
       .eq("enabled", true)
       .not("next_run_at", "is", null)
@@ -116,6 +124,18 @@ export class MaintenanceScheduler {
     const repository = related(row.repositories);
     const capability = related(row.capability_definitions);
     const timezone = workspace?.timezone ?? "UTC";
+
+    // Workspace must have opted into maintenance (Phase 4 feature flag).
+    if (workspace?.maintenance_enabled !== true) {
+      await this.advanceConfig(row, now, timezone);
+      return;
+    }
+
+    // Globally killed capability (kill-switch breach).
+    if (capability?.is_globally_disabled === true) {
+      await this.advanceConfig(row, now, timezone);
+      return;
+    }
 
     if (repository?.is_enabled === false) {
       await this.advanceConfig(row, now, timezone);

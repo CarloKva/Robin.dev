@@ -2,7 +2,11 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getWorkspaceForUser, getWorkspaceMemberRole } from "@/lib/db/workspace";
 import { getRepositoriesForWorkspace } from "@/lib/db/github";
-import { listCapabilityConfigs } from "@/lib/db/maintenance";
+import {
+  isMaintenanceEnabled,
+  listCapabilityConfigs,
+  listGloballyDisabledCapabilities,
+} from "@/lib/db/maintenance";
 import { MaintenanceClient } from "./MaintenanceClient";
 
 export const metadata = { title: "Maintenance — Robin.dev" };
@@ -18,11 +22,14 @@ export default async function MaintenancePage({
   const workspace = await getWorkspaceForUser(userId);
   if (!workspace) redirect("/onboarding/workspace");
 
-  const [repositories, role, params] = await Promise.all([
-    getRepositoriesForWorkspace(workspace.id),
-    getWorkspaceMemberRole(userId),
-    searchParams,
-  ]);
+  const [repositories, role, params, maintenanceEnabled, disabledCapabilities] =
+    await Promise.all([
+      getRepositoriesForWorkspace(workspace.id),
+      getWorkspaceMemberRole(userId),
+      searchParams,
+      isMaintenanceEnabled(workspace.id),
+      listGloballyDisabledCapabilities(),
+    ]);
 
   const enabledRepos = repositories.filter((r) => r.is_enabled && r.is_available);
   const selectedRepoId = params.repository_id ?? enabledRepos[0]?.id;
@@ -34,6 +41,8 @@ export default async function MaintenancePage({
   return (
     <MaintenanceClient
       isOwner={role === "owner"}
+      maintenanceEnabled={maintenanceEnabled}
+      disabledCapabilities={disabledCapabilities}
       repositories={enabledRepos.map((r) => ({
         id: r.id,
         full_name: r.full_name,

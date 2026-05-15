@@ -9,6 +9,7 @@ import { createBugfixWorker } from "./workers/bugfix.worker";
 import { bugfixQueue } from "./queues/bugfix.queue";
 import { maintenanceQueue } from "./queues/maintenance.queue";
 import { maintenanceScheduler } from "./scheduler/maintenance-scheduler";
+import { maintenanceKillSwitch } from "./scheduler/maintenance-kill-switch";
 import { createMaintenanceWorker } from "./workers/maintenance.worker";
 import { createProvisioningWorker, resolveRedisUrlForAgents } from "./workers/agent.provisioning.worker";
 import { createDeprovisioningWorker } from "./workers/agent.deprovisioning.worker";
@@ -85,6 +86,7 @@ async function main() {
     // Maintenance capabilities scheduler. Phase 0 defaults to dry-run mode unless
     // MAINTENANCE_SCHEDULER_DRY_RUN=false is explicitly set.
     maintenanceScheduler.start();
+    maintenanceKillSwitch.start();
 
     log.info(
       {},
@@ -199,6 +201,7 @@ async function main() {
     if (IS_CONTROL_PLANE) {
       repoWatchdog.stop();
       maintenanceScheduler.stop();
+      maintenanceKillSwitch.stop();
     }
 
     // Give active jobs 30s to complete before forcing exit
