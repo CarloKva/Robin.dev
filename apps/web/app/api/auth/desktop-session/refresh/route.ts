@@ -8,38 +8,45 @@
 
 import { NextResponse } from 'next/server';
 
+import { desktopAuthPreflight, withDesktopAuthCors } from '@/lib/api/desktop-session-cors';
 import { revokeRefreshToken, rotateSupabaseJwt } from '@/lib/auth/desktop-session';
+
+export function OPTIONS(): NextResponse {
+  return desktopAuthPreflight();
+}
 
 export async function POST(request: Request): Promise<NextResponse> {
   const auth = request.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 });
+    return withDesktopAuthCors(NextResponse.json({ error: 'Missing bearer token' }, { status: 401 }));
   }
   const refreshToken = auth.slice('Bearer '.length).trim();
   if (!refreshToken) {
-    return NextResponse.json({ error: 'Empty bearer token' }, { status: 401 });
+    return withDesktopAuthCors(NextResponse.json({ error: 'Empty bearer token' }, { status: 401 }));
   }
 
   try {
     const next = await rotateSupabaseJwt(refreshToken);
-    return NextResponse.json({
-      supabase_jwt: next.supabaseJwt,
-      expires_at: next.expiresAt,
-      workspace_id: next.workspaceId,
-      user_id: next.userId,
-    });
+    return withDesktopAuthCors(
+      NextResponse.json({
+        supabase_jwt: next.supabaseJwt,
+        expires_at: next.expiresAt,
+        workspace_id: next.workspaceId,
+        user_id: next.userId,
+      }),
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[POST /api/auth/desktop-session/refresh]', message);
-    return NextResponse.json({ error: message }, { status: 401 });
+    return withDesktopAuthCors(NextResponse.json({ error: message }, { status: 401 }));
   }
 }
 
 export async function DELETE(request: Request): Promise<NextResponse> {
   const auth = request.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 });
+    return withDesktopAuthCors(NextResponse.json({ error: 'Missing bearer token' }, { status: 401 }));
   }
   await revokeRefreshToken(auth.slice('Bearer '.length).trim()).catch(() => undefined);
-  return NextResponse.json({ ok: true });
+  return withDesktopAuthCors(NextResponse.json({ ok: true }));
 }

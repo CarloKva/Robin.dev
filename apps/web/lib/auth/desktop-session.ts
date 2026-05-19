@@ -39,8 +39,26 @@ interface MintLinkCodeInput {
 
 export async function mintLinkCode(input: MintLinkCodeInput): Promise<string> {
   const supabase = createSupabaseAdminClient();
-  // Opportunistic purge so the table doesn't grow without bound.
-  await supabase.rpc('purge_expired_desktop_link_codes').catch(() => undefined);
+  // Opportunistic purge so the table doesn't grow without bound. Supabase's
+  // query builders are PromiseLike but don't expose `.catch` until awaited,
+  // so wrap in try/catch instead. Missing function (e.g. migration not yet
+  // applied) is non-fatal here.
+  try {
+    await supabase.rpc('purge_expired_desktop_link_codes');
+  } catch {
+    /* ignore */
+  }
+
+  // One pending handoff per PKCE `state`. Re-hitting `/auth/desktop-handoff`
+  // mints another row otherwise and poll's `.maybeSingle()` errors on multiples.
+  const { error: deleteErr } = await supabase
+    .from('desktop_link_codes')
+    .delete()
+    .eq('state', input.state)
+    .is('used_at', null);
+  if (deleteErr) {
+    throw new Error(`Failed to reset pending desktop link: ${deleteErr.message}`);
+  }
 
   const code = randomToken(48);
   const { error } = await supabase.from('desktop_link_codes').insert({
@@ -61,6 +79,83 @@ interface ExchangeLinkCodeInput {
   state: string;
   verifier: string;
   deviceName: string | null;
+}
+
+interface PollByStateInput {
+  state: string;
+  verifier: string;
+  deviceName: string | null;
+}
+
+/**
+ * Polled variant of the exchange: looks up a `desktop_link_codes` row by
+ * its `state` (instead of by opaque `code`). Used by the desktop client to
+ * complete sign-in without depending on `robin://` URL-scheme delivery,
+ * which doesn't work reliably for raw dev binaries (only for installed
+ * .app bundles).
+ *
+ * Returns null if no row yet — caller keeps polling. Throws on PKCE
+ * mismatch or stale row.
+ */
+export async function pollExchangeByState(
+  input: PollByStateInput,
+): Promise<DesktopSessionBundle | null> {
+  const supabase = createSupabaseAdminClient();
+  const { data: row, error } = await supabase
+    .from('desktop_link_codes')
+    .select('code, user_id, state, code_challenge, workspace_id, expires_at, used_at')
+    .eq('state', input.state)
+    .is('used_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Lookup failed: ${error.message}`);
+  if (!row) return null;
+
+  const linkCode = row as {
+    code: string;
+    user_id: string;
+    state: string;
+    code_challenge: string;
+    workspace_id: string | null;
+    expires_at: string;
+    used_at: string | null;
+  };
+
+  if (new Date(linkCode.expires_at).getTime() < Date.now()) {
+    throw new Error('Link code expired');
+  }
+  if (!verifyChallenge(input.verifier, linkCode.code_challenge)) {
+    throw new Error('PKCE verifier mismatch');
+  }
+
+  await supabase
+    .from('desktop_link_codes')
+    .update({ used_at: new Date().toISOString() })
+    .eq('code', linkCode.code);
+
+  const refreshToken = randomToken(48);
+  const refreshSha = sha256(refreshToken);
+  await supabase.from('desktop_sessions').insert({
+    user_id: linkCode.user_id,
+    workspace_id: linkCode.workspace_id,
+    refresh_token_sha: refreshSha,
+    device_name: input.deviceName,
+  });
+
+  const { jwt, expiresAt } = signSupabaseJwt({
+    sub: linkCode.user_id,
+    workspaceId: linkCode.workspace_id,
+  });
+
+  return {
+    supabaseJwt: jwt,
+    refreshToken,
+    expiresAt,
+    workspaceId: linkCode.workspace_id,
+    userId: linkCode.user_id,
+  };
 }
 
 export interface DesktopSessionBundle {

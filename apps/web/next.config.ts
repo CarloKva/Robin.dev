@@ -1,4 +1,11 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { loadEnvConfig } from "@next/env";
+
+// Next only reads `.env*` under `apps/web` unless we pull from the repo root.
+// Shared secrets often live only in `/Robin.dev/.env.local`.
+loadEnvConfig(path.resolve(__dirname, "../.."));
+loadEnvConfig(path.resolve(__dirname));
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@robin/shared-types"],

@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
   // not via Clerk session cookie. See apps/desktop/src-tauri/src/auth.rs.
   "/api/auth/desktop-session",
   "/api/auth/desktop-session/refresh",
+  "/api/auth/desktop-session/poll",
 ]);
 
 export default clerkMiddleware(async (auth, request: NextRequest) => {
