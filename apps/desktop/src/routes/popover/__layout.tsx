@@ -7,6 +7,10 @@ import { TabStrip } from '@/components/primitives/TabStrip';
 import { useSession, useWorkspaceId } from '@/lib/session/SessionContext';
 import { useAgentsRoster } from '@/lib/realtime/useAgentsRoster';
 import { useUnreadCounts } from '@/lib/realtime/useUnreadCounts';
+import {
+  PopoverFooterSlotProvider,
+  usePopoverFooterSlot,
+} from '@/lib/popover/footerSlot';
 import { Route as RootRoute } from '../__root';
 
 export const Route = createRoute({
@@ -16,7 +20,11 @@ export const Route = createRoute({
 });
 
 function PopoverLayout() {
-  return <PopoverShellWithChrome />;
+  return (
+    <PopoverFooterSlotProvider>
+      <PopoverShellWithChrome />
+    </PopoverFooterSlotProvider>
+  );
 }
 
 function PopoverShellWithChrome() {
@@ -27,6 +35,7 @@ function PopoverShellWithChrome() {
   const workspaceId = useWorkspaceId();
   const agents = useAgentsRoster(workspaceId);
   const counts = useUnreadCounts(workspaceId);
+  const { left: footerLeft } = usePopoverFooterSlot();
 
   if (loading) {
     return (
@@ -77,7 +86,7 @@ function PopoverShellWithChrome() {
       }
       footer={
         <PopoverFooter
-          left={<span>Robin v0.0.1</span>}
+          left={footerLeft ?? <span className="text-2xs text-ink3">Robin v0.0.1</span>}
           right={
             <button
               type="button"

@@ -13,6 +13,7 @@ export interface WipTask {
   branch: string | null;
   repo: string | null;
   prUrl: string | null;
+  prNumber: number | null;
   agentId: string | null;
   currentActivity: string | null;
   progress: number | null;
@@ -22,6 +23,20 @@ export interface WipTask {
 interface UseInProgressResult {
   tasks: WipTask[];
   loading: boolean;
+}
+
+interface IterationEmbed {
+  iteration_number: number | null;
+  status: string | null;
+  pr_url: string | null;
+  pr_number: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  summary: string | null;
+}
+
+interface RepoEmbed {
+  full_name: string | null;
 }
 
 const WIP_STATUSES: TaskStatus[] = ['queued', 'in_progress', 'in_review', 'review_pending'];
@@ -40,7 +55,11 @@ export function useInProgressTasks(workspaceId: string | null): UseInProgressRes
     const { data, error } = await supabase()
       .from('tasks')
       .select(
-        'id, title, description, status, priority, branch, repo_full_name, pr_url, assigned_agent_id, current_activity, progress, started_at, updated_at',
+        `
+        id, title, description, status, priority, assigned_agent_id, created_at, updated_at,
+        repositories!tasks_repository_id_fkey ( full_name ),
+        task_iterations ( iteration_number, status, pr_url, pr_number, started_at, completed_at, summary )
+        `,
       )
       .eq('workspace_id', workspaceId)
       .in('status', WIP_STATUSES)
@@ -52,20 +71,27 @@ export function useInProgressTasks(workspaceId: string | null): UseInProgressRes
     }
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     setTasks(
-      rows.map((row) => ({
-        id: row['id'] as string,
-        title: (row['title'] as string) ?? '',
-        description: (row['description'] as string | null) ?? null,
-        status: row['status'] as TaskStatus,
-        priority: row['priority'] as TaskPriority,
-        branch: (row['branch'] as string | null) ?? null,
-        repo: (row['repo_full_name'] as string | null) ?? null,
-        prUrl: (row['pr_url'] as string | null) ?? null,
-        agentId: (row['assigned_agent_id'] as string | null) ?? null,
-        currentActivity: (row['current_activity'] as string | null) ?? null,
-        progress: (row['progress'] as number | null) ?? null,
-        startedAt: (row['started_at'] as string | null) ?? null,
-      })),
+      rows.map((row) => {
+        const repoEmbed = row['repositories'] as RepoEmbed | RepoEmbed[] | null;
+        const repo = pickRepo(repoEmbed);
+        const iters = (row['task_iterations'] as IterationEmbed[] | null) ?? [];
+        const latest = pickLatestIteration(iters);
+        return {
+          id: row['id'] as string,
+          title: (row['title'] as string) ?? '',
+          description: (row['description'] as string | null) ?? null,
+          status: row['status'] as TaskStatus,
+          priority: row['priority'] as TaskPriority,
+          branch: null,
+          repo,
+          prUrl: latest?.pr_url ?? null,
+          prNumber: latest?.pr_number ?? extractPrNumber(latest?.pr_url ?? null),
+          agentId: (row['assigned_agent_id'] as string | null) ?? null,
+          currentActivity: latest?.summary ?? null,
+          progress: null,
+          startedAt: latest?.started_at ?? null,
+        };
+      }),
     );
     setLoading(false);
   }, [workspaceId]);
@@ -86,4 +112,23 @@ export function useInProgressTasks(workspaceId: string | null): UseInProgressRes
   });
 
   return { tasks, loading };
+}
+
+function pickRepo(embed: RepoEmbed | RepoEmbed[] | null): string | null {
+  if (!embed) return null;
+  if (Array.isArray(embed)) return embed[0]?.full_name ?? null;
+  return embed.full_name ?? null;
+}
+
+function pickLatestIteration(iters: IterationEmbed[]): IterationEmbed | null {
+  if (iters.length === 0) return null;
+  return [...iters].sort(
+    (a, b) => (b.iteration_number ?? 0) - (a.iteration_number ?? 0),
+  )[0] ?? null;
+}
+
+function extractPrNumber(url: string | null): number | null {
+  if (!url) return null;
+  const m = url.match(/\/pull\/(\d+)/);
+  return m ? Number(m[1]) : null;
 }

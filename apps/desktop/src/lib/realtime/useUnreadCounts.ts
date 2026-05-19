@@ -38,7 +38,7 @@ export function useUnreadCounts(workspaceId: string | null): UnreadCounts {
           .from('tasks')
           .select('id, status')
           .eq('workspace_id', workspaceId)
-          .in('status', ['completed', 'failed', 'review_pending', 'rejected']),
+          .in('status', ['completed', 'failed', 'review_pending', 'rejected', 'in_review']),
         supabase()
           .from('tasks')
           .select('id', { count: 'exact', head: true })

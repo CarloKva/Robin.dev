@@ -1,5 +1,3 @@
-import { SectionHeader } from '@/components/primitives/SectionHeader';
-import { LiveLabel } from '@/components/primitives/LiveDot';
 import type { WipTask } from '@/lib/realtime/useInProgressTasks';
 import { WipCard } from './WipCard';
 
@@ -9,10 +7,7 @@ interface WipListProps {
 
 export function WipList({ tasks }: WipListProps) {
   return (
-    <div className="py-2">
-      <SectionHeader right={<LiveLabel />}>
-        {tasks.length === 1 ? '1 in flight' : `${tasks.length} in flight`}
-      </SectionHeader>
+    <div className="flex flex-col gap-2 px-3 pb-3">
       {tasks.map((task) => (
         <WipCard key={task.id} task={task} />
       ))}

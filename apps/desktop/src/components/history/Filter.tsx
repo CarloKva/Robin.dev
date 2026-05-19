@@ -4,21 +4,24 @@ import { useAgentsRoster } from '@/lib/realtime/useAgentsRoster';
 import { useWorkspaceId } from '@/lib/session/SessionContext';
 
 interface FilterProps {
-  value: 'all' | 'merges' | string;
-  onChange: (next: 'all' | 'merges' | string) => void;
+  value: 'all' | string;
+  onChange: (next: 'all' | string) => void;
   entries: HistoryEntry[];
 }
 
 export function Filter({ value, onChange, entries }: FilterProps) {
   const workspaceId = useWorkspaceId();
   const agents = useAgentsRoster(workspaceId);
-  const activeAgentIds = new Set(entries.map((e) => e.agentId).filter((id): id is string => Boolean(id)));
+  const activeAgentIds = new Set(
+    entries.map((e) => e.agentId).filter((id): id is string => Boolean(id)),
+  );
   const activeAgents = agents.filter((a) => activeAgentIds.has(a.id));
 
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-divider px-3 py-2">
-      <Pill active={value === 'all'} onClick={() => onChange('all')}>All</Pill>
-      <Pill active={value === 'merges'} onClick={() => onChange('merges')}>Merges</Pill>
+    <div className="flex items-center gap-1.5 overflow-x-auto border-b border-divider px-3.5 py-2">
+      <Pill active={value === 'all'} onClick={() => onChange('all')}>
+        All
+      </Pill>
       {activeAgents.map((agent) => (
         <Pill
           key={agent.id}
@@ -47,9 +50,8 @@ function Pill({
   const accentStyle =
     hue !== undefined && active
       ? ({
-          background: `hsl(${hue}, 55%, 92%)`,
-          color: `hsl(${hue}, 55%, 32%)`,
-          borderColor: `hsl(${hue}, 55%, 75%)`,
+          background: `hsl(${hue}, 60%, 92%)`,
+          color: `hsl(${hue}, 60%, 32%)`,
         } as React.CSSProperties)
       : undefined;
   return (
@@ -58,10 +60,12 @@ function Pill({
       onClick={onClick}
       style={accentStyle}
       className={cn(
-        'inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-2xs font-medium transition-colors',
+        'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-xs transition-colors',
         active
-          ? 'border-ink bg-ink text-popover'
-          : 'border-border bg-panel text-ink2 hover:bg-hover',
+          ? hue === undefined
+            ? 'bg-accent-soft font-semibold text-accent'
+            : 'font-semibold'
+          : 'font-medium text-ink2 hover:bg-hover',
       )}
     >
       {children}

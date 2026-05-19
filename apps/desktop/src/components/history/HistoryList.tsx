@@ -11,7 +11,7 @@ interface HistoryListProps {
 }
 
 interface DayGroup {
-  label: 'Today' | 'Yesterday' | string;
+  label: string;
   entries: HistoryEntry[];
 }
 
@@ -21,11 +21,13 @@ export function HistoryList({ entries }: HistoryListProps) {
   const groups = useMemo(() => groupByDay(entries), [entries]);
 
   return (
-    <div className="py-2">
-      {groups.map((group) => (
-        <section key={group.label} className="mb-2">
-          <SectionHeader>{group.label}</SectionHeader>
-          {group.entries.map((entry) => {
+    <div className="flex-1 overflow-y-auto pb-2">
+      {groups.map((group, gi) => (
+        <section key={group.label} className="mb-1">
+          <SectionHeader {...(gi === 0 ? { className: 'pt-2' } : {})}>
+            {group.label}
+          </SectionHeader>
+          {group.entries.map((entry, i) => {
             const agent = entry.agentId ? agents.find((a) => a.id === entry.agentId) : undefined;
             return (
               <HistoryRow
@@ -33,6 +35,8 @@ export function HistoryList({ entries }: HistoryListProps) {
                 entry={entry}
                 agent={agent}
                 laneHue={agent?.hue ?? 0}
+                isLast={i === group.entries.length - 1}
+                repo={entry.repo}
               />
             );
           })}
@@ -54,7 +58,11 @@ function groupByDay(entries: HistoryEntry[]): DayGroup[] {
     const date = new Date(entry.createdAt);
     const key = date.toDateString();
     const label =
-      key === todayKey ? 'Today' : key === yesterdayKey ? 'Yesterday' : date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+      key === todayKey
+        ? 'Today'
+        : key === yesterdayKey
+          ? 'Yesterday'
+          : date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
     let group = buckets.get(key);
     if (!group) {
       group = { label, entries: [] };

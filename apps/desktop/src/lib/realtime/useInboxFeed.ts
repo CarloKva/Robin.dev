@@ -12,15 +12,14 @@ interface UseInboxFeedResult {
 }
 
 const INBOX_LIMIT = 50;
+const INBOX_STATUSES = ['completed', 'failed', 'review_pending', 'rejected', 'in_review'];
 
 /**
- * Inbox feed. The spec (§Phase 2.1) calls for a letter-shaped projection
- * over `task_events`; v1 keeps it client-side to avoid a new endpoint.
- *
- * We fetch tasks in terminal/review states, hydrate their last ~20 events,
- * and feed both to `projectLetter`. Realtime listens to INSERTs on
- * `task_events` for the workspace and re-projects the affected task on the
- * fly.
+ * Letter feed for the popover Inbox. Schema reality (vs. earlier draft):
+ *   - tasks has no completed_at / failed_at / repo_full_name columns
+ *   - repo lives on the joined `repositories.full_name` via `tasks.repository_id`
+ *   - timing + PR url live on `task_iterations` (last iteration per task)
+ *   - error message comes from the last `task.failed` event in `task_events`
  */
 export function useInboxFeed(workspaceId: string | null): UseInboxFeedResult {
   const [letters, setLetters] = useState<InboxLetter[]>([]);
@@ -36,9 +35,15 @@ export function useInboxFeed(workspaceId: string | null): UseInboxFeedResult {
 
     const { data: taskRows, error: taskErr } = await supabase()
       .from('tasks')
-      .select('id, title, status, priority, assigned_agent_id, repo_full_name, created_at, updated_at, completed_at, failed_at')
+      .select(
+        `
+        id, title, status, priority, assigned_agent_id, created_at, updated_at,
+        repositories!tasks_repository_id_fkey ( full_name ),
+        task_iterations ( iteration_number, status, pr_url, pr_number, started_at, completed_at, summary )
+        `,
+      )
       .eq('workspace_id', workspaceId)
-      .in('status', ['completed', 'failed', 'review_pending', 'rejected', 'in_review'])
+      .in('status', INBOX_STATUSES)
       .order('updated_at', { ascending: false })
       .limit(INBOX_LIMIT);
 
@@ -56,13 +61,14 @@ export function useInboxFeed(workspaceId: string | null): UseInboxFeedResult {
       return;
     }
 
+    // Pull task_events for error messages + duration on failure.
     const [{ data: eventRows }, readMap] = await Promise.all([
       supabase()
         .from('task_events')
-        .select('id, task_id, event_type, actor_type, actor_id, payload, created_at')
+        .select('id, task_id, event_type, payload, created_at')
         .in('task_id', ids)
-        .order('created_at', { ascending: true })
-        .limit(INBOX_LIMIT * 20),
+        .in('event_type', ['task.failed', 'task.completed'])
+        .order('created_at', { ascending: true }),
       getInboxReadMap(),
     ]);
 

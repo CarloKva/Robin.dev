@@ -1,12 +1,24 @@
 import { kindFor, type InboxKind } from './kindFor';
 
 /**
- * Letter-shaped projection over a task + its event tail. v1 emits a literal
- * headline (the task title) and a templated body — true AI summarisation is
- * deferred (§Phase 2.2). Inputs are deliberately loose-typed because the
- * desktop client reads raw Supabase rows; tighten once `projectLetter` moves
- * into `packages/shared-types`.
+ * Letter-shaped projection over a task + its event tail. Inputs are
+ * deliberately loose-typed because the desktop client reads raw Supabase rows;
+ * tighten once `projectLetter` moves into `packages/shared-types`.
  */
+
+interface RepositoryEmbed {
+  full_name?: string | null;
+}
+
+interface IterationEmbed {
+  iteration_number?: number | null;
+  status?: string | null;
+  pr_url?: string | null;
+  pr_number?: number | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  summary?: string | null;
+}
 
 interface TaskRow {
   id: string;
@@ -14,11 +26,10 @@ interface TaskRow {
   status: string;
   priority: string;
   assigned_agent_id: string | null;
-  repo_full_name: string | null;
   created_at: string | null;
   updated_at: string | null;
-  completed_at: string | null;
-  failed_at: string | null;
+  repositories?: RepositoryEmbed | RepositoryEmbed[] | null;
+  task_iterations?: IterationEmbed[] | null;
 }
 
 interface EventRow {
@@ -55,37 +66,31 @@ export function projectLetter(
   const kind = kindFor(task.status, events);
   if (!kind) return null;
 
-  const prEvent = [...events].reverse().find((e) =>
-    e.event_type === 'agent.pr.opened' || e.event_type === 'agent.pr.updated',
-  );
+  const repo = pickRepo(task.repositories);
+  const lastIter = pickLatestIteration(task.task_iterations);
+
   const failedEvent = [...events].reverse().find((e) => e.event_type === 'task.failed');
   const completedEvent = [...events].reverse().find((e) => e.event_type === 'task.completed');
-  const commitEvent = [...events].reverse().find((e) => e.event_type === 'agent.commit.pushed');
-
-  const prPayload = (prEvent?.payload ?? {}) as Record<string, unknown>;
   const failedPayload = (failedEvent?.payload ?? {}) as Record<string, unknown>;
   const completedPayload = (completedEvent?.payload ?? {}) as Record<string, unknown>;
 
-  const prUrl = (prPayload['pr_url'] as string | undefined) ?? null;
-  const prNumber = (prPayload['pr_number'] as number | undefined) ?? null;
-  const branch =
-    (prPayload['branch'] as string | undefined) ??
-    ((commitEvent?.payload as Record<string, unknown> | undefined)?.['branch'] as string | undefined) ??
-    null;
+  const prUrl = lastIter?.pr_url ?? null;
+  const prNumber = lastIter?.pr_number ?? extractPrNumberFromUrl(prUrl);
   const errorMessage = (failedPayload['message'] as string | undefined) ?? null;
+
   const durationSeconds =
     (completedPayload['duration_seconds'] as number | undefined) ??
     (failedPayload['duration_seconds'] as number | undefined) ??
-    null;
-  const tokens =
-    (completedPayload['tokens_used'] as number | undefined) ??
-    (completedPayload['tokens'] as number | undefined) ??
+    diffSeconds(lastIter?.started_at, lastIter?.completed_at) ??
     null;
 
   const headline = task.title;
-  const body = bodyFor({ kind, task, prUrl, prNumber, branch, errorMessage });
+  const body = bodyFor({ kind, summary: lastIter?.summary ?? null, prNumber, errorMessage });
   const receivedAt =
-    task.completed_at ?? task.failed_at ?? task.updated_at ?? task.created_at ?? new Date().toISOString();
+    lastIter?.completed_at ??
+    task.updated_at ??
+    task.created_at ??
+    new Date().toISOString();
 
   return {
     id: task.id,
@@ -94,36 +99,63 @@ export function projectLetter(
     headline,
     body,
     agentId: task.assigned_agent_id,
-    repo: task.repo_full_name,
+    repo,
     prUrl,
     prNumber,
-    branch,
+    branch: null,
     errorMessage,
     durationSeconds,
-    tokens,
+    tokens: null,
     receivedAt,
     read: Boolean(readMap[task.id]) && readMap[task.id]! >= new Date(receivedAt).getTime(),
   };
 }
 
+function pickRepo(embed: TaskRow['repositories']): string | null {
+  if (!embed) return null;
+  if (Array.isArray(embed)) return embed[0]?.full_name ?? null;
+  return embed.full_name ?? null;
+}
+
+function pickLatestIteration(iters: TaskRow['task_iterations']): IterationEmbed | null {
+  if (!iters || iters.length === 0) return null;
+  return [...iters].sort(
+    (a, b) => (b.iteration_number ?? 0) - (a.iteration_number ?? 0),
+  )[0] ?? null;
+}
+
+function extractPrNumberFromUrl(url: string | null): number | null {
+  if (!url) return null;
+  const m = url.match(/\/pull\/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+function diffSeconds(start: string | null | undefined, end: string | null | undefined): number | null {
+  if (!start || !end) return null;
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  return ms > 0 ? Math.round(ms / 1000) : null;
+}
+
 interface BodyContext {
   kind: InboxKind;
-  task: TaskRow;
-  prUrl: string | null;
+  summary: string | null;
   prNumber: number | null;
-  branch: string | null;
   errorMessage: string | null;
 }
 
 function bodyFor(ctx: BodyContext): string {
+  if (ctx.summary && ctx.summary.trim().length > 0) {
+    return ctx.summary;
+  }
   switch (ctx.kind) {
     case 'shipped':
-      if (ctx.prNumber != null) {
-        return `I shipped this — PR #${ctx.prNumber} is open${ctx.branch ? ` on \`${ctx.branch}\`` : ''}. Have a look when you can.`;
-      }
-      return 'I finished this work. Have a look when you can.';
+      return ctx.prNumber != null
+        ? `I shipped this — PR #${ctx.prNumber} is open. Have a look when you can.`
+        : 'I finished this work. Have a look when you can.';
     case 'review':
-      return 'This is ready for your review. Approve or reject when you have a moment.';
+      return ctx.prNumber != null
+        ? `Ready for your review — PR #${ctx.prNumber} is open.`
+        : 'This is ready for your review.';
     case 'failed':
       return ctx.errorMessage
         ? `I hit a wall and stopped. Error: ${ctx.errorMessage}`
