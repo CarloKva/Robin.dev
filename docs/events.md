@@ -374,6 +374,105 @@ Emesso quando un utente avvia manualmente un rework dalla dashboard.
 
 ---
 
+## Maintenance Agents — eventi sulla coda `maintenance_events`
+
+Questi eventi sono persistiti nella tabella `maintenance_events` (non `task_events`). I run di implementazione (`spec_impl` / `bug_impl`) emettono anche i normali eventi task-scoped su `task_events` una volta che la `tasks` row collegata esiste.
+
+Spec di riferimento: `docs/maintenance-agents-spec.md` §8.
+
+### `agent.run.scheduled`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| capability_definition_id | `MaintenanceCapabilityId` | spec_discovery / spec_impl / bug_discovery / bug_impl |
+| runner_agent_id | uuid | Agente VPS selezionato dallo scheduler |
+| trigger | string? | schedule / manual / webhook / auto |
+| finding_id | uuid? | Solo per impl trigger da approval |
+| reason | string? | Es. `approve_finding` |
+
+**Emesso da:** `MaintenanceScheduler.processDueConfig` (system) o triage route (human, su approve).
+
+### `agent.run.started`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| capability_definition_id | `MaintenanceCapabilityId` | — |
+| runner_agent_id | uuid | AGENT_ID del processo che esegue |
+
+**Emesso da:** `runMaintenanceAgent` (agent).
+
+### `agent.run.completed`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| findings_created | int | Numero di righe inserite in `spec_findings`/`bug_findings` |
+| tokens_used | int | Da output Claude + SDK fallback |
+| cost_usd | number | Idem |
+| dropped | int? | Findings scartati dal validator |
+| summary | string? | Per discovery |
+| pr_url | string? | Per impl |
+| task_id | uuid? | Per impl |
+| files_changed | int? | Per impl |
+| tests_added | int? | Per spec_impl |
+| warnings | string[]? | Validator warnings |
+
+**Emesso da:** `runMaintenanceAgent` (agent).
+
+### `agent.run.failed`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| reason | string? | Causa breve |
+| error | string? | Messaggio errore esteso |
+| detail | string? | Dettaglio aggiuntivo |
+
+**Emesso da:** `runMaintenanceAgent` (agent), `MaintenanceScheduler` (system), triage route (system).
+
+### `agent.run.budget_exceeded`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| budget | int | `daily_token_budget` configurato |
+| used | int | Token già consumati nella giornata locale workspace |
+
+**Emesso da:** `MaintenanceScheduler` (system).
+
+### `finding.created`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| finding_id | uuid | Riga in `spec_findings` o `bug_findings` |
+| type | `"spec" \| "bug"` | Tipo della finding |
+| repository_id | uuid | Repository sorgente |
+| confidence | number | 0..1 |
+| status | string? | Per spec: implemented/partial/missing/drifted |
+| severity | string? | Per bug: P0/P1/P2/P3 |
+
+**Emesso da:** `runMaintenanceAgent` (agent).
+
+### `finding.triaged`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| finding_id | uuid | — |
+| type | `"spec" \| "bug"` | — |
+| new_state | `FindingTriageState` | approved/rejected/snoozed/implemented |
+| by_user_id | string | Clerk user ID |
+
+**Emesso da:** triage route (human).
+
+### `finding.auto_implemented`
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| finding_id | uuid | — |
+| type | `"spec" \| "bug"` | — |
+| task_id | uuid | Task linkato auto-creato |
+
+**Emesso da:** `auto-implement.service` (system).
+
+---
+
 ## [Sprint C] — Eventi pianificati, non ancora implementati
 
 | Evento | Quando | Note |
