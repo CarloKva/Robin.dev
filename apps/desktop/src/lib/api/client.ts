@@ -28,7 +28,10 @@ export async function apiFetch<T = unknown>(
 ): Promise<T> {
   const session = await loadSession();
   const headers = new Headers(init.headers);
-  if (session) headers.set('Authorization', `Bearer ${session.clerkSessionToken}`);
+  // For REST calls we present the Supabase JWT — the desktop-aware variant of
+  // `requireWorkspace` (TODO M1+) accepts either Clerk session or this JWT.
+  // Realtime channels use `supabase.realtime.setAuth(jwt)` separately.
+  if (session) headers.set('Authorization', `Bearer ${session.supabaseJwt}`);
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }

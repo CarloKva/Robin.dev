@@ -10,8 +10,8 @@ export function listEnvironments(repositoryId: string): Promise<{ environments: 
 
 interface CreateEnvironmentInput {
   repositoryId: string;
-  type: EnvironmentType;
-  branch: string;
+  environmentType: EnvironmentType;
+  targetBranch: string;
   autoMerge: boolean;
 }
 
@@ -20,8 +20,8 @@ export function createEnvironment(input: CreateEnvironmentInput): Promise<unknow
     method: 'POST',
     body: JSON.stringify({
       repository_id: input.repositoryId,
-      type: input.type,
-      branch: input.branch,
+      environment_type: input.environmentType,
+      target_branch: input.targetBranch,
       auto_merge: input.autoMerge,
     }),
   });
@@ -29,7 +29,7 @@ export function createEnvironment(input: CreateEnvironmentInput): Promise<unknow
 
 export function updateEnvironment(
   id: string,
-  patch: Partial<{ branch: string; auto_merge: boolean }>,
+  patch: Partial<{ target_branch: string; auto_merge: boolean }>,
 ): Promise<unknown> {
   return apiFetch(`/api/environments/${id}`, {
     method: 'PATCH',

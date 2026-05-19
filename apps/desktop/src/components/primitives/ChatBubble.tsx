@@ -52,7 +52,12 @@ export function ChatBubble({
   return (
     <div className="flex items-start gap-2">
       {agentName ? (
-        <Avatar name={agentName} hue={agentHue ?? 16} src={agentAvatarUrl} size="sm" />
+        <Avatar
+          name={agentName}
+          hue={agentHue ?? 16}
+          size="sm"
+          {...(agentAvatarUrl ? { src: agentAvatarUrl } : {})}
+        />
       ) : null}
       <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-panel px-3 py-2 text-sm text-ink">
         {children}

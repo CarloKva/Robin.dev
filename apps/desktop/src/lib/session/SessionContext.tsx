@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 
 import {
   clearSession,
@@ -23,10 +24,31 @@ const Context = createContext<SessionContextValue | null>(null);
 
 const REFRESH_LEAD_SECONDS = 5 * 60; // refresh 5 min before expiry
 
+let sessionBridge: ((next: DesktopSession) => void) | null = null;
+
+/** Used by `/sign-in` so session state updates synchronously before `router.navigate` runs. */
+export function commitDesktopSession(next: DesktopSession): void {
+  const bridge = sessionBridge;
+  if (bridge) bridge(next);
+  else queueMicrotask(() => sessionBridge?.(next));
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<DesktopSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [connection, setConnection] = useState<ConnectionState>(connectionStateStore.get());
+
+  useLayoutEffect(() => {
+    sessionBridge = (fresh: DesktopSession) => {
+      flushSync(() => {
+        setSession(fresh);
+      });
+      void applySession(fresh);
+    };
+    return () => {
+      sessionBridge = null;
+    };
+  }, []);
 
   // Initial load + Supabase Realtime auth handoff.
   useEffect(() => {
@@ -75,15 +97,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('robin:sign-out', handler);
   }, [signOut]);
 
-  // Listen for the deep-link auth callback.
+  // Sign-in completion is now driven by `startSignIn` directly (polling).
+  // The robin:// deep-link callback listener stays as a defence-in-depth
+  // path in case a future build registers the URL scheme.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ state: string; code: string }>).detail;
       if (!detail) return;
       void completeSignIn(detail)
         .then(async (fresh) => {
-          setSession(fresh);
-          await applySession(fresh);
+          commitDesktopSession(fresh);
         })
         .catch((err) => {
           console.error('completeSignIn failed', err);
@@ -91,6 +114,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('robin:auth-callback', handler);
     return () => window.removeEventListener('robin:auth-callback', handler);
+  }, []);
+
+  // Expose a setter for optional window events (`robin:session-set`).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const fresh = (event as CustomEvent<DesktopSession>).detail;
+      if (!fresh) return;
+      commitDesktopSession(fresh);
+    };
+    window.addEventListener('robin:session-set', handler as EventListener);
+    return () => window.removeEventListener('robin:session-set', handler as EventListener);
   }, []);
 
   // Schedule the next refresh.

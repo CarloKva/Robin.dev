@@ -11,12 +11,13 @@ pub fn cmd_notify<R: Runtime>(
     body: String,
     deeplink: Option<String>,
 ) -> Result<(), String> {
-    let mut builder = app.notification().builder().title(title).body(body);
-    if let Some(link) = deeplink {
-        // macOS doesn't surface notification-click payloads to Tauri reliably;
-        // we encode the deeplink in the notification id so the renderer can
-        // look it up if/when activation reaches us.
-        builder = builder.identifier(link);
-    }
-    builder.show().map_err(|e| e.to_string())
+    // The plugin no longer exposes `identifier` on the builder; the deeplink
+    // is round-tripped via the renderer's notification subscription instead.
+    let _ = deeplink;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
 }

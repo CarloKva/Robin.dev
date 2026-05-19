@@ -18,7 +18,7 @@ async function load(): Promise<ReadMap> {
   if (isTauri()) {
     try {
       const { load } = await import('@tauri-apps/plugin-store');
-      const store = await load(FILE, { autoSave: false });
+      const store = await load(FILE, { autoSave: false, defaults: {} });
       const value = await store.get<ReadMap>(KEY);
       cached = value ?? {};
       return cached;
@@ -57,7 +57,7 @@ async function persist(map: ReadMap): Promise<void> {
   if (isTauri()) {
     try {
       const { load } = await import('@tauri-apps/plugin-store');
-      const store = await load(FILE, { autoSave: false });
+      const store = await load(FILE, { autoSave: false, defaults: {} });
       await store.set(KEY, map);
       await store.save();
       return;

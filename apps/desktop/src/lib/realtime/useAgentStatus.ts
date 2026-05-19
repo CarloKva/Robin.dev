@@ -32,7 +32,7 @@ export function useAgentStatus(workspaceId: string | null): AgentWithStatus[] {
     const { data, error } = await supabase()
       .from('agents_with_status')
       .select(
-        'id, name, hue, avatar_url, status, effective_status, current_task_id, last_seen_at, specialty',
+        'id, name, hue, avatar_url, raw_status, effective_status, current_task_id, last_seen_at',
       )
       .eq('workspace_id', workspaceId)
       .order('last_seen_at', { ascending: false, nullsFirst: false });
@@ -47,11 +47,11 @@ export function useAgentStatus(workspaceId: string | null): AgentWithStatus[] {
         name: row['name'] as string,
         hue: (row['hue'] as number | null) ?? 16,
         avatarUrl: (row['avatar_url'] as string | null) ?? null,
-        status: (row['status'] as AgentStatusEnum) ?? 'offline',
+        status: (row['raw_status'] as AgentStatusEnum) ?? 'offline',
         effectiveStatus: (row['effective_status'] as AgentStatusEnum) ?? 'offline',
         currentTaskId: (row['current_task_id'] as string | null) ?? null,
         lastSeenAt: (row['last_seen_at'] as string | null) ?? null,
-        specialty: (row['specialty'] as string[] | null) ?? [],
+        specialty: [],
       })),
     );
   }, [workspaceId]);

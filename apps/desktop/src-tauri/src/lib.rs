@@ -17,6 +17,7 @@ mod deeplink;
 mod expanded;
 mod notifications;
 mod popover;
+mod shell;
 mod tray;
 
 use tauri::Manager;
@@ -53,6 +54,7 @@ pub fn run() {
             expanded::cmd_show_expanded,
             expanded::cmd_focus_agent,
             notifications::cmd_notify,
+            shell::cmd_open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

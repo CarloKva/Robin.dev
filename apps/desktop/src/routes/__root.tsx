@@ -1,5 +1,7 @@
 import { Outlet, createRootRoute, redirect } from '@tanstack/react-router';
 
+import { SessionProvider } from '@/lib/session/SessionContext';
+
 export const Route = createRootRoute({
   component: RootComponent,
   beforeLoad: ({ location }) => {
@@ -13,5 +15,9 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <SessionProvider>
+      <Outlet />
+    </SessionProvider>
+  );
 }

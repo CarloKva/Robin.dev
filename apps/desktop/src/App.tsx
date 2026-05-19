@@ -16,7 +16,8 @@ export function App() {
   useEffect(() => {
     let off: (() => void) | undefined;
     void installDeepLinkRouter({
-      navigate: (opts) => router.navigate(opts as Parameters<typeof router.navigate>[0]),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      navigate: (opts) => router.navigate(opts as any),
     }).then((cleanup) => {
       off = cleanup;
     });

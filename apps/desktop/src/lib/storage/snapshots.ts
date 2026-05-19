@@ -14,7 +14,7 @@ async function ensureLoaded(): Promise<void> {
   if (isTauri()) {
     try {
       const { load } = await import('@tauri-apps/plugin-store');
-      const store = await load(FILE, { autoSave: false });
+      const store = await load(FILE, { autoSave: false, defaults: {} });
       const value = await store.get<Record<string, unknown>>('snapshots');
       cached = value ?? {};
       loaded = true;
@@ -43,7 +43,7 @@ export async function writeSnapshot(key: string, value: unknown): Promise<void> 
   if (isTauri()) {
     try {
       const { load } = await import('@tauri-apps/plugin-store');
-      const store = await load(FILE, { autoSave: false });
+      const store = await load(FILE, { autoSave: false, defaults: {} });
       await store.set('snapshots', cached);
       await store.save();
       return;

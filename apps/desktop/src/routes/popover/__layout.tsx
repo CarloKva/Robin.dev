@@ -4,7 +4,7 @@ import { PopoverFooter } from '@/components/shell/PopoverFooter';
 import { PopoverHeader } from '@/components/shell/PopoverHeader';
 import { PopoverShell } from '@/components/shell/PopoverShell';
 import { TabStrip } from '@/components/primitives/TabStrip';
-import { SessionProvider, useSession, useWorkspaceId } from '@/lib/session/SessionContext';
+import { useSession, useWorkspaceId } from '@/lib/session/SessionContext';
 import { useAgentsRoster } from '@/lib/realtime/useAgentsRoster';
 import { useUnreadCounts } from '@/lib/realtime/useUnreadCounts';
 import { Route as RootRoute } from '../__root';
@@ -16,11 +16,7 @@ export const Route = createRoute({
 });
 
 function PopoverLayout() {
-  return (
-    <SessionProvider>
-      <PopoverShellWithChrome />
-    </SessionProvider>
-  );
+  return <PopoverShellWithChrome />;
 }
 
 function PopoverShellWithChrome() {

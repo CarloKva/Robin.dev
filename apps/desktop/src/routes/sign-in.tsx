@@ -1,8 +1,11 @@
-import { createRoute } from '@tanstack/react-router';
+import { createRoute, useRouter } from '@tanstack/react-router';
+
+import { useState } from 'react';
 
 import { Btn } from '@/components/primitives/Btn';
 import { RobinLogoTile } from '@/components/primitives/RobinLogoTile';
 import { startSignIn } from '@/lib/auth/session';
+import { commitDesktopSession } from '@/lib/session/SessionContext';
 import { Route as RootRoute } from './__root';
 
 export const Route = createRoute({
@@ -12,6 +15,9 @@ export const Route = createRoute({
 });
 
 function SignInPage() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
   return (
     <div className="flex h-full min-h-screen items-center justify-center bg-bg px-6">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-popover p-8 shadow-popover">
@@ -25,14 +31,27 @@ function SignInPage() {
             variant="primary"
             size="lg"
             full
+            disabled={busy}
             onClick={() => {
-              void startSignIn();
+              setBusy(true);
+              startSignIn()
+                .then((session) => {
+                  commitDesktopSession(session);
+                  void router.navigate({ to: '/popover/inbox', replace: true }).catch(console.error);
+                })
+                .catch((err) => {
+                  console.error('[sign-in] failed', err);
+                  alert(`Sign-in failed: ${err?.message ?? err}`);
+                })
+                .finally(() => setBusy(false));
             }}
           >
-            Sign in with browser
+            {busy ? 'Waiting for browser…' : 'Sign in with browser'}
           </Btn>
           <p className="mt-2 text-2xs text-ink4">
-            We&rsquo;ll open your default browser. After signing in you&rsquo;ll be redirected back here.
+            {busy
+              ? "We're checking in with the server every couple of seconds. You can close the browser tab once it says \"Returning to Robin\"."
+              : "We'll open your default browser. After signing in you'll come back here automatically."}
           </p>
         </div>
       </div>

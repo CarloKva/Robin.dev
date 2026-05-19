@@ -75,8 +75,15 @@ export function useInboxFeed(workspaceId: string | null): UseInboxFeedResult {
     }
 
     const projected = tasks
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((task) => projectLetter(task as any, byTask.get(task['id'] as string) ?? [], readMap))
+      .map((task) =>
+        projectLetter(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          task as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (byTask.get(task['id'] as string) ?? []) as any,
+          readMap,
+        ),
+      )
       .filter((letter): letter is InboxLetter => letter !== null);
     setLetters(projected);
     setLoading(false);

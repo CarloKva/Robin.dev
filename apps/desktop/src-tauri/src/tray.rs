@@ -21,7 +21,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("main")
         .menu(&menu)
-        .menu_on_left_click(false)
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "quit" => app.exit(0),
             "sign-out" => {

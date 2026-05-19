@@ -12,7 +12,7 @@ interface EnvironmentCardProps {
 }
 
 export function EnvironmentCard({ environment, onChange }: EnvironmentCardProps) {
-  const [autoMerge, setAutoMerge] = useState(Boolean((environment as { auto_merge?: boolean }).auto_merge));
+  const [autoMerge, setAutoMerge] = useState(environment.auto_merge);
   const [busy, setBusy] = useState(false);
 
   return (
@@ -20,9 +20,9 @@ export function EnvironmentCard({ environment, onChange }: EnvironmentCardProps)
       <header className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-ink3">
-            {environment.type === 'production' ? 'Production' : 'Staging'}
+            {environment.environment_type === 'production' ? 'Production' : 'Staging'}
           </p>
-          <BranchTag branch={environment.branch ?? 'main'} size="md" />
+          <BranchTag branch={environment.target_branch} size="md" />
         </div>
         <Btn
           variant="danger"
